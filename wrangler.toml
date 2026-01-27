@@ -1,0 +1,44 @@
+name = "accord-chat"
+main = "src/index.ts"
+compatibility_date = "2025-01-24"
+
+# Static Assets
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Environment Variables
+[vars]
+JWT_SECRET = "super-secret-key-change-me"
+
+# Durable Objects
+[[durable_objects.bindings]]
+name = "CHAT_ROOM"
+class_name = "ChatRoom"
+
+[[durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "PresenceTracker"
+
+[[migrations]]
+tag = "v1" # Should be unique for each entry
+new_sqlite_classes = ["ChatRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["PresenceTracker"]
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "discord-db"
+database_id = "641755c4-58a6-42b1-bbf2-acc814d9d5cf"
+
+# R2 Storage
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "discord-files"
+
+# Observability
+[observability]
+enabled = true

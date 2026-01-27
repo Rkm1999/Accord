@@ -1,0 +1,2117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accord — Harmony in Messaging</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #36393f;
+            color: #dcddde;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .card {
+            background: #2f3136;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 400px;
+            margin: auto;
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: white;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.8em;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border-radius: 3px;
+            border: none;
+            background: #202225;
+            color: white;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 10px 20px;
+            border-radius: 3px;
+            border: none;
+            background: #5865f2;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #4752c4;
+        }
+
+        .switch {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+
+        .switch a {
+            color: #00aff4;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        #chat-container {
+            display: none;
+            flex-direction: row;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        #sidebar {
+            width: 240px;
+            background: #2f3136;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        #sidebar-header {
+            padding: 15px;
+            font-weight: bold;
+            border-bottom: 1px solid #202225;
+            color: white;
+        }
+
+        .sidebar-section {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .sidebar-section-header {
+            font-size: 0.7em;
+            color: #8e9297;
+            text-transform: uppercase;
+            font-weight: bold;
+            margin: 15px 10px 5px 10px;
+        }
+
+        #channel-list,
+        #dm-list {
+            min-height: 20px;
+        }
+
+        .channel-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 2px;
+            color: #8e9297;
+            transition: 0.2s;
+        }
+
+        .channel-item:hover {
+            background: #393c43;
+            color: #dcddde;
+        }
+
+        .channel-item.active {
+            background: #40444b;
+            color: white;
+        }
+
+        .unread-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ed4245;
+            /* Red notification dot */
+            box-shadow: 0 0 4px rgba(237, 66, 69, 0.5);
+            display: none;
+        }
+
+        .channel-item.unread .unread-dot {
+            display: block;
+        }
+
+        .channel-item.mention-unread .unread-dot {
+            display: block;
+            background: #faa61a;
+            box-shadow: 0 0 4px rgba(250, 166, 26, 0.5);
+        }
+
+        .mention {
+            background: rgba(88, 101, 242, 0.3);
+            color: #dee0fc;
+            padding: 0 2px;
+            border-radius: 3px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .mention:hover {
+            background: #5865f2;
+            color: white;
+        }
+
+        .message.mention-highlight {
+            background: rgba(250, 166, 26, 0.1);
+            border-left: 2px solid #faa61a !important;
+        }
+
+        @keyframes flash-highlight {
+            0% {
+                background-color: rgba(88, 101, 242, 0.5);
+            }
+
+            100% {
+                background-color: #40444b;
+            }
+        }
+
+        .flash-highlight {
+            animation: flash-highlight 1.5s ease-out;
+        }
+
+        .new-messages-divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+            color: #ed4245;
+            font-size: 0.7em;
+            font-weight: bold;
+        }
+
+        .new-messages-divider::before,
+        .new-messages-divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: #ed4245;
+        }
+
+        .new-messages-divider span {
+            padding: 0 10px;
+            text-transform: uppercase;
+        }
+
+        #unread-banner {
+            position: absolute;
+            top: 50px;
+            /* Below status bar */
+            left: 20px;
+            right: 20px;
+            background: #ed4245;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9em;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 10;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: 0.2s;
+        }
+
+        #unread-banner:hover {
+            background: #c03537;
+        }
+
+        #unread-banner .close-banner {
+            font-size: 1.2em;
+            padding: 0 10px;
+        }
+
+        /* Autocomplete Mention */
+        #autocomplete-dropdown {
+            position: absolute;
+            background: #2f3136;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            width: 200px;
+            display: none;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .autocomplete-item {
+            padding: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #b9bbbe;
+        }
+
+        .autocomplete-item:hover,
+        .autocomplete-item.selected {
+            background: #4752c4;
+            color: white;
+        }
+
+        .autocomplete-item .status-dot {
+            width: 8px;
+            height: 8px;
+        }
+
+        #sidebar-footer {
+            padding: 15px;
+            border-top: 1px solid #202225;
+        }
+
+        #add-channel-btn {
+            width: 100%;
+            height: 32px;
+            background: transparent;
+            border: 1px dashed #4f545c;
+            color: #4f545c;
+        }
+
+        #add-channel-btn:hover {
+            border-color: #dcddde;
+            color: #dcddde;
+        }
+
+        /* Main Chat */
+        #main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #36393f;
+            min-width: 0;
+            position: relative;
+        }
+
+        #status {
+            padding: 10px 20px;
+            font-size: 0.8em;
+            background: #2f3136;
+            border-bottom: 1px solid #202225;
+            flex-shrink: 0;
+        }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .message {
+            margin-bottom: 10px;
+            padding: 5px;
+            border-radius: 4px;
+            background: #40444b;
+            max-width: 80%;
+        }
+
+        #input-area {
+            padding: 20px;
+            background: #36393f;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        #reply-preview {
+            display: none;
+            background: #2f3136;
+            padding: 10px;
+            border-radius: 8px 8px 0 0;
+            border-bottom: 2px solid #5865f2;
+            font-size: 0.8em;
+            color: #b9bbbe;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #typing-indicator {
+            font-size: 0.75em;
+            color: #b9bbbe;
+            height: 15px;
+            padding-left: 5px;
+            margin-bottom: 2px;
+        }
+
+        #input-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        #message-input {
+            flex: 1;
+            height: 44px;
+            background: #40444b;
+            border-radius: 8px;
+        }
+
+        .reply-context {
+            font-size: 0.8em;
+            color: #b9bbbe;
+            border-left: 2px solid #4f545c;
+            padding-left: 10px;
+            margin-bottom: 5px;
+            font-style: italic;
+            cursor: pointer;
+        }
+
+        .reply-context:hover {
+            color: white;
+        }
+
+        .message:hover .message-actions {
+            display: flex;
+        }
+
+        .message-actions {
+            display: none;
+            float: right;
+            gap: 5px;
+        }
+
+        .action-btn {
+            font-size: 0.7em;
+            background: #4f545c;
+            color: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .action-btn:hover {
+            background: #5865f2;
+        }
+
+        .action-btn.delete:hover {
+            background: #ed4245;
+        }
+
+        .edited-tag {
+            font-size: 0.65em;
+            color: #8e9297;
+            margin-left: 5px;
+            font-style: italic;
+        }
+
+        .edit-input {
+            width: 100%;
+            background: #40444b;
+            color: white;
+            border: 1px solid #5865f2;
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 5px;
+            font-family: inherit;
+        }
+
+        /* Member List */
+        #member-list-container {
+            width: 240px;
+            background: #2f3136;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        #member-list-header {
+            padding: 15px;
+            font-size: 0.7em;
+            color: #8e9297;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+
+        #member-list {
+            flex: 1;
+            padding: 10px;
+        }
+
+        /* Markdown Styles */
+        .message-content pre {
+            background: #2f3136;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 8px 0;
+            border: 1px solid #202225;
+        }
+
+        .message-content code {
+            background: #2f3136;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+
+        .message-content blockquote {
+            border-left: 4px solid #4f545c;
+            margin-left: 0;
+            padding-left: 10px;
+            color: #b9bbbe;
+        }
+
+        .message-content a {
+            color: #00aff4;
+            text-decoration: none;
+        }
+
+        .message-content a:hover {
+            text-decoration: underline;
+        }
+
+        .message-content p {
+            margin: 4px 0;
+        }
+
+        .message-content ul,
+        .message-content ol {
+            margin: 4px 0;
+            padding-left: 20px;
+        }
+
+        /* Reaction Styles */
+        .reactions-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .reaction-badge {
+            background: #2f3136;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 0.85em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: 0.1s;
+            color: #b9bbbe;
+        }
+
+        .reaction-badge:hover {
+            background: #3ba55c33;
+            border-color: #3ba55c;
+        }
+
+        .reaction-badge.active {
+            background: #5865f233;
+            border-color: #5865f2;
+            color: #dee0fc;
+        }
+
+        .reaction-badge .count {
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        /* Emoji Picker Popover */
+        #emoji-picker {
+            position: absolute;
+            background: #2f3136;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            display: none;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 5px;
+            z-index: 1001;
+        }
+
+        .picker-emoji {
+            font-size: 1.5em;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .picker-emoji:hover {
+            background: #40444b;
+        }
+
+        /* Avatar Styles */
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+
+        .avatar-small {
+            width: 24px;
+            height: 24px;
+        }
+
+        .avatar-placeholder {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .avatar-placeholder.small {
+            width: 24px;
+            height: 24px;
+            font-size: 11px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: #292b2f;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .user-profile .username {
+            font-weight: bold;
+            color: white;
+            flex: 1;
+        }
+
+        .user-profile .avatar-upload-btn {
+            background: transparent;
+            padding: 5px;
+            font-size: 0.8em;
+            color: #b9bbbe;
+        }
+
+        .user-profile .avatar-upload-btn:hover {
+            color: white;
+        }
+
+        .settings-btn {
+            background: transparent;
+            padding: 5px;
+            font-size: 0.8em;
+            color: #b9bbbe;
+            cursor: pointer;
+        }
+
+        .settings-btn:hover {
+            color: white;
+        }
+
+        /* Settings Modal */
+        #settings-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #settings-modal .card {
+            position: relative;
+            animation: popIn 0.2s ease-out;
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0.9);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .close-settings {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #b9bbbe;
+        }
+
+        .close-settings:hover {
+            color: white;
+        }
+
+        /* Link Preview Styles */
+        .link-card {
+            background: #2f3136;
+            margin-top: 8px;
+            border-radius: 4px;
+            border-left: 3px solid #202225;
+            max-width: 432px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: background 0.1s;
+        }
+
+        .link-card:hover {
+            background: #36393f;
+        }
+
+        .link-card a {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .link-card-content {
+            padding: 10px;
+        }
+
+        .link-site-name {
+            font-size: 0.75em;
+            color: #b9bbbe;
+            margin-bottom: 4px;
+        }
+
+        .link-title {
+            font-weight: 600;
+            color: #00aff4;
+            margin-bottom: 4px;
+            font-size: 1em;
+            line-height: 1.3;
+        }
+
+        .link-description {
+            font-size: 0.85em;
+            color: #dcddde;
+            margin-bottom: 8px;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .link-image {
+            width: 100%;
+            height: auto;
+            max-height: 250px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .member-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px;
+            border-radius: 4px;
+            color: #8e9297;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #3ba55c;
+        }
+
+        /* Mobile Optimization */
+        #mobile-header {
+            display: none;
+            height: 48px;
+            background: #2f3136;
+            border-bottom: 1px solid #202225;
+            padding: 0 10px;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            z-index: 100;
+        }
+
+        #mobile-room-name {
+            font-weight: bold;
+            color: white;
+        }
+
+        #mobile-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 90;
+        }
+
+        @media (max-width: 768px) {
+            #sidebar {
+                position: fixed;
+                left: -240px;
+                top: 0;
+                bottom: 0;
+                transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                z-index: 1000;
+                box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
+            }
+
+            #sidebar.open {
+                left: 0;
+            }
+
+            #member-list-container {
+                position: fixed;
+                right: -240px;
+                top: 0;
+                bottom: 0;
+                width: 240px;
+                transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                z-index: 1000;
+                box-shadow: -2px 0 10px rgba(0, 0, 0, 0.5);
+            }
+
+            #member-list-container.open {
+                right: 0;
+            }
+
+            #mobile-header {
+                display: flex;
+            }
+
+            #status {
+                display: none;
+            }
+
+            #main-content {
+                width: 100%;
+            }
+
+            #messages {
+                padding: 10px;
+            }
+
+            .message {
+                max-width: 92%;
+            }
+
+            #unread-banner {
+                top: 60px;
+                left: 10px;
+                right: 10px;
+            }
+
+            #input-area {
+                padding: 10px;
+            }
+
+            #message-input {
+                font-size: 16px;
+                /* Prevents iOS zoom on focus */
+            }
+
+            #upload-btn,
+            #send-btn {
+                padding: 10px 12px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="settings-modal">
+        <div class="card">
+            <span class="close-settings" onclick="closeSettings()">✕</span>
+            <h2>User Settings</h2>
+
+            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;">
+                <div id="settings-avatar" class="avatar-placeholder"
+                    style="width: 80px; height: 80px; font-size: 32px; margin-bottom: 10px; cursor: pointer;"
+                    onclick="document.getElementById('settings-avatar-input').click()"></div>
+                <button class="action-btn" onclick="document.getElementById('settings-avatar-input').click()">Change
+                    Avatar</button>
+                <input type="file" id="settings-avatar-input" style="display: none;" accept="image/*"
+                    onchange="uploadAvatar(this.files[0])">
+            </div>
+
+            <div class="input-group">
+                <label>Username</label>
+                <input type="text" id="settings-username" placeholder="Username">
+            </div>
+            <div class="input-group">
+                <label>Email</label>
+                <input type="email" id="settings-email" placeholder="Email">
+            </div>
+            <div class="input-group">
+                <label>New Password (Optional)</label>
+                <input type="password" id="settings-password" placeholder="Leave empty to keep current">
+            </div>
+            <button onclick="saveSettings()" style="width: 100%; margin-bottom: 10px;">Save Changes</button>
+            <button onclick="logout()" style="width: 100%; background: #ed4245;">Log Out</button>
+        </div>
+    </div>
+
+    <div id="auth-box" class="card">
+        <h2 id="auth-title">Welcome back!</h2>
+        <div class="input-group">
+            <label>Username</label>
+            <input type="text" id="username" placeholder="Username">
+        </div>
+        <div id="email-group" class="input-group" style="display: none;">
+            <label>Email</label>
+            <input type="email" id="email" placeholder="Email">
+        </div>
+        <div class="input-group">
+            <label>Password</label>
+            <input type="password" id="password" placeholder="Password">
+        </div>
+        <button id="auth-btn" style="width: 100%;">Log In</button>
+        <div class="switch">
+            <span id="switch-text">Need an account?</span>
+            <a id="switch-link">Register</a>
+        </div>
+    </div>
+
+    <div id="chat-container">
+        <div id="sidebar">
+            <div id="sidebar-header">Accord</div>
+            <div class="sidebar-section">
+                <div class="sidebar-section-header">Channels</div>
+                <div id="channel-list"></div>
+
+                <div class="sidebar-section-header">Direct Messages</div>
+                <div id="dm-list"></div>
+            </div>
+            <div id="sidebar-footer">
+                <div class="user-profile">
+                    <div id="my-avatar" class="avatar-placeholder" style="background: #5865f2;"></div>
+                    <span class="username" id="my-username">...</span>
+                    <button class="settings-btn" onclick="openSettings()">⚙️</button>
+                </div>
+                <button id="add-channel-btn">+ Add Channel</button>
+            </div>
+        </div>
+        <div id="main-content">
+            <div id="mobile-header">
+                <button id="mobile-menu-btn" style="background: transparent; font-size: 1.5em; padding: 5px;">≡</button>
+                <div id="mobile-room-name"># general</div>
+                <button id="mobile-members-btn"
+                    style="background: transparent; font-size: 1.5em; padding: 5px;">👥</button>
+            </div>
+            <div id="mobile-overlay"></div>
+            <div id="status">Connecting...</div>
+            <div id="unread-banner">
+                <span>You have unread messages</span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="text-decoration: underline;">Jump to Unread</span>
+                    <span class="close-banner">✕</span>
+                </div>
+            </div>
+            <div id="messages"></div>
+            <div id="input-area">
+                <div id="reply-preview">
+                    <span>Replying to <strong id="reply-author"></strong></span>
+                    <button id="cancel-reply" style="background: transparent; color: #ed4245; padding: 2px;">✕</button>
+                </div>
+                <div id="typing-indicator"></div>
+                <div id="input-controls">
+                    <input type="file" id="file-input" style="display: none;" accept="image/*">
+                    <button id="upload-btn" style="background: #3ba55c; padding: 10px;">📎</button>
+                    <input type="text" id="message-input" placeholder="Message #general" autofocus>
+                    <button id="send-btn">Send</button>
+                </div>
+            </div>
+        </div>
+        <div id="member-list-container">
+            <div id="member-list-header">Online — 0</div>
+            <div id="member-list"></div>
+        </div>
+    </div>
+
+    <div id="emoji-picker"></div>
+
+    <div id="autocomplete-dropdown"></div>
+
+    <script>
+        let isLogin = true;
+        const authBox = document.getElementById('auth-box');
+        const chatContainer = document.getElementById('chat-container');
+        const authTitle = document.getElementById('auth-title');
+        const emailGroup = document.getElementById('email-group');
+        const authBtn = document.getElementById('auth-btn');
+        const switchLink = document.getElementById('switch-link');
+        const switchText = document.getElementById('switch-text');
+
+        const usernameInput = document.getElementById('username');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+
+        switchLink.onclick = () => {
+            isLogin = !isLogin;
+            authTitle.innerText = isLogin ? 'Welcome back!' : 'Create an account';
+            emailGroup.style.display = isLogin ? 'none' : 'block';
+            authBtn.innerText = isLogin ? 'Log In' : 'Register';
+            switchText.innerText = isLogin ? 'Need an account?' : 'Already have an account?';
+            switchLink.innerText = isLogin ? 'Register' : 'Login';
+        };
+
+        authBtn.onclick = async () => {
+            const payload = { username: usernameInput.value, password: passwordInput.value };
+            if (!isLogin) payload.email = emailInput.value;
+            const endpoint = isLogin ? '/api/login' : '/api/register';
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.error) alert(data.error);
+                else {
+                    if (isLogin) {
+                        localStorage.setItem('token', data.token);
+                        localStorage.setItem('username', data.username);
+                        localStorage.setItem('avatar_url', data.avatar_url || '');
+                        window.location.reload();
+                    } else {
+                        alert('Registered! Please login.');
+                        isLogin = true;
+                        switchLink.onclick();
+                    }
+                }
+            } catch (e) {
+                alert('Auth Error: ' + e.message);
+                console.error(e);
+            }
+        };
+
+        // Mobile UI Logic
+        const sidebar = document.getElementById('sidebar');
+        const memberListContainer = document.getElementById('member-list-container');
+        const overlay = document.getElementById('mobile-overlay');
+
+        document.getElementById('mobile-menu-btn').onclick = () => {
+            sidebar.classList.add('open');
+            overlay.style.display = 'block';
+        };
+
+        document.getElementById('mobile-members-btn').onclick = () => {
+            memberListContainer.classList.add('open');
+            overlay.style.display = 'block';
+        };
+
+        overlay.onclick = () => {
+            sidebar.classList.remove('open');
+            memberListContainer.classList.remove('open');
+            overlay.style.display = 'none';
+        };
+
+        // Chat Logic
+        let ws;
+        let currentRoom = new URLSearchParams(window.location.search).get('room') || 'general';
+        let allMembers = [];
+        let membersMap = new Map(); // Global map for username -> avatar_url
+        let onlineUsers = []; // Now contains { username, avatar_url } objects
+
+        async function initApp() {
+            authBox.style.display = 'none';
+            chatContainer.style.display = 'flex';
+
+            // Set up user profile in sidebar
+            const myUsername = localStorage.getItem('username');
+            const myAvatar = localStorage.getItem('avatar_url');
+            document.getElementById('my-username').innerText = myUsername;
+            updateAvatarElement(document.getElementById('my-avatar'), myUsername, myAvatar);
+
+            await loadChannels();
+            await loadDms();
+            connectRoom(currentRoom);
+
+        }
+
+        function updateAvatarElement(el, username, avatarUrl) {
+            // If el is a container (like sidebar profile), it might have image inside
+            // But here we usually pass the container div for placeholder/img swap
+            if (avatarUrl) {
+                el.innerHTML = `<img src="${avatarUrl}" class="avatar" alt="${username}">`;
+                el.style.background = 'transparent';
+                if (el.classList.contains('avatar-placeholder')) el.classList.remove('avatar-placeholder'); // Remove placeholder class if it becomes image container
+            } else {
+                el.innerHTML = username.charAt(0).toUpperCase();
+                el.style.background = stringToColor(username);
+                el.setAttribute('data-username', username);
+                if (!el.classList.contains('avatar')) el.classList.add('avatar-placeholder');
+            }
+        }
+
+        function stringToColor(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return `hsl(${hash % 360}, 50%, 40%)`;
+        }
+
+        async function loadChannels() {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/channels', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const channels = await res.json();
+            const list = document.getElementById('channel-list');
+            list.innerHTML = '';
+            channels.forEach(ch => {
+                const div = document.createElement('div');
+                div.id = `channel-${ch.id}`;
+
+                // Server-side lastRead is priority on reload
+                const lastRead = ch.last_read || 0;
+                localStorage.setItem(`lastRead-${ch.id}`, lastRead);
+
+                const isUnread = ch.last_timestamp > lastRead && ch.id !== currentRoom;
+                console.log(`[Unread] Channel #${ch.id}: lastMsg=${ch.last_timestamp}, readAt=${lastRead}, unread=${isUnread}`);
+
+                div.className = `channel-item ${ch.id === currentRoom ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
+                div.innerHTML = `<span># ${ch.name}</span><div class="unread-dot"></div>`;
+                div.onclick = () => {
+                    if (currentRoom === ch.id) return;
+                    const oldRoom = currentRoom;
+                    const url = new URL(window.location);
+                    url.searchParams.set('room', ch.id);
+                    window.history.pushState({}, '', url);
+
+                    document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
+                    div.classList.add('active');
+                    div.classList.remove('unread');
+                    div.classList.remove('mention-unread');
+
+                    currentRoom = ch.id;
+                    connectRoom(ch.id, oldRoom);
+                };
+                list.appendChild(div);
+            });
+        }
+
+        async function loadDms() {
+            const token = localStorage.getItem('token');
+            const myUsername = localStorage.getItem('username');
+            const res = await fetch('/api/dms', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const dms = await res.json();
+            const list = document.getElementById('dm-list');
+            list.innerHTML = '';
+            dms.forEach(dm => {
+                const partner = dm.user1 === myUsername ? dm.user2 : dm.user1;
+                const div = document.createElement('div');
+                div.id = `channel-${dm.id}`;
+
+                let lastRead = dm.last_read || 0;
+                localStorage.setItem(`lastRead-${dm.id}`, lastRead);
+
+                const isUnread = dm.last_timestamp > lastRead && dm.id !== currentRoom;
+
+                div.className = `channel-item ${dm.id === currentRoom ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
+                div.innerHTML = `<span>👤 ${partner}</span><div class="unread-dot"></div>`;
+                div.onclick = () => {
+                    if (currentRoom === dm.id) return;
+                    const oldRoom = currentRoom;
+                    const url = new URL(window.location);
+                    url.searchParams.set('room', dm.id);
+                    window.history.pushState({}, '', url);
+
+                    document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
+                    div.classList.add('active');
+                    div.classList.remove('unread');
+                    div.classList.remove('mention-unread');
+
+                    currentRoom = dm.id;
+                    connectRoom(dm.id, oldRoom);
+                };
+                list.appendChild(div);
+            });
+        }
+
+        async function startDm(username) {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/dms', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ target: username })
+            });
+            const data = await res.json();
+            if (data.success) {
+                await loadDms();
+                const dmEl = document.getElementById(`channel-${data.id}`);
+                if (dmEl) dmEl.onclick();
+            } else {
+                alert(data.error);
+            }
+        }
+
+        async function connectRoom(roomId, oldRoomId) {
+            if (ws) {
+                ws.close();
+            }
+
+            const token = localStorage.getItem('token');
+            const myUsername = localStorage.getItem('username');
+            const statusDiv = document.getElementById('status');
+            const messagesDiv = document.getElementById('messages');
+            const messageInput = document.getElementById('message-input');
+
+            messagesDiv.innerHTML = '';
+            statusDiv.innerText = `Connecting to #${roomId}...`;
+            messageInput.placeholder = `Message #${roomId}`;
+
+            // Mobile Header Sync
+            const mobileRoomName = document.getElementById('mobile-room-name');
+            if (roomId.startsWith('dm:')) {
+                const parts = roomId.split(':');
+                const partner = parts[1] === myUsername ? parts[2] : parts[1];
+                mobileRoomName.innerText = `👤 ${partner}`;
+            } else {
+                mobileRoomName.innerText = `# ${roomId}`;
+            }
+
+            // Auto-close mobile drawers
+            sidebar.classList.remove('open');
+            memberListContainer.classList.remove('open');
+            overlay.style.display = 'none';
+
+            // Fetch last read timestamp for this channel
+            const lastRead = parseInt(localStorage.getItem(`lastRead-${roomId}`)) || 0;
+            let dividerShown = false;
+
+            const unreadBanner = document.getElementById('unread-banner');
+            unreadBanner.style.display = 'none';
+
+            // Fetch all members of this channel
+            try {
+                const membersRes = await fetch(`/api/channels/${roomId}/members`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!membersRes.ok) throw new Error('Failed to fetch members');
+                allMembers = await membersRes.json();
+                console.log(`[Connect] Fetched ${allMembers.length} members for #${roomId}`, allMembers);
+            } catch (e) {
+                console.error('[Connect] Error fetching members:', e);
+                allMembers = [];
+            }
+            renderMemberList();
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}?token=${token}`;
+
+            ws = new WebSocket(wsUrl);
+            ws.onopen = () => {
+                statusDiv.innerText = `# ${roomId} — Joined as ${myUsername}`;
+                statusDiv.style.color = '#3ba55c';
+            };
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'history') {
+                    data.messages.forEach(msg => {
+                        // Insert divider if this is the first message after lastRead
+                        if (!dividerShown && lastRead > 0 && msg.timestamp > lastRead) {
+                            const divider = document.createElement('div');
+                            divider.id = 'unread-divider';
+                            divider.className = 'new-messages-divider';
+                            divider.innerHTML = `<span>New Messages</span>`;
+                            messagesDiv.appendChild(divider);
+                            dividerShown = true;
+                        }
+                        addMessage(msg, false);
+                    });
+
+                    if (dividerShown) {
+                        unreadBanner.style.display = 'flex';
+                    }
+
+                    // Always scroll to bottom by default
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+                } else if (data.type === 'message') {
+                    addMessage(data, false);
+                } else if (data.type === 'typing') {
+                    updateTypingUI(data.users);
+                } else if (data.type === 'presence') {
+                    onlineUsers = data.users;
+                    renderMemberList();
+                    // Update avatars in messages for all online users (in case history rendered before presence)
+                    onlineUsers.forEach(u => {
+                        if (u.avatar_url) {
+                            document.querySelectorAll(`.avatar-placeholder[data-username="${u.username}"], img.avatar[alt="${u.username}"]`).forEach(el => {
+                                const parent = el.parentElement;
+                                if (parent) updateAvatarElement(parent, u.username, u.avatar_url);
+                            });
+                        }
+                    });
+                } else if (data.type === 'message-update') {
+                    const msgEl = document.getElementById(`msg-${data.id}`);
+                    if (msgEl) {
+                        const contentEl = msgEl.querySelector('.message-content');
+                        if (contentEl) contentEl.innerHTML = formatMessageContent(data.content);
+                        if (!msgEl.querySelector('.edited-tag')) {
+                            const editedTag = document.createElement('span');
+                            editedTag.className = 'edited-tag';
+                            editedTag.innerText = '(edited)';
+                            msgEl.querySelector('.message-meta').appendChild(editedTag);
+                        }
+                    }
+                } else if (data.type === 'message-delete') {
+                    const msgEl = document.getElementById(`msg-${data.id}`);
+                    if (msgEl) msgEl.remove();
+                } else if (data.type === 'reaction-update') {
+                    updateMessageReactions(data.message_id, data.username, data.emoji, data.action);
+                } else if (data.type === 'profile-update') {
+                    // Update global map
+                    membersMap.set(data.username, data.avatar_url);
+                    // Re-render member list
+                    renderMemberList();
+                    // Re-render avatars in existing messages
+                    document.querySelectorAll(`.avatar-placeholder[data-username="${data.username}"], img.avatar[alt="${data.username}"]`).forEach(el => {
+                        const parent = el.parentElement;
+                        if (parent) {
+                            updateAvatarElement(parent, data.username, data.avatar_url);
+                        }
+                    });
+                }
+            };
+
+            unreadBanner.onclick = (e) => {
+                const isClose = e.target.classList.contains('close-banner');
+                if (isClose) {
+                    unreadBanner.style.display = 'none';
+                    return;
+                }
+                const divider = document.getElementById('unread-divider');
+                if (divider) divider.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                unreadBanner.style.display = 'none';
+                markAsRead(roomId);
+            };
+
+            // IntersectionObserver to hide banner AND mark as read if we reach the divider
+            const dividerObserver = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting) {
+                    unreadBanner.style.display = 'none';
+                    dividerObserver.disconnect();
+                }
+            }, { root: messagesDiv, threshold: 1.0 });
+
+            // IntersectionObserver for the bottom of the list to mark everything as read
+            const bottomObserver = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting) {
+                    markAsRead(roomId);
+                }
+            }, { root: messagesDiv, threshold: 0.1 });
+
+            // We need to wait for messages to render before observing
+            setTimeout(() => {
+                const divider = document.getElementById('unread-divider');
+                if (divider) dividerObserver.observe(divider);
+
+                // Create a sentinel element at the bottom to track reading progress
+                const sentinel = document.createElement('div');
+                sentinel.style.height = '1px';
+                messagesDiv.appendChild(sentinel);
+                bottomObserver.observe(sentinel);
+            }, 1000);
+
+            ws.onerror = (e) => {
+                statusDiv.innerText = 'Connection error. Check your login.';
+                statusDiv.style.color = '#ed4245';
+            };
+        }
+
+        function updateTypingUI(users) {
+            const el = document.getElementById('typing-indicator');
+            const myUsername = localStorage.getItem('username');
+            const others = users.filter(u => u !== myUsername);
+
+            if (others.length === 0) {
+                el.innerText = '';
+                return;
+            }
+            if (others.length === 1) {
+                el.innerText = `${others[0]} is typing...`;
+            } else if (others.length === 2) {
+                el.innerText = `${others[0]} and ${others[1]} are typing...`;
+            } else {
+                el.innerText = 'Several people are typing...';
+            }
+
+            // Auto-clear after 5 seconds just in case
+            clearTimeout(window.typingTimer);
+            window.typingTimer = setTimeout(() => { el.innerText = ''; }, 5000);
+        }
+
+        async function markAsRead(roomId) {
+            const now = Date.now();
+            localStorage.setItem(`lastRead-${roomId}`, now);
+            const token = localStorage.getItem('token');
+            try {
+                await fetch(`/api/rooms/${roomId}/read`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ timestamp: now })
+                });
+            } catch (e) { }
+        }
+
+        function renderMemberList() {
+            const list = document.getElementById('member-list');
+            const header = document.getElementById('member-list-header');
+
+            // allMembers contains objects {username, avatar_url} (from DB)
+            // onlineUsers contains objects {username, avatar_url} (from Presence)
+
+            // Populate global map
+            membersMap.clear();
+            allMembers.forEach(m => membersMap.set(m.username, m.avatar_url));
+            onlineUsers.forEach(u => {
+                // If DB doesn't have it (or has null), but presence does, use presence
+                const current = membersMap.get(u.username);
+                if (!current && u.avatar_url) {
+                    membersMap.set(u.username, u.avatar_url);
+                } else if (!membersMap.has(u.username)) {
+                    membersMap.set(u.username, u.avatar_url);
+                }
+            });
+            const sortedUsernames = Array.from(membersMap.keys()).sort();
+
+            header.innerText = `Members — ${sortedUsernames.length}`;
+            list.innerHTML = '';
+
+            const onlineSet = new Set(onlineUsers.map(u => u.username));
+
+            // Group by online/offline
+            const online = sortedUsernames.filter(u => onlineSet.has(u));
+            const offline = sortedUsernames.filter(u => !onlineSet.has(u));
+
+            const renderGroup = (label, users, isOnline) => {
+                if (users.length === 0) return;
+                const groupHeader = document.createElement('div');
+                groupHeader.style.padding = '10px 5px';
+                groupHeader.style.fontSize = '0.7em';
+                groupHeader.style.color = '#8e9297';
+                groupHeader.style.textTransform = 'uppercase';
+                groupHeader.innerText = `${label} — ${users.length}`;
+                list.appendChild(groupHeader);
+
+                users.forEach(user => {
+                    const avatarUrl = membersMap.get(user);
+                    const div = document.createElement('div');
+                    div.className = 'member-item';
+                    div.style.cursor = 'pointer';
+                    if (!isOnline) div.style.opacity = '0.4';
+
+                    const avatarEl = document.createElement('div');
+                    avatarEl.className = 'avatar-placeholder small';
+                    updateAvatarElement(avatarEl, user, avatarUrl);
+                    div.appendChild(avatarEl);
+
+                    const statusDot = document.createElement('div');
+                    statusDot.className = 'status-dot';
+                    statusDot.style.background = isOnline ? '#3ba55c' : '#747f8d';
+                    div.appendChild(statusDot);
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.innerText = user;
+                    div.appendChild(nameSpan);
+
+                    div.onclick = () => {
+                        if (user !== localStorage.getItem('username')) {
+                            startDm(user);
+                        }
+                    };
+                    list.appendChild(div);
+                });
+            };
+
+            renderGroup('Online', online, true);
+            renderGroup('Offline', offline, false);
+        }
+
+        function addMessage(msg, isSelf) {
+            const messagesDiv = document.getElementById('messages');
+            const myUsername = localStorage.getItem('username');
+            const div = document.createElement('div');
+            div.id = `msg-${msg.id}`;
+            div.className = 'message';
+            if (isSelf) div.style.borderLeft = '4px solid #5865f2';
+
+            const time = new Date(msg.timestamp).toLocaleTimeString();
+
+            let replyHtml = '';
+            if (msg.reply_to_id) {
+                const preview = msg.reply_to_content.length > 50 ? msg.reply_to_content.slice(0, 50) + '...' : msg.reply_to_content;
+                replyHtml = `<div class="reply-context" onclick="scrollToMessage('${msg.reply_to_id}')">
+                    <small>@${msg.reply_to_author}: ${preview}</small>
+                </div>`;
+            }
+
+            // Proper escaping for content to be safe in data-attribute
+            const safeContent = msg.content.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            const isAuthor = msg.author === myUsername;
+
+            const authorAvatar = membersMap.get(msg.author);
+            let avatarHtml = `<div class="avatar-placeholder" style="background: ${stringToColor(msg.author)}" data-username="${msg.author}">${msg.author.charAt(0).toUpperCase()}</div>`;
+            if (authorAvatar) {
+                avatarHtml = `<img src="${authorAvatar}" class="avatar" alt="${msg.author}">`;
+            }
+
+            div.innerHTML = `
+                ${replyHtml}
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex-shrink: 0; margin-top: 5px;">${avatarHtml}</div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div class="message-actions">
+                            <div class="action-btn" onclick="showEmojiPicker(event, '${msg.id}')">😀</div>
+                            <div class="action-btn" data-id="${msg.id}" data-author="${msg.author}" data-content="${safeContent}" onclick="handleReplyClick(this)">Reply</div>
+                            ${isAuthor ? `<div class="action-btn" onclick="handleEditClick('${msg.id}')">Edit</div>` : ''}
+                            ${isAuthor ? `<div class="action-btn delete" onclick="handleDeleteClick('${msg.id}')">Delete</div>` : ''}
+                        </div>
+                        <div class="message-meta">
+                            <strong>${msg.author}</strong> 
+                            <span style="font-size: 0.7em; color: #8e9297; margin-left: 5px;">${time}</span>
+                            ${msg.is_edited ? '<span class="edited-tag">(edited)</span>' : ''}
+                        </div>
+                        <div class="message-content">${formatMessageContent(msg.content)}</div>
+                        <div class="reactions-container" id="reactions-${msg.id}"></div>
+                    </div>
+                </div>
+            `;
+            messagesDiv.appendChild(div);
+
+            // Render reactions if any
+            if (msg.reactions && msg.reactions.length > 0) {
+                renderReactions(msg.id, msg.reactions);
+            }
+
+            // Check for links and render previews
+            const urls = extractUrls(msg.content);
+            if (urls.length > 0) {
+                const previewContainer = document.createElement('div');
+                previewContainer.className = 'link-previews';
+                div.querySelector('.message-content').appendChild(previewContainer);
+                urls.forEach(url => renderLinkPreview(url, previewContainer));
+            }
+
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function formatMessageContent(content) {
+            // Configure renderer to open links in new tab
+            const renderer = new marked.Renderer();
+            renderer.link = function (href, title, text) {
+                // Check if we are in the new token signature (href is an object with {href, title, text, type: 'link'})
+                if (typeof href === 'object' && href !== null && href.type === 'link') {
+                    const token = href;
+                    return `<a href="${token.href}" title="${token.title || ''}" target="_blank" rel="noopener noreferrer">${token.text || token.href}</a>`;
+                }
+
+                // Legacy signature: href, title, text
+                // If text is literally '[object Object]', fallback to href
+                const linkText = (text && text !== '[object Object]') ? text : href;
+                return `<a href="${href}" title="${title || ''}" target="_blank" rel="noopener noreferrer">${linkText || href}</a>`;
+            };
+
+            // marked configuration for security and breaks
+            marked.setOptions({
+                gfm: true,
+                breaks: true,
+                headerIds: false,
+                mangle: false,
+                renderer: renderer
+            });
+
+            // Parse markdown
+            let html = marked.parse(content);
+
+            // Highlight mentions (after markdown parsing to avoid breaking links)
+            html = html.replace(/@(\w+)/g, (match, username) => {
+                return `<span class="mention" data-username="${username}">${match}</span>`;
+            });
+
+            // Simple image detection (legacy support for /files/ links)
+            if (content.trim().startsWith('/files/') && !content.includes('\n')) {
+                return `<img src="${content.trim()}" style="max-width: 100%; border-radius: 4px; margin-top: 5px; display: block;">`;
+            }
+
+            return html;
+        }
+
+        function extractUrls(text) {
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const matches = text.match(urlRegex) || [];
+            return matches.map(match => {
+                let url = match;
+                while (url.endsWith('.') || url.endsWith(',') || url.endsWith(')') || url.endsWith('"') || url.endsWith('\'')) {
+                    url = url.slice(0, -1);
+                }
+                return url;
+            }).filter(u => u.length > 4);
+        }
+
+        async function renderLinkPreview(url, container) {
+            // Avoid duplicates in same message if needed, or just render all
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`/api/preview?url=${encodeURIComponent(url)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+
+                if (!data.title && !data.description && !data.image) return;
+
+                const card = document.createElement('div');
+                card.className = 'link-card';
+
+                // Only show image if it exists
+                const imgHtml = data.image ? `<img src="${data.image}" class="link-image" onerror="this.style.display='none'">` : '';
+
+                card.innerHTML = `
+                    <a href="${data.url}" target="_blank" rel="noopener noreferrer">
+                        <div class="link-card-content">
+                            <div class="link-site-name">${data.site_name || ''}</div>
+                            <div class="link-title">${data.title || url}</div>
+                            <div class="link-description">${data.description || ''}</div>
+                        </div>
+                        ${imgHtml}
+                    </a>
+                `;
+                container.appendChild(card);
+            } catch (e) {
+                console.error('Failed to load preview', e);
+            }
+        }
+
+        function handleEditClick(id) {
+            const msgEl = document.getElementById(`msg-${id}`);
+            const contentEl = msgEl.querySelector('.message-content');
+            const originalContent = contentEl.innerText;
+
+            contentEl.innerHTML = `
+                <input type="text" class="edit-input" value="${originalContent.replace(/"/g, '&quot;')}" 
+                    onkeydown="if(event.key==='Enter') saveEdit('${id}', this.value); if(event.key==='Escape') cancelEdit('${id}', '${originalContent.replace(/'/g, "\\'")}')">
+                <div style="font-size: 0.7em; margin-top: 4px;">
+                    escape to <a href="#" onclick="cancelEdit('${id}', '${originalContent.replace(/'/g, "\\'")}'); return false;" style="color: #00aff4;">cancel</a> • 
+                    enter to <a href="#" onclick="saveEdit('${id}', this.previousElementSibling.value); return false;" style="color: #00aff4;">save</a>
+                </div>
+            `;
+            const input = contentEl.querySelector('input');
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
+        }
+
+        function cancelEdit(id, originalContent) {
+            const msgEl = document.getElementById(`msg-${id}`);
+            const contentEl = msgEl.querySelector('.message-content');
+            contentEl.innerHTML = formatMessageContent(originalContent);
+        }
+
+        async function saveEdit(id, newContent) {
+            if (!newContent.trim()) return;
+            ws.send(JSON.stringify({ type: 'edit', id, content: newContent }));
+
+            // Optimistic update
+            const msgEl = document.getElementById(`msg-${id}`);
+            const contentEl = msgEl.querySelector('.message-content');
+            contentEl.innerHTML = formatMessageContent(newContent);
+            if (!msgEl.querySelector('.edited-tag')) {
+                const editedTag = document.createElement('span');
+                editedTag.className = 'edited-tag';
+                editedTag.innerText = '(edited)';
+                msgEl.querySelector('.message-meta').appendChild(editedTag);
+            }
+        }
+
+        function handleDeleteClick(id) {
+            if (confirm('Are you sure you want to delete this message?')) {
+                ws.send(JSON.stringify({ type: 'delete', id }));
+                document.getElementById(`msg-${id}`).remove();
+            }
+        }
+
+        // Reaction Logic
+        const COMMON_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '✅', '🚀'];
+
+        function showEmojiPicker(e, messageId) {
+            const picker = document.getElementById('emoji-picker');
+            picker.innerHTML = '';
+            COMMON_EMOJIS.forEach(emoji => {
+                const span = document.createElement('span');
+                span.className = 'picker-emoji';
+                span.innerText = emoji;
+                span.onclick = () => {
+                    toggleReaction(messageId, emoji);
+                    picker.style.display = 'none';
+                };
+                picker.appendChild(span);
+            });
+
+            picker.style.left = `${e.clientX - 100}px`;
+            picker.style.top = `${e.clientY - 50}px`;
+            picker.style.display = 'grid';
+
+            // Close when clicking outside
+            const closer = () => {
+                picker.style.display = 'none';
+                document.removeEventListener('click', closer);
+            };
+            setTimeout(() => document.addEventListener('click', closer), 10);
+        }
+
+        function toggleReaction(messageId, emoji) {
+            const container = document.getElementById(`reactions-${messageId}`);
+            const myUsername = localStorage.getItem('username');
+            const existing = Array.from(container.children).find(b => b.dataset.emoji === emoji);
+
+            const isActive = existing && existing.classList.contains('active');
+
+            if (isActive) {
+                ws.send(JSON.stringify({ type: 'reaction-remove', message_id: messageId, emoji }));
+                updateMessageReactions(messageId, myUsername, emoji, 'remove');
+            } else {
+                ws.send(JSON.stringify({ type: 'reaction-add', message_id: messageId, emoji }));
+                updateMessageReactions(messageId, myUsername, emoji, 'add');
+            }
+        }
+
+        function updateMessageReactions(messageId, username, emoji, action) {
+            const container = document.getElementById(`reactions-${messageId}`);
+            if (!container) return;
+
+            let badge = Array.from(container.children).find(b => b.dataset.emoji === emoji);
+            const myUsername = localStorage.getItem('username');
+
+            if (action === 'add') {
+                if (!badge) {
+                    badge = document.createElement('div');
+                    badge.className = 'reaction-badge';
+                    badge.dataset.emoji = emoji;
+                    badge.dataset.users = JSON.stringify([]);
+                    badge.innerHTML = `<span>${emoji}</span><span class="count">0</span>`;
+                    badge.onclick = () => toggleReaction(messageId, emoji);
+                    container.appendChild(badge);
+                }
+                const users = JSON.parse(badge.dataset.users);
+                if (!users.includes(username)) {
+                    users.push(username);
+                    badge.dataset.users = JSON.stringify(users);
+                    badge.querySelector('.count').innerText = users.length;
+                    if (username === myUsername) badge.classList.add('active');
+                }
+            } else {
+                if (badge) {
+                    const users = JSON.parse(badge.dataset.users);
+                    const index = users.indexOf(username);
+                    if (index !== -1) {
+                        users.splice(index, 1);
+                        if (users.length === 0) {
+                            badge.remove();
+                        } else {
+                            badge.dataset.users = JSON.stringify(users);
+                            badge.querySelector('.count').innerText = users.length;
+                            if (username === myUsername) badge.classList.remove('active');
+                        }
+                    }
+                }
+            }
+        }
+
+        function renderReactions(messageId, reactions) {
+            const container = document.getElementById(`reactions-${messageId}`);
+            container.innerHTML = '';
+
+            const grouped = reactions.reduce((acc, r) => {
+                if (!acc[r.emoji]) acc[r.emoji] = [];
+                acc[r.emoji].push(r.username);
+                return acc;
+            }, {});
+
+            const myUsername = localStorage.getItem('username');
+
+            for (const [emoji, users] of Object.entries(grouped)) {
+                const badge = document.createElement('div');
+                badge.className = 'reaction-badge' + (users.includes(myUsername) ? ' active' : '');
+                badge.dataset.emoji = emoji;
+                badge.dataset.users = JSON.stringify(users);
+                badge.innerHTML = `<span>${emoji}</span><span class="count">${users.length}</span>`;
+                badge.onclick = () => toggleReaction(messageId, emoji);
+                container.appendChild(badge);
+            }
+        }
+
+        function handleReplyClick(btn) {
+            const id = btn.getAttribute('data-id');
+            const author = btn.getAttribute('data-author');
+            const content = btn.getAttribute('data-content');
+            setReply(id, author, content);
+        }
+
+        let currentReply = null;
+        function setReply(id, author, content) {
+            currentReply = { id, author, content };
+            document.getElementById('reply-preview').style.display = 'flex';
+            document.getElementById('reply-author').innerText = author;
+            document.getElementById('message-input').focus();
+        }
+
+        document.getElementById('cancel-reply').onclick = () => {
+            currentReply = null;
+            document.getElementById('reply-preview').style.display = 'none';
+        };
+
+        function scrollToMessage(id) {
+            const el = document.getElementById(`msg-${id}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.remove('flash-highlight');
+                void el.offsetWidth; // Trigger reflow for animation
+                el.classList.add('flash-highlight');
+            }
+        }
+
+        document.getElementById('send-btn').onclick = () => {
+            const input = document.getElementById('message-input');
+            const content = input.value.trim();
+            if (content && ws.readyState === WebSocket.OPEN) {
+                const payload = { content };
+                if (currentReply) {
+                    payload.reply_to_id = currentReply.id;
+                    payload.reply_to_author = currentReply.author;
+                    payload.reply_to_content = currentReply.content;
+                }
+                ws.send(JSON.stringify(payload));
+
+                const myMsg = {
+                    author: localStorage.getItem('username'),
+                    content,
+                    timestamp: Date.now(),
+                    ... (currentReply ? {
+                        reply_to_id: currentReply.id,
+                        reply_to_author: currentReply.author,
+                        reply_to_content: currentReply.content
+                    } : {})
+                };
+                addMessage(myMsg, true);
+                markAsRead(currentRoom);
+
+                input.value = '';
+                document.getElementById('cancel-reply').onclick();
+            }
+        };
+
+        // File Upload Logic
+        const fileInput = document.getElementById('file-input');
+        const uploadBtn = document.getElementById('upload-btn');
+
+        uploadBtn.onclick = () => fileInput.click();
+
+        fileInput.onchange = async () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('file', file);
+
+            uploadBtn.innerText = '⌛';
+            try {
+                const res = await fetch(`/api/upload`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.url && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ content: data.url }));
+                    addMessage({ author: localStorage.getItem('username'), content: data.url, timestamp: Date.now() }, true);
+                }
+            } catch (e) {
+                alert('Upload failed');
+            }
+            uploadBtn.innerText = '📎';
+            fileInput.value = '';
+        };
+
+        // Mention Autocomplete Logic
+        const autocompleteDropdown = document.getElementById('autocomplete-dropdown');
+        const messageInput = document.getElementById('message-input');
+        let selectedIndex = 0;
+        let mentionStartIndex = -1;
+        let filteredMembers = [];
+
+        messageInput.oninput = (e) => {
+            const val = messageInput.value;
+            const pos = messageInput.selectionStart;
+            const lastAt = val.lastIndexOf('@', pos - 1);
+
+            if (lastAt !== -1 && (lastAt === 0 || val[lastAt - 1] === ' ')) {
+                const term = val.slice(lastAt + 1, pos);
+                if (!term.includes(' ')) {
+                    showAutocomplete(term, lastAt);
+                    return;
+                }
+            }
+            hideAutocomplete();
+        };
+
+        function showAutocomplete(term, index) {
+            mentionStartIndex = index;
+            // Autocomplete now needs to handle mixed sources if needed, but for now we look at cache or filtered members
+            // We use membersMap keys
+            const candidates = Array.from(membersMap.keys());
+            filteredMembers = candidates.filter(m => m.toLowerCase().includes(term.toLowerCase())).slice(0, 10);
+
+            if (filteredMembers.length === 0) {
+                hideAutocomplete();
+                return;
+            }
+
+            autocompleteDropdown.innerHTML = '';
+            filteredMembers.forEach((m, i) => {
+                const div = document.createElement('div');
+                div.className = `autocomplete-item ${i === selectedIndex ? 'selected' : ''}`;
+
+                const isOnline = onlineUsers.some(u => u.username === m);
+                div.innerHTML = `<div class="status-dot" style="background: ${isOnline ? '#3ba55c' : '#747f8d'}"></div><span>${m}</span>`;
+                div.onclick = () => selectMention(m);
+                autocompleteDropdown.appendChild(div);
+            });
+
+            const rect = messageInput.getBoundingClientRect();
+            autocompleteDropdown.style.left = `${rect.left}px`;
+            autocompleteDropdown.style.top = `${rect.top - autocompleteDropdown.offsetHeight - 10}px`;
+            autocompleteDropdown.style.display = 'block';
+
+            // Re-calculate top if height changed
+            autocompleteDropdown.style.top = `${rect.top - autocompleteDropdown.offsetHeight - 10}px`;
+        }
+
+        function hideAutocomplete() {
+            autocompleteDropdown.style.display = 'none';
+            selectedIndex = 0;
+            mentionStartIndex = -1;
+        }
+
+        function selectMention(username) {
+            const val = messageInput.value;
+            const before = val.slice(0, mentionStartIndex);
+            const after = val.slice(messageInput.selectionStart);
+            messageInput.value = before + '@' + username + ' ' + after;
+            hideAutocomplete();
+            messageInput.focus();
+        }
+
+        messageInput.addEventListener('keydown', (e) => {
+            if (autocompleteDropdown.style.display === 'block') {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    selectedIndex = (selectedIndex + 1) % filteredMembers.length;
+                    renderAutocompleteItems();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    selectedIndex = (selectedIndex - 1 + filteredMembers.length) % filteredMembers.length;
+                    renderAutocompleteItems();
+                } else if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    selectMention(filteredMembers[selectedIndex]);
+                } else if (e.key === 'Escape') {
+                    hideAutocomplete();
+                }
+            } else if (e.key === 'Enter') {
+                document.getElementById('send-btn').onclick();
+            }
+        });
+
+        function renderAutocompleteItems() {
+            const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
+            items.forEach((item, i) => {
+                item.className = `autocomplete-item ${i === selectedIndex ? 'selected' : ''}`;
+            });
+        }
+
+        document.getElementById('add-channel-btn').onclick = async () => {
+            const name = prompt('Enter channel name:');
+            if (name) {
+                const token = localStorage.getItem('token');
+                const res = await fetch('/api/channels', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ name })
+                });
+                if (res.ok) await loadChannels();
+                else alert('Failed to create channel');
+            }
+        };
+
+
+        let lastTypingSent = 0;
+        document.getElementById('message-input').oninput = () => {
+            const now = Date.now();
+            if (now - lastTypingSent > 2500) { // Throttle typing events
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'typing' }));
+                    lastTypingSent = now;
+                }
+            }
+        };
+
+        if (localStorage.getItem('token')) initApp();
+
+        // Settings Logic
+        function openSettings() {
+            document.getElementById('settings-modal').style.display = 'flex';
+            document.getElementById('settings-username').value = localStorage.getItem('username');
+            const myUsername = localStorage.getItem('username');
+            const myAvatar = localStorage.getItem('avatar_url');
+            updateAvatarElement(document.getElementById('settings-avatar'), myUsername, myAvatar);
+        }
+
+        async function uploadAvatar(file) {
+            if (!file) return;
+            const token = localStorage.getItem('token');
+            const myUsername = localStorage.getItem('username');
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/api/user/avatar', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.avatar_url) {
+                    localStorage.setItem('avatar_url', data.avatar_url);
+                    // Update various UI elements
+                    updateAvatarElement(document.getElementById('settings-avatar'), myUsername, data.avatar_url);
+                    updateAvatarElement(document.getElementById('my-avatar'), myUsername, data.avatar_url);
+
+                    // Notify others via WebSocket
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'profile-update',
+                            username: myUsername,
+                            avatar_url: data.avatar_url
+                        }));
+                    }
+                }
+            } catch (e) {
+                alert('Avatar upload failed.');
+            }
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.reload();
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').style.display = 'none';
+        }
+
+        async function saveSettings() {
+            const username = document.getElementById('settings-username').value;
+            const email = document.getElementById('settings-email').value;
+            const password = document.getElementById('settings-password').value;
+
+            const payload = { username };
+            if (email) payload.email = email;
+            if (password) payload.password = password;
+
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch('/api/user/me', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                if (data.success) {
+                    alert('Settings saved!');
+                    if (data.token) {
+                        localStorage.setItem('token', data.token);
+                    }
+                    if (data.username) {
+                        localStorage.setItem('username', data.username);
+                        document.getElementById('my-username').innerText = data.username;
+                    }
+                    closeSettings();
+                    // Optionally reload to refresh everything if username changed
+                    if (data.token) window.location.reload();
+                }
+            } catch (e) {
+                alert('Failed to save settings');
+            }
+        }
+
+        // Automatic lastRead update removed to prevent aggressive "marking as read" on reload
+    </script>
+</body>
+
+</html>
