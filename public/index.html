@@ -3,8 +3,13 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Optimized viewport for mobile: prevents zooming on inputs -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Accord — Harmony in Messaging</title>
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    <!-- Theme Color for mobile browsers -->
+    <meta name="theme-color" content="#2f3136">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body {
@@ -15,6 +20,8 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
+            /* Prevent pull-to-refresh on mobile */
+            overscroll-behavior-y: none;
         }
 
         .card {
@@ -53,6 +60,8 @@
             background: #202225;
             color: white;
             box-sizing: border-box;
+            /* Prevent iOS zooming by enforcing 16px font size on inputs if needed, 
+               but viewport meta tag handles this mostly. */
         }
 
         button {
@@ -286,6 +295,9 @@
         #sidebar-footer {
             padding: 15px;
             border-top: 1px solid #202225;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
         #add-channel-btn {
@@ -299,6 +311,24 @@
         #add-channel-btn:hover {
             border-color: #dcddde;
             color: #dcddde;
+        }
+
+        #install-pwa-btn {
+            width: 100%;
+            padding: 8px;
+            background: #3ba55c;
+            color: white;
+            font-weight: bold;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: none;
+            /* Hidden by default */
+            font-size: 0.8em;
+        }
+
+        #install-pwa-btn:hover {
+            background: #2d8046;
         }
 
         /* Main Chat */
@@ -931,6 +961,7 @@
                     <button class="settings-btn" onclick="openSettings()">⚙️</button>
                 </div>
                 <button id="add-channel-btn">+ Add Channel</button>
+                <button id="install-pwa-btn">↓ Install App</button>
             </div>
         </div>
         <div id="main-content">
@@ -2110,7 +2141,39 @@
             }
         }
 
-        // Automatic lastRead update removed to prevent aggressive "marking as read" on reload
+        // PWA Installation Logic
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('SW registered!', reg))
+                    .catch(err => console.log('SW registration failed', err));
+            });
+        }
+
+        let deferredPrompt;
+        const installBtn = document.getElementById('install-pwa-btn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.style.display = 'block';
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`User response to the install prompt: ${outcome}`);
+                deferredPrompt = null;
+                installBtn.style.display = 'none';
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            installBtn.style.display = 'none';
+            deferredPrompt = null;
+            console.log('PWA was installed');
+        });
     </script>
 </body>
 
