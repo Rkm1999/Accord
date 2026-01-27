@@ -918,6 +918,23 @@
                 <label>New Password (Optional)</label>
                 <input type="password" id="settings-password" placeholder="Leave empty to keep current">
             </div>
+
+            <hr style="border: 0; border-top: 1px solid #4f545c; margin: 20px 0;">
+            <h3 style="color: white; margin-bottom: 15px;">Notification Settings</h3>
+
+            <div class="input-group">
+                <label>Notification Level (Global)</label>
+                <select id="settings-notif-level"
+                    style="width: 100%; padding: 8px; background: #202225; color: white; border: 1px solid #4f545c; border-radius: 4px;">
+                    <option value="all">All Messages</option>
+                    <option value="mentions">Mentions Only</option>
+                    <option value="mute">Muted</option>
+                </select>
+            </div>
+
+            <button id="push-toggle-btn" onclick="togglePushNotifications()"
+                style="width: 100%; margin-bottom: 20px; background: #3ba55c;">Enable Push Notifications</button>
+
             <button onclick="saveSettings()" style="width: 100%; margin-bottom: 10px;">Save Changes</button>
             <button onclick="logout()" style="width: 100%; background: #ed4245;">Log Out</button>
         </div>
@@ -1006,6 +1023,7 @@
     <div id="autocomplete-dropdown"></div>
 
     <script>
+        console.log('[Accord] v1.1 - Push Debug Active');
         let isLogin = true;
         const authBox = document.getElementById('auth-box');
         const chatContainer = document.getElementById('chat-container');
@@ -1099,7 +1117,29 @@
             await loadChannels();
             await loadDms();
             connectRoom(currentRoom);
+        }
 
+        async function resetApp() {
+            if (confirm("This will clear all local data, unregister service workers, and logout. Proceed?")) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (let registration of registrations) {
+                    await registration.unregister();
+                }
+                localStorage.clear();
+                window.location.reload();
+            }
+        }
+
+        async function checkAndPromptPush() {
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.getSubscription();
+
+            if (!subscription && Notification.permission === 'default') {
+                // We shouldn't alert() here as it's an auto-prompt
+                togglePushNotifications(true);
+            }
         }
 
         function updateAvatarElement(el, username, avatarUrl) {
@@ -2052,6 +2092,7 @@
             const myUsername = localStorage.getItem('username');
             const myAvatar = localStorage.getItem('avatar_url');
             updateAvatarElement(document.getElementById('settings-avatar'), myUsername, myAvatar);
+            updatePushUI();
         }
 
         async function uploadAvatar(file) {
@@ -2107,6 +2148,16 @@
             if (password) payload.password = password;
 
             const token = localStorage.getItem('token');
+            const level = document.getElementById('settings-notif-level').value;
+            await fetch('/api/settings/notifications', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ level })
+            });
+
             try {
                 const res = await fetch('/api/user/me', {
                     method: 'PUT',
@@ -2141,11 +2192,133 @@
             }
         }
 
+        // Push Notification Logic
+        let isPushActionPending = false;
+        async function togglePushNotifications(isAuto = false) {
+            if (isPushActionPending) return;
+            isPushActionPending = true;
+            const btn = document.getElementById('push-toggle-btn');
+            console.log('[Push] togglePushNotifications called, isAuto:', isAuto);
+
+            if (Notification.permission === 'default') {
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    alert('Permission denied for notifications.');
+                    return;
+                }
+            }
+
+            const registration = await navigator.serviceWorker.ready;
+            let subscription = await registration.pushManager.getSubscription();
+
+            try {
+                if (subscription) {
+                    // Unsubscribe
+                    await subscription.unsubscribe();
+                    await fetch('/api/push/unsubscribe', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify({ endpoint: subscription.endpoint })
+                    });
+                    btn.innerText = 'Enable Push Notifications';
+                    btn.style.background = '#3ba55c';
+                } else {
+                    // Subscribe
+                    const res = await fetch('/api/push/public-key', {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    });
+                    const { publicKey } = await res.json();
+                    console.log('[Push] Public Key from API:', publicKey);
+                    console.log('[Push] Permission state:', Notification.permission);
+
+                    if (publicKey.includes('PLACEHOLDER')) {
+                        alert('Push notification cannot be enabled with placeholder VAPID keys. Please generate real VAPID keys in wrangler.toml.');
+                        return;
+                    }
+
+                    console.log('[Push] Subscribing with key length:', publicKey.length);
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(publicKey)
+                    });
+
+                    await fetch('/api/push/subscribe', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify(subscription)
+                    });
+                    btn.innerText = 'Disable Push Notifications';
+                    btn.style.background = '#ed4245';
+                }
+            } catch (e) {
+                console.error('Push Toggle Error:', e);
+                alert('Failed to toggle push notifications: ' + e.message);
+            } finally {
+                isPushActionPending = false;
+            }
+        }
+
+        async function updatePushUI() {
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.getSubscription();
+            const btn = document.getElementById('push-toggle-btn');
+            if (subscription) {
+                btn.innerText = 'Disable Push Notifications';
+                btn.style.background = '#ed4245';
+            } else {
+                btn.innerText = 'Enable Push Notifications';
+                btn.style.background = '#3ba55c';
+            }
+
+            // Load settings
+            const res = await fetch('/api/settings/notifications', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            const settings = await res.json();
+            document.getElementById('settings-notif-level').value = settings.global;
+        }
+
+        function urlBase64ToUint8Array(base64String) {
+            console.log('[Push] Converting key:', base64String);
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            console.log('[Push] Key converted, length:', outputArray.length);
+            return outputArray;
+        }
+
         // PWA Installation Logic
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js')
-                    .then(reg => console.log('SW registered!', reg))
+                    .then(async (reg) => {
+                        console.log('SW registered!', reg);
+                        const syncToken = () => {
+                            const activeWorker = navigator.serviceWorker.controller || reg.active;
+                            if (activeWorker) {
+                                activeWorker.postMessage({
+                                    type: 'SET_TOKEN',
+                                    token: localStorage.getItem('token')
+                                });
+                            }
+                        };
+                        reg.update();
+                        syncToken();
+                        navigator.serviceWorker.addEventListener('controllerchange', syncToken);
+                        document.addEventListener('visibilitychange', () => {
+                            if (document.visibilityState === 'visible') syncToken();
+                        });
+                    })
                     .catch(err => console.log('SW registration failed', err));
             });
         }

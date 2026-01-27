@@ -26,6 +26,8 @@ export class PresenceTracker extends DurableObject {
         const username = url.searchParams.get("username");
         const roomId = url.searchParams.get("roomId");
 
+        console.log(`[PresenceTracker] Action: ${action}, User: ${username}, Room: ${roomId}`);
+
         if (action === "get-all-metadata") {
             const results = this.ctx.storage.sql.exec("SELECT * FROM room_metadata").toArray();
             return new Response(JSON.stringify(results));
@@ -100,13 +102,16 @@ export class PresenceTracker extends DurableObject {
         // Notify all active rooms to update their connected clients
         const promises = Array.from(this.activeRooms).map(async (roomId) => {
             try {
+                // Ensure we use the NAME to get the ID, as roomId stored here is the name
                 const id = this.env.CHAT_ROOM.idFromName(roomId);
                 const stub = this.env.CHAT_ROOM.get(id);
+                console.log(`[PresenceTracker] Broadcasting to room: ${roomId} (${id.toString()})`);
                 await stub.fetch(new Request("http://do/update-presence", {
                     method: "POST",
                     body: payload
                 }));
             } catch (e) {
+                console.error(`[PresenceTracker] Failed to broadcast to ${roomId}:`, e);
                 this.activeRooms.delete(roomId);
             }
         });

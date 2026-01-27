@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { sign, verify } from 'hono/jwt';
 import { jwt } from 'hono/jwt';
+import webpush from 'web-push';
 import { ChatRoom } from "./chat-room";
 import { PresenceTracker } from "./presence-tracker";
 import { hashPassword } from './auth';
@@ -282,10 +283,92 @@ app.get('/api/channels/:roomId/members', async (c) => {
 	const roomId = c.req.param('roomId');
 	const id = c.env.CHAT_ROOM.idFromName(roomId).toString();
 	const { results } = await c.env.DB.prepare(
-		"SELECT cm.username, u.avatar_url FROM channel_members cm LEFT JOIN users u ON cm.user_id = u.id WHERE cm.channel_id = ? ORDER BY cm.username ASC"
+		"SELECT cm.user_id, cm.username, u.avatar_url FROM channel_members cm LEFT JOIN users u ON cm.user_id = u.id WHERE cm.channel_id = ? ORDER BY cm.username ASC"
 	).bind(id).all();
 	console.log(`[API] Members for ${roomId} (${id}):`, JSON.stringify(results));
 	return c.json(results);
+});
+
+// Push Notifications
+app.get('/api/push/public-key', (c) => {
+	return c.json({ publicKey: c.env.VAPID_PUBLIC_KEY });
+});
+
+app.post('/api/push/subscribe', async (c) => {
+	const user = c.get('jwtPayload') as any;
+	const subscription = await c.req.json();
+
+	// In the payload strategy, the client sends the standard PushSubscription object
+	if (!subscription.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
+		return c.json({ error: "Invalid subscription" }, 400);
+	}
+
+	await c.env.DB.prepare(
+		"INSERT OR REPLACE INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+	).bind(
+		crypto.randomUUID(),
+		user.id,
+		subscription.endpoint,
+		subscription.keys.p256dh,
+		subscription.keys.auth,
+		Date.now()
+	).run();
+
+	return c.json({ success: true });
+});
+
+app.post('/api/push/unsubscribe', async (c) => {
+	const { endpoint } = await c.req.json();
+	await c.env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").bind(endpoint).run();
+	return c.json({ success: true });
+});
+
+// Notification Settings
+app.get('/api/settings/notifications', async (c) => {
+	const user = c.get('jwtPayload') as any;
+	const { results } = await c.env.DB.prepare(
+		"SELECT room_id, level FROM notification_settings WHERE user_id = ?"
+	).bind(user.id).all();
+
+	const global = results.find((r: any) => r.room_id === null)?.level || 'all';
+	const perRoom = results.filter((r: any) => r.room_id !== null);
+
+	return c.json({ global, perRoom });
+});
+
+app.put('/api/settings/notifications', async (c) => {
+	const user = c.get('jwtPayload') as any;
+	const { room_id, level } = await c.req.json(); // room_id is null for global
+
+	if (!['all', 'mentions', 'mute'].includes(level)) {
+		return c.json({ error: "Invalid level" }, 400);
+	}
+
+	await c.env.DB.prepare(
+		"INSERT INTO notification_settings (user_id, room_id, level) VALUES (?, ?, ?) ON CONFLICT(user_id, room_id) DO UPDATE SET level = ?"
+	).bind(user.id, room_id || null, level, level).run();
+
+	return c.json({ success: true });
+});
+
+// Latest Notification for SW (no-payload strategy)
+app.get('/api/push/last-notification', async (c) => {
+	const user = c.get('jwtPayload') as any;
+
+	// Fetch from the immediate notification queue
+	const { results } = await c.env.DB.prepare(`
+		SELECT title, body, url FROM notification_queue WHERE user_id = ?
+	`).bind(user.id).all();
+
+	if (results.length === 0) return c.json({ error: "No notifications" }, 404);
+
+	const msg: any = results[0];
+	return c.json({
+		title: msg.title,
+		body: msg.body,
+		icon: 'https://cdn-icons-png.flaticon.com/512/733/733579.png',
+		data: { url: msg.url }
+	});
 });
 
 // Image Uploads

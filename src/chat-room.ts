@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import webpush from 'web-push';
 import { verify } from 'hono/jwt';
 
 /**
@@ -137,7 +138,7 @@ export class ChatRoom extends DurableObject {
         server.send(JSON.stringify({ type: "history", messages: history }));
 
         // Notify Global Presence
-        this.ctx.waitUntil(this.notifyPresence("join", user.username, undefined, user.avatar_url));
+        await this.notifyPresence("join", user.username, undefined, user.avatar_url);
 
         // Fetch current global presence and send it to the user immediately
         const presenceId = this.env.PRESENCE.idFromName("global");
@@ -349,6 +350,113 @@ export class ChatRoom extends DurableObject {
         if (alarm === null) {
             // Schedule sync in 10 seconds
             this.ctx.storage.setAlarm(Date.now() + 10000);
+        }
+
+        // Trigger Push Notifications
+        this.ctx.waitUntil(this.triggerPushNotifications(username, content, mentions, replyToAuthor));
+    }
+
+    private async triggerPushNotifications(sender: string, content: string, mentions: string[], replyToAuthor: string | null) {
+        const roomId = this.ctx.id.toString();
+
+        // 1. Get all members of this channel (including their IDs)
+        // Note: D1 is used here as it's the source of truth for membership
+        const { results: members } = await this.env.DB.prepare(
+            "SELECT user_id, username FROM channel_members WHERE channel_id = ?"
+        ).bind(roomId).all();
+
+        // 2. Filter out the sender
+        const recipients = members.filter((m: any) => m.username !== sender);
+        if (recipients.length === 0) return;
+
+        // 3. For each recipient, check their notification settings and subscriptions
+        for (const recipient of recipients) {
+            const settingsRequest = await this.env.DB.prepare(
+                "SELECT level, room_id FROM notification_settings WHERE user_id = ? AND (room_id = ? OR room_id IS NULL) ORDER BY room_id DESC LIMIT 1"
+            ).bind((recipient as any).user_id, roomId).first();
+
+            const level = (settingsRequest as any)?.level || 'all';
+
+            if (level === 'mute') continue;
+            if (level === 'mentions' && !mentions.includes((recipient as any).username) && (recipient as any).username !== replyToAuthor) continue;
+
+            // Get push subscriptions
+            const { results: subs } = await this.env.DB.prepare(
+                "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?"
+            ).bind((recipient as any).user_id).all();
+
+            if (subs.length === 0) continue;
+
+            const payload = {
+                title: `${sender} in #${this.channelName || 'Accord'}`,
+                body: content.length > 100 ? content.slice(0, 100) + '...' : content,
+                url: `/?room=${this.channelName || roomId}`
+            };
+
+            // Update Notification Queue for this user
+            try {
+                await this.env.DB.prepare(`
+                    INSERT INTO notification_queue (user_id, title, body, url, timestamp)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                    title = excluded.title,
+                    body = excluded.body,
+                    url = excluded.url,
+                    timestamp = excluded.timestamp
+                `).bind(
+                    (recipient as any).user_id,
+                    payload.title,
+                    payload.body,
+                    payload.url,
+                    Date.now()
+                ).run();
+            } catch (e) {
+                console.error(`[Push Debug] Failed to update queue for ${(recipient as any).username}:`, e);
+            }
+
+            // Send push to each subscription
+            for (const sub of subs) {
+                try {
+                    await this.sendPush(sub, payload);
+                } catch (e) {
+                    console.error(`Failed to send push to ${(recipient as any).username}:`, e);
+                }
+            }
+        }
+    }
+
+    private async sendPush(subscription: any, payload: any) {
+        console.log(`[Push Notification] SENDING to: ${subscription.endpoint}`);
+
+        const pushConfig = {
+            endpoint: subscription.endpoint,
+            keys: {
+                p256dh: subscription.p256dh,
+                auth: subscription.auth
+            }
+        };
+
+        webpush.setVapidDetails(
+            'mailto:admin@example.com',
+            this.env.VAPID_PUBLIC_KEY,
+            this.env.VAPID_PRIVATE_KEY
+        );
+
+        const options = {
+            TTL: 60,
+            urgency: 'high' as webpush.Urgency
+        };
+
+        try {
+            await webpush.sendNotification(pushConfig, JSON.stringify(payload), options);
+            console.log(`[Push Notification] Success`);
+        } catch (e: any) {
+            console.error(`[Push Notification] Error:`, e);
+            if (e.statusCode === 410 || e.statusCode === 404) {
+                // Clean up expired subs
+                await this.env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?")
+                    .bind(subscription.endpoint).run();
+            }
         }
     }
 

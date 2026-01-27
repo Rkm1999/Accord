@@ -1,5 +1,5 @@
 {
-	"name": "discord-backend",
+	"name": "accord-chat",
 	"version": "0.0.0",
 	"private": true,
 	"scripts": {
@@ -12,11 +12,13 @@
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.12.4",
+		"@types/web-push": "^3.6.4",
 		"typescript": "^5.5.2",
 		"vitest": "~3.2.0",
 		"wrangler": "^4.60.0"
 	},
 	"dependencies": {
-		"hono": "^4.11.5"
+		"hono": "^4.11.5",
+		"web-push": "^3.6.7"
 	}
 }
