@@ -1,6 +1,7 @@
-name = "accord-chat"
+name = "accord"
 main = "src/index.ts"
-compatibility_date = "2025-01-24"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
 
 # Static Assets
 [assets]
@@ -9,7 +10,9 @@ binding = "ASSETS"
 
 # Environment Variables
 [vars]
-JWT_SECRET = "super-secret-key-change-me"
+JWT_SECRET = "TH3SrjnlESCVDLNN1m2E8HnET28juQJsZH07CH+bbfw="
+VAPID_PUBLIC_KEY = "BKx5kwQnD6iUMVftPEnWxWm12X8zjwzxmUFe08dEooOil7j_4fjyp9RAUz58I5ITicf_YgXd7TvCuJYA2WQd7W0"
+VAPID_PRIVATE_KEY = "c0fjpNHBu0qHiqDiKh7vjy-Ed333ba_-1jxCneekxm4"
 
 # Durable Objects
 [[durable_objects.bindings]]
@@ -31,13 +34,13 @@ new_sqlite_classes = ["PresenceTracker"]
 # D1 Database
 [[d1_databases]]
 binding = "DB"
-database_name = "discord-db"
-database_id = "641755c4-58a6-42b1-bbf2-acc814d9d5cf"
+database_name = "accord-db"
+database_id = "1e564577-fc6e-4369-bd68-c61642e5ea3d"
 
 # R2 Storage
 [[r2_buckets]]
 binding = "FILES"
-bucket_name = "discord-files"
+bucket_name = "accord-files"
 
 # Observability
 [observability]

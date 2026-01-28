@@ -10,6 +10,7 @@ import { verify } from 'hono/jwt';
 export class ChatRoom extends DurableObject {
     private channelName: string = "";
     private typingUsers: Map<string, number> = new Map();
+    private lastHeartbeat: number = 0;
 
     constructor(state: DurableObjectState, env: Env) {
         super(state, env);
@@ -26,7 +27,13 @@ export class ChatRoom extends DurableObject {
             reply_to_author TEXT,
             reply_to_content TEXT,
             is_edited INTEGER DEFAULT 0,
-            is_deleted INTEGER DEFAULT 0
+            is_deleted INTEGER DEFAULT 0,
+            has_attachment INTEGER DEFAULT 0,
+            attachment_type TEXT,
+            attachment_url TEXT,
+            attachment_name TEXT,
+            attachment_size INTEGER,
+            attachment_mime_type TEXT
           )
         `);
 
@@ -49,6 +56,10 @@ export class ChatRoom extends DurableObject {
         try {
             this.ctx.storage.sql.exec("ALTER TABLE messages ADD COLUMN is_edited INTEGER DEFAULT 0");
             this.ctx.storage.sql.exec("ALTER TABLE messages ADD COLUMN is_deleted INTEGER DEFAULT 0");
+        } catch (e) { }
+        try {
+            this.ctx.storage.sql.exec("ALTER TABLE messages ADD COLUMN has_attachment INTEGER DEFAULT 0");
+            this.ctx.storage.sql.exec("ALTER TABLE messages ADD COLUMN attachment_type TEXT");
         } catch (e) { }
     }
 
@@ -96,8 +107,11 @@ export class ChatRoom extends DurableObject {
         const webSocketPair = new WebSocketPair();
         const [client, server] = Object.values(webSocketPair);
 
-        // Associate user info with the socket
-        this.ctx.acceptWebSocket(server, [user.username]);
+        // Generate a unique session ID for this browser tab/connection
+        const sessionId = crypto.randomUUID();
+
+        // Associate user info and session ID with the socket
+        this.ctx.acceptWebSocket(server, [user.username, sessionId]);
 
         // Register membership in D1 with self-healing for ID changes
         if (user.id) {
@@ -119,7 +133,7 @@ export class ChatRoom extends DurableObject {
 
                 await this.env.DB.prepare(
                     "INSERT OR IGNORE INTO channel_members (channel_id, user_id, username, joined_at) VALUES (?, ?, ?, ?)"
-                ).bind(this.ctx.id.toString(), user.id, user.username, Date.now()).run();
+                ).bind(this.channelName || this.ctx.id.toString(), user.id, user.username, Date.now()).run();
             })());
         }
 
@@ -138,12 +152,12 @@ export class ChatRoom extends DurableObject {
         server.send(JSON.stringify({ type: "history", messages: history }));
 
         // Notify Global Presence
-        await this.notifyPresence("join", user.username, undefined, user.avatar_url);
+        await this.notifyPresence("join", user.username, sessionId, undefined, user.avatar_url);
 
         // Fetch current global presence and send it to the user immediately
         const presenceId = this.env.PRESENCE.idFromName("global");
         const presenceStub = this.env.PRESENCE.get(presenceId);
-        const presenceRes = await presenceStub.fetch(`http://presence/?action=get&username=${user.username}&roomId=${this.ctx.id.toString()}`);
+        const presenceRes = await presenceStub.fetch(`http://presence/?action=get&username=${user.username}&roomId=${this.ctx.id.toString()}&sessionId=${sessionId}`);
         const onlineUsers = await presenceRes.json();
         server.send(JSON.stringify({ type: "presence", users: onlineUsers }));
 
@@ -153,10 +167,10 @@ export class ChatRoom extends DurableObject {
         });
     }
 
-    private async notifyPresence(action: "join" | "leave" | "notify-message", username: string, body?: any, avatarUrl?: string) {
+    private async notifyPresence(action: "join" | "leave" | "notify-message" | "heartbeat", username: string, sessionId: string, body?: any, avatarUrl?: string) {
         const id = this.env.PRESENCE.idFromName("global");
         const stub = this.env.PRESENCE.get(id);
-        let url = `http://presence/?action=${action}&username=${username}&roomId=${this.channelName}`;
+        let url = `http://presence/?action=${action}&username=${username}&roomId=${this.channelName}&sessionId=${sessionId}`;
         if (avatarUrl) url += `&avatarUrl=${encodeURIComponent(avatarUrl)}`;
 
         await stub.fetch(new Request(url, {
@@ -300,10 +314,16 @@ export class ChatRoom extends DurableObject {
         const replyToId = data.reply_to_id || null;
         const replyToAuthor = data.reply_to_author || null;
         const replyToContent = data.reply_to_content || null;
+        const hasAttachment = data.has_attachment ? 1 : 0;
+        const attachmentType = data.attachment_type || null;
+        const attachmentUrl = data.attachment_url || null;
+        const attachmentName = data.attachment_name || null;
+        const attachmentSize = data.attachment_size || null;
+        const attachmentMimeType = data.attachment_mime_type || null;
 
         this.ctx.storage.sql.exec(
-            "INSERT INTO messages (id, author, content, timestamp, reply_to_id, reply_to_author, reply_to_content) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            id, username, content, timestamp, replyToId, replyToAuthor, replyToContent
+            "INSERT INTO messages (id, author, content, timestamp, reply_to_id, reply_to_author, reply_to_content, has_attachment, attachment_type, attachment_url, attachment_name, attachment_size, attachment_mime_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            id, username, content, timestamp, replyToId, replyToAuthor, replyToContent, hasAttachment, attachmentType, attachmentUrl, attachmentName, attachmentSize, attachmentMimeType
         );
 
         // Extract mentions: @username
@@ -315,7 +335,7 @@ export class ChatRoom extends DurableObject {
         }
 
         // Notify Global Presence of active messaging for notifications
-        this.ctx.waitUntil(this.notifyPresence("notify-message", username, {
+        this.ctx.waitUntil(this.notifyPresence("notify-message", username, tags[1] || "", {
             mentionedUsers: mentions,
             timestamp: timestamp
         }));
@@ -329,7 +349,13 @@ export class ChatRoom extends DurableObject {
             timestamp,
             reply_to_id: replyToId,
             reply_to_author: replyToAuthor,
-            reply_to_content: replyToContent
+            reply_to_content: replyToContent,
+            has_attachment: hasAttachment,
+            attachment_type: attachmentType,
+            attachment_url: attachmentUrl,
+            attachment_name: attachmentName,
+            attachment_size: attachmentSize,
+            attachment_mime_type: attachmentMimeType
         });
 
         // When a message is sent, the user is definitely not typing anymore
@@ -357,7 +383,7 @@ export class ChatRoom extends DurableObject {
     }
 
     private async triggerPushNotifications(sender: string, content: string, mentions: string[], replyToAuthor: string | null) {
-        const roomId = this.ctx.id.toString();
+        const roomId = this.channelName || this.ctx.id.toString();
 
         // 1. Get all members of this channel (including their IDs)
         // Note: D1 is used here as it's the source of truth for membership
@@ -464,8 +490,8 @@ export class ChatRoom extends DurableObject {
         // Handle disconnects
         console.log(`WebSocket closed: ${code} ${reason}`);
         const tags = this.ctx.getTags(ws);
-        if (tags[0]) {
-            this.ctx.waitUntil(this.notifyPresence("leave", tags[0]));
+        if (tags[0] && tags[1]) {
+            this.ctx.waitUntil(this.notifyPresence("leave", tags[0], tags[1]));
         }
     }
 
@@ -481,19 +507,28 @@ export class ChatRoom extends DurableObject {
         const history = this.ctx.storage.sql.exec("SELECT * FROM messages").toArray();
         if (history.length > 0) {
             try {
+                const roomId = this.channelName || this.ctx.id.toString();
+
+                // Self-healing: Migration of old IDs in D1
+                if (this.channelName) {
+                    await this.env.DB.prepare(
+                        "UPDATE messages SET channel_id = ? WHERE channel_id = ?"
+                    ).bind(this.channelName, this.ctx.id.toString()).run();
+                }
+
                 const statements = history.map(msg =>
                     this.env.DB.prepare(`
-                        INSERT INTO messages (id, channel_id, author, content, timestamp, reply_to_id, reply_to_author, reply_to_content, is_edited, is_deleted)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO messages (id, channel_id, author, content, timestamp, reply_to_id, reply_to_author, reply_to_content, is_edited, is_deleted, has_attachment, attachment_type, attachment_url, attachment_name, attachment_size, attachment_mime_type)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(id) DO UPDATE SET
                             content = excluded.content,
                             is_edited = excluded.is_edited,
                             is_deleted = excluded.is_deleted
                     `)
-                        .bind(msg.id, this.ctx.id.toString(), msg.author, msg.content, msg.timestamp, msg.reply_to_id, msg.reply_to_author, msg.reply_to_content, msg.is_edited, msg.is_deleted)
+                        .bind(msg.id, roomId, msg.author, msg.content, msg.timestamp, msg.reply_to_id, msg.reply_to_author, msg.reply_to_content, msg.is_edited, msg.is_deleted, msg.has_attachment, msg.attachment_type, msg.attachment_url, msg.attachment_name, msg.attachment_size, msg.attachment_mime_type)
                 );
                 await this.env.DB.batch(statements);
-                console.log(`Synced ${history.length} messages to D1`);
+                console.log(`Synced ${history.length} messages to D1 for room ${roomId}`);
                 // Prune local
                 this.ctx.storage.sql.exec("DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY timestamp DESC LIMIT 50)");
             } catch (e) {
@@ -517,5 +552,19 @@ export class ChatRoom extends DurableObject {
                 console.error("Failed to sync reactions:", e);
             }
         }
+
+        // 3. Send Heartbeat for all currently connected users
+        const activeSessions = this.ctx.getWebSockets().map(ws => {
+            const tags = this.ctx.getTags(ws);
+            return { username: tags[0], sessionId: tags[1] };
+        }).filter(s => !!s.username && !!s.sessionId);
+
+        if (activeSessions.length > 0) {
+            console.log(`[ChatRoom] Sending heartbeats for ${activeSessions.length} sessions in ${this.channelName}`);
+            await Promise.all(activeSessions.map(s => this.notifyPresence("heartbeat", s.username!, s.sessionId!)));
+        }
+
+        // Schedule next sync/heartbeat in 20 seconds (shorter than 60s expiry)
+        this.ctx.storage.setAlarm(Date.now() + 20000);
     }
 }
