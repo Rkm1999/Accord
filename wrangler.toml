@@ -1,6 +1,7 @@
 name = "accord-chat"
 main = "src/index.ts"
 compatibility_date = "2025-01-24"
+compatibility_flags = ["nodejs_compat"]
 
 # Static Assets
 [assets]
@@ -31,13 +32,13 @@ new_sqlite_classes = ["PresenceTracker"]
 # D1 Database
 [[d1_databases]]
 binding = "DB"
-database_name = "discord-db"
-database_id = "641755c4-58a6-42b1-bbf2-acc814d9d5cf"
+database_name = "accord"
+database_id = "59dd7aa3-afd3-41d4-8765-e1dc3dad2852"
 
 # R2 Storage
 [[r2_buckets]]
 binding = "FILES"
-bucket_name = "discord-files"
+bucket_name = "accord"
 
 # Observability
 [observability]

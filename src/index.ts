@@ -482,15 +482,105 @@ app.all('/ws/:roomId', async (c) => {
 		return c.text("Unauthorized: Missing token", 401);
 	}
 
-	// Note: We'll verify the token inside the DO to keep it clean, 
+	// Note: We'll verify the token inside the DO to keep it clean,
 	// or verify here and pass info. For now, let's verify here.
-	// We'll skip deep verification for now to keep the demo moving, 
+	// We'll skip deep verification for now to keep the demo moving,
 	// but in Phase 3 final we should check it.
 
 	const id = c.env.CHAT_ROOM.idFromName(roomId);
 	const stub = c.env.CHAT_ROOM.get(id);
 
 	return stub.fetch(c.req.raw);
+});
+
+// Message Search API
+	app.get('/api/messages/search', async (c) => {
+		const user = c.get('jwtPayload') as any;
+		const query = c.req.query('query');
+		const channel_id = c.req.query('channel_id');
+		const author = c.req.query('author');
+		const time_from = c.req.query('time_from');
+		const time_to = c.req.query('time_to');
+		const limit = parseInt(c.req.query('limit') || '50');
+		const offset = parseInt(c.req.query('offset') || '0');
+
+		console.log('[Search API] Request:', { query, channel_id, author, time_from, time_to, limit, offset });
+
+		if (!query) {
+			return c.json({ error: 'Missing required parameter: query' }, 400);
+		}
+
+		// Build search query with proper escaping
+		const likePattern = query.split(' ').map(w => `%${w.replace(/%/g, '\\%')}%`).join(' OR ');
+
+		// Build dynamic WHERE clause based on provided filters
+		let whereClause = 'WHERE m.is_deleted = 0';
+		const params = [];
+		let paramIndex = 1;
+
+		// Add content search to WHERE clause
+		if (likePattern) {
+			whereClause += ` AND (m.content LIKE ? OR m.reply_to_content LIKE ?)`;
+			params.push(likePattern, likePattern);
+		}
+
+		if (channel_id) {
+			whereClause += ` AND m.channel_id = $${paramIndex++}`;
+			params.push(channel_id);
+		}
+
+		if (author) {
+			whereClause += ` AND m.author = $${paramIndex++}`;
+			params.push(author);
+		}
+
+		if (time_from) {
+			whereClause += ` AND m.timestamp >= $${paramIndex++}`;
+			params.push(time_from);
+		}
+
+		if (time_to) {
+			whereClause += ` AND m.timestamp <= $${paramIndex++}`;
+			params.push(time_to);
+		}
+
+		console.log('[Search API] WHERE clause:', whereClause);
+		console.log('[Search API] Parameters:', params);
+
+		const results = await c.env.DB.prepare(`
+			SELECT
+				m.*,
+				(SELECT name FROM channels WHERE uuid = m.channel_id) as channel_name,
+				COALESCE(
+					(SELECT json_group_array(json_object('emoji', r.emoji, 'username', r.username))
+					 FROM message_reactions r WHERE r.message_id = m.id),
+					''
+				) as reactions
+			FROM messages m
+			${whereClause}
+			ORDER BY m.timestamp DESC
+			LIMIT ? OFFSET ?
+		`).bind(...params, limit, offset).all();
+
+		console.log('[Search API] Results returned:', results.results.length);
+
+		return c.json({
+			results: results.results,
+			total: results.results.length,
+			has_more: results.results.length >= limit
+		});
+	});
+
+// Get unique authors for filter dropdown
+app.get('/api/messages/authors', async (c) => {
+	const user = c.get('jwtPayload') as any;
+	const { results } = await c.env.DB.prepare(`
+		SELECT DISTINCT author FROM messages
+		WHERE is_deleted = 0 AND author != ?
+		ORDER BY author ASC
+	`).bind(user.username).all();
+
+	return c.json(results);
 });
 
 // Fallback to static assets

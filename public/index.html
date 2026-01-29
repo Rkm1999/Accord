@@ -60,8 +60,25 @@
             background: #202225;
             color: white;
             box-sizing: border-box;
-            /* Prevent iOS zooming by enforcing 16px font size on inputs if needed, 
+            /* Prevent iOS zooming by enforcing 16px font size on inputs if needed,
                but viewport meta tag handles this mostly. */
+        }
+
+        /* Search Highlighting */
+        .search-highlight {
+            background: rgba(250, 166, 26, 0.3);
+            border-radius: 2px;
+            font-weight: 500;
+        }
+
+        .search-highlight::before {
+            content: "";
+            position: absolute;
+            left: -2px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #faa61a;
         }
 
         button {
@@ -112,6 +129,9 @@
             font-weight: bold;
             border-bottom: 1px solid #202225;
             color: white;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .sidebar-section {
@@ -532,6 +552,16 @@
             padding-left: 20px;
         }
 
+        .channel-tag {
+            background: rgba(88, 101, 242, 0.15);
+            color: #5865f2;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 500;
+            margin-right: 8px;
+        }
+
         /* Reaction Styles */
         .reactions-container {
             display: flex;
@@ -805,6 +835,30 @@
             color: white;
         }
 
+        #mobile-search-btn {
+            background: transparent;
+            font-size: 1.5em;
+            padding: 5px;
+            color: white;
+            cursor: pointer;
+        }
+
+        #mobile-search-btn:hover {
+            background: #393c43;
+        }
+
+        #desktop-search-btn {
+            background: transparent;
+            color: white;
+            padding: 5px;
+            font-size: 1.2em;
+            cursor: pointer;
+        }
+
+        #desktop-search-btn:hover {
+            background: #393c43;
+        }
+
         #mobile-overlay {
             display: none;
             position: fixed;
@@ -963,7 +1017,12 @@
 
     <div id="chat-container">
         <div id="sidebar">
-            <div id="sidebar-header">Accord</div>
+            <div id="sidebar-header">
+                <button id="desktop-search-btn"
+                    style="background: transparent; color: white; padding: 5px; font-size: 1.2em; cursor: pointer;">
+                    🔍
+                </button>Accord
+            </div>
             <div class="sidebar-section">
                 <div class="sidebar-section-header">Channels</div>
                 <div id="channel-list"></div>
@@ -985,6 +1044,8 @@
             <div id="mobile-header">
                 <button id="mobile-menu-btn" style="background: transparent; font-size: 1.5em; padding: 5px;">≡</button>
                 <div id="mobile-room-name"># general</div>
+                <button id="mobile-search-btn"
+                    style="background: transparent; font-size: 1.5em; padding: 5px;">🔍 Search</button>
                 <button id="mobile-members-btn"
                     style="background: transparent; font-size: 1.5em; padding: 5px;">👥</button>
             </div>
@@ -996,6 +1057,18 @@
                     <span style="text-decoration: underline;">Jump to Unread</span>
                     <span class="close-banner">✕</span>
                 </div>
+            </div>
+            <div id="search-bar" style="display: none; padding: 10px 20px; background: #40444b; border-bottom: 2px solid #5865f2; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <input type="text" id="search-input" placeholder="Search messages... (Ctrl+F)"
+                    style="flex: 1; padding: 8px; background: #2f3136; color: white; border: 1px solid #5865f2; border-radius: 4px; min-width: 200px;">
+                <select id="filter-channel" style="padding: 8px; background: #2f3136; color: white; border: 1px solid #5865f2; border-radius: 4px;">
+                    <option value="">All Channels</option>
+                </select>
+                <select id="filter-author" style="padding: 8px; background: #2f3136; color: white; border: 1px solid #5865f2; border-radius: 4px;">
+                    <option value="">All Senders</option>
+                </select>
+                <button id="search-btn" style="padding: 8px 16px; background: #5865f2; color: white; border: none; border-radius: 4px;">Search</button>
+                <button id="clear-search-btn" style="padding: 8px 16px; background: #ed4245; color: white; border: none; border-radius: 4px;">Clear</button>
             </div>
             <div id="messages"></div>
             <div id="input-area">
@@ -1095,6 +1168,26 @@
             sidebar.classList.remove('open');
             memberListContainer.classList.remove('open');
             overlay.style.display = 'none';
+        };
+
+        document.getElementById('mobile-search-btn').onclick = () => {
+            const searchBar = document.getElementById('search-bar');
+            if (searchBar) {
+                searchBar.style.display = searchBar.style.display === 'flex' ? 'none' : 'flex';
+                if (searchBar.style.display === 'flex') {
+                    document.getElementById('search-input').focus();
+                }
+            }
+        };
+
+        document.getElementById('desktop-search-btn').onclick = () => {
+            const searchBar = document.getElementById('search-bar');
+            if (searchBar) {
+                searchBar.style.display = searchBar.style.display === 'flex' ? 'none' : 'flex';
+                if (searchBar.style.display === 'flex') {
+                    document.getElementById('search-input').focus();
+                }
+            }
         };
 
         // Chat Logic
@@ -1592,7 +1685,8 @@
                             ${isAuthor ? `<div class="action-btn delete" onclick="handleDeleteClick('${msg.id}')">Delete</div>` : ''}
                         </div>
                         <div class="message-meta">
-                            <strong>${msg.author}</strong> 
+                            <span class="channel-tag">#${msg.channel_name || msg.channel_id}</span>
+                            <strong>${msg.author}</strong>
                             <span style="font-size: 0.7em; color: #8e9297; margin-left: 5px;">${time}</span>
                             ${msg.is_edited ? '<span class="edited-tag">(edited)</span>' : ''}
                         </div>
@@ -1604,7 +1698,7 @@
             messagesDiv.appendChild(div);
 
             // Render reactions if any
-            if (msg.reactions && msg.reactions.length > 0) {
+            if (Array.isArray(msg.reactions) && msg.reactions.length > 0) {
                 renderReactions(msg.id, msg.reactions);
             }
 
@@ -2347,6 +2441,169 @@
             deferredPrompt = null;
             console.log('PWA was installed');
         });
+
+        // Search Functionality
+        let searchResults = [];
+        let isSearching = false;
+
+        function initSearch() {
+            const searchBtn = document.getElementById('search-btn');
+            const clearBtn = document.getElementById('clear-search-btn');
+            const searchInput = document.getElementById('search-input');
+            
+            if (searchBtn) searchBtn.onclick = performSearch;
+            if (clearBtn) clearBtn.onclick = clearSearch;
+            if (searchInput) {
+                searchInput.onkeydown = (e) => {
+                    if (e.key === 'Enter') performSearch();
+                    if (e.key === 'Escape') clearSearch();
+                };
+            }
+            
+            populateFilters();
+        }
+
+        async function populateFilters() {
+            const token = localStorage.getItem('token');
+            
+            if (!token) return;
+            
+            // Get channels
+            try {
+                const channelsRes = await fetch('/api/channels', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                 const channels = await channelsRes.json();
+
+                const channelSelect = document.getElementById('filter-channel');
+                if (channelSelect) {
+                    channelSelect.innerHTML = '<option value="">All Channels</option>';
+                    channels.forEach(ch => {
+                        const option = document.createElement('option');
+                        option.value = ch.uuid || ch.id;
+                        option.text = `#${ch.name}`;
+                        channelSelect.appendChild(option);
+                    });
+                }
+                
+                // Get authors
+                const authorsRes = await fetch('/api/messages/authors', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (authorsRes.ok) {
+                    const authors = await authorsRes.json();
+                    const authorSelect = document.getElementById('filter-author');
+                    if (authorSelect) {
+                        authorSelect.innerHTML = '<option value="">All Senders</option>';
+                        authors.forEach(author => {
+                            const option = document.createElement('option');
+                            option.value = author;
+                            option.text = author;
+                            authorSelect.appendChild(option);
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error('[Search] Error populating filters:', e);
+            }
+        }
+
+        async function performSearch() {
+            const query = document.getElementById('search-input').value.trim();
+            const channel = document.getElementById('filter-channel')?.value || '';
+            const author = document.getElementById('filter-author')?.value || '';
+            const token = localStorage.getItem('token');
+            
+            if (!query) {
+                alert('Please enter a search query');
+                return;
+            }
+            
+            try {
+                console.log('[Search] Query:', query, 'Channel:', channel, 'Author:', author);
+                
+                const params = new URLSearchParams({
+                    query: query,
+                    channel_id: channel,
+                    author: author,
+                    limit: '50'
+                });
+                
+                const res = await fetch(`/api/messages/search?${params}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!res.ok) throw new Error('Search failed');
+                
+                const data = await res.json();
+                console.log('[Search] Results count:', data.results.length);
+                searchResults = data.results;
+                displaySearchResults(data.results);
+                
+            } catch (e) {
+                alert('Search error: ' + e.message);
+                console.error('[Search] Error:', e);
+            }
+        }
+
+        function displaySearchResults(results) {
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML = '';
+            
+            // Add header
+            const header = document.createElement('div');
+            header.style.cssText = `
+                padding: 10px 20px;
+                background: #40444b;
+                font-weight: bold;
+                color: #5865f2;
+            `;
+            header.innerText = `Search Results (${results.length} messages)`;
+            messagesDiv.appendChild(header);
+            
+            // Display messages
+            results.forEach(msg => addMessage(msg, false));
+        }
+
+        function clearSearch() {
+            const searchInput = document.getElementById('search-input');
+            const filterChannel = document.getElementById('filter-channel');
+            const filterAuthor = document.getElementById('filter-author');
+            const searchBar = document.getElementById('search-bar');
+            
+            if (searchInput) searchInput.value = '';
+            if (filterChannel) filterChannel.value = '';
+            if (filterAuthor) filterAuthor.value = '';
+            if (searchBar) searchBar.style.display = 'none';
+            
+            searchResults = [];
+            
+            // Reload current room
+            const token = localStorage.getItem('token');
+            const myUsername = localStorage.getItem('username');
+            
+            connectRoom(currentRoom);
+        }
+
+        // Keyboard shortcut for search
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault();
+                const searchBar = document.getElementById('search-bar');
+                if (searchBar) {
+                    searchBar.style.display = searchBar.style.display === 'flex' ? 'none' : 'flex';
+                    if (searchBar.style.display === 'flex') {
+                        const searchInput = document.getElementById('search-input');
+                        if (searchInput) searchInput.focus();
+                    }
+                }
+            }
+        });
+
+        // Initialize search on app load
+        if (document.getElementById('message-input')) {
+            initSearch();
+        }
     </script>
 </body>
 
