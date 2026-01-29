@@ -148,26 +148,61 @@ app.put('/api/user/me', async (c) => {
 
 // Avatar Upload
 app.post('/api/user/avatar', async (c) => {
-	const user = c.get('jwtPayload') as any;
-	const body = await c.req.parseBody();
-	const file = body['file'] as File;
+    const user = c.get('jwtPayload') as any;
+    const body = await c.req.parseBody();
+    const file = body['file'] as File;
 
-	if (!file) {
-		return c.json({ error: "Missing file" }, 400);
-	}
+    if (!file) {
+        return c.json({ error: "Missing file" }, 400);
+    }
 
-	const fileName = `avatars/${user.id}-${Date.now()}.${file.name.split('.').pop()}`;
-	await c.env.FILES.put(fileName, file.stream(), {
-		httpMetadata: { contentType: file.type }
-	});
+    const fileName = `avatars/${user.id}-${Date.now()}.${file.name.split('.').pop()}`;
+    await c.env.FILES.put(fileName, file.stream(), {
+        httpMetadata: { contentType: file.type }
+    });
 
-	const avatarUrl = `/files/${fileName}`;
-	await c.env.DB.prepare(
-		"UPDATE users SET avatar_url = ? WHERE id = ?"
-	).bind(avatarUrl, user.id).run();
-	console.log(`[Upload] Updated avatar for user ${user.username} (${user.id}) to ${avatarUrl}`);
+    const avatarUrl = `/files/${fileName}`;
+    await c.env.DB.prepare(
+        "UPDATE users SET avatar_url = ? WHERE id = ?"
+    ).bind(avatarUrl, user.id).run();
+    console.log(`[Upload] Updated avatar for user ${user.username} (${user.id}) to ${avatarUrl}`);
 
-	return c.json({ success: true, avatar_url: avatarUrl });
+    return c.json({ success: true, avatar_url: avatarUrl });
+});
+
+// Message Attachment Upload
+app.post('/api/upload-message-attachment', async (c) => {
+    const user = c.get('jwtPayload') as any;
+    const body = await c.req.parseBody();
+    const file = body['file'] as File;
+
+    if (!file) {
+        return c.json({ error: "Missing file" }, 400);
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'text/markdown'];
+    if (!allowedTypes.includes(file.type)) {
+        return c.json({ error: `File type not allowed. Allowed: ${allowedTypes.join(', ')}` }, 400);
+    }
+
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+        return c.json({ error: "File size too large. Maximum 10MB" }, 400);
+    }
+
+    // Generate unique filename
+    const fileName = `${crypto.randomUUID()}-${file.name}`;
+    await c.env.FILES.put(fileName, file.stream(), {
+        httpMetadata: { contentType: file.type }
+    });
+
+    return c.json({
+        url: `/files/${fileName}`,
+        name: file.name,
+        size: file.size,
+        type: file.type
+    });
 });
 
 // Channels
@@ -371,22 +406,72 @@ app.get('/api/push/last-notification', async (c) => {
 	});
 });
 
-// Image Uploads
-app.post('/api/upload', async (c) => {
-	const body = await c.req.parseBody();
-	const file = body['file'] as File;
+// Message Attachment Upload
+app.post('/api/upload-message-attachment', async (c) => {
+    const user = c.get('jwtPayload') as any;
+    const body = await c.req.parseBody();
+    const file = body['file'] as File;
 
-	if (!file) {
-		return c.json({ error: "Missing file" }, 400);
-	}
+    if (!file) {
+        return c.json({ error: "Missing file" }, 400);
+    }
 
-	// Simple check, in production use proper verification
-	const fileName = `${crypto.randomUUID()}-${file.name}`;
-	await c.env.FILES.put(fileName, file.stream(), {
-		httpMetadata: { contentType: file.type }
-	});
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'text/markdown'];
+    if (!allowedTypes.includes(file.type)) {
+        return c.json({ error: `File type not allowed. Allowed: ${allowedTypes.join(', ')}` }, 400);
+    }
 
-	return c.json({ url: `/files/${fileName}` });
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+        return c.json({ error: "File size too large. Maximum 10MB" }, 400);
+    }
+
+    // Generate unique filename
+    const fileName = `${crypto.randomUUID()}-${file.name}`;
+    await c.env.FILES.put(fileName, file.stream(), {
+        httpMetadata: { contentType: file.type }
+    });
+
+    return c.json({
+        url: `/files/${fileName}`,
+        name: file.name,
+        size: file.size,
+        type: file.type
+    });
+});
+
+// Attach Existing File to Message
+app.post('/api/message/attach-file', async (c) => {
+    const user = c.get('jwtPayload') as any;
+    const { message_id, file_url, file_name, file_size, file_type } = await c.req.json();
+
+    if (!message_id || !file_url) {
+        return c.json({ error: "Missing required fields: message_id, file_url" }, 400);
+    }
+
+    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'text/markdown'].includes(file_type)) {
+        return c.json({ error: "Invalid file type" }, 400);
+    }
+
+    if (file_size > 10 * 1024 * 1024) {
+        return c.json({ error: "File size too large. Maximum 10MB" }, 400);
+    }
+
+    // Update the message to include attachment
+    await c.env.DB.prepare(
+        `UPDATE messages 
+         SET has_attachment = 1,
+             attachment_type = ?,
+             attachment_url = ?,
+             attachment_name = ?,
+             attachment_size = ?,
+             attachment_mime_type = ?,
+             timestamp = ?
+         WHERE id = ?`
+    ).bind(file_type, file_url, file_name || 'attachment', file_size, file_type, Date.now(), message_id).run();
+
+    return c.json({ success: true });
 });
 
 // Serve Files from R2 with Optimization
@@ -471,6 +556,69 @@ app.get('/api/preview', async (c) => {
 		console.error("Link preview error:", e);
 		return c.json({ error: "Failed to fetch preview" }, 500);
 	}
+});
+
+// Advanced Search API
+app.get('/api/search', async (c) => {
+    const user = c.get('jwtPayload') as any;
+    const q = c.req.query('q');
+    const author = c.req.query('author');
+    const roomId = c.req.query('roomId');
+    const after = c.req.query('after');
+    const before = c.req.query('before');
+    const hasAttachment = c.req.query('hasAttachment');
+
+    let query = "SELECT * FROM messages WHERE 1=1";
+    const params: any[] = [];
+
+    if (q) {
+        query += " AND content LIKE ?";
+        params.push(`%${q}%`);
+    }
+    if (author) {
+        query += " AND author = ?";
+        params.push(author);
+    }
+    if (roomId) {
+        query += " AND channel_id = ?";
+        params.push(roomId);
+    }
+    if (after) {
+        query += " AND timestamp >= ?";
+        params.push(parseInt(after));
+    }
+    if (before) {
+        query += " AND timestamp <= ?";
+        params.push(parseInt(before));
+    }
+    if (hasAttachment === 'true') {
+        query += " AND has_attachment = 1";
+    }
+
+    query += " ORDER BY timestamp DESC LIMIT 100";
+
+    try {
+        const { results } = await c.env.DB.prepare(query).bind(...params).all();
+
+        // Enhance results with attachment details
+        const enhancedResults = await Promise.all(results.map(async (msg: any) => {
+            if (msg.has_attachment) {
+                return {
+                    ...msg,
+                    attachment_url: msg.attachment_url,
+                    attachment_name: msg.attachment_name,
+                    attachment_size: msg.attachment_size,
+                    attachment_mime_type: msg.attachment_mime_type
+                };
+            }
+            return msg;
+        }));
+
+        return c.json(enhancedResults);
+    } catch (e: any) {
+        console.error("Search Error:", e);
+        return c.json({ error: "Search failed" }, 500);
+    }
 });
 
 // WebSocket Upgrade
