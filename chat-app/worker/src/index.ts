@@ -28,7 +28,7 @@ export default {
 
     if (url.pathname === "/api/history") {
       const { results } = await env.DB.prepare(
-        "SELECT username, message, timestamp FROM messages ORDER BY timestamp DESC LIMIT 100"
+        "SELECT username, message, timestamp, link_url, link_title, link_description, link_image FROM messages ORDER BY timestamp DESC LIMIT 100"
       ).all();
 
       return Response.json(results.reverse());

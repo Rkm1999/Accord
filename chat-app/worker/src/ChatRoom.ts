@@ -9,6 +9,13 @@ interface UserState {
   joinedAt: number;
 }
 
+interface LinkMetadata {
+  url: string;
+  title: string;
+  description: string;
+  image: string;
+}
+
 export class ChatRoom extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -49,13 +56,24 @@ export class ChatRoom extends DurableObject<Env> {
       return;
     }
 
-    await this.env.DB.prepare(
-      "INSERT INTO messages (username, message, timestamp) VALUES (?, ?, ?)"
-    )
-      .bind(username, data.message, Date.now())
-      .run();
+    const linkMetadata = await this.fetchLinkMetadata(data.message);
+    const timestamp = Date.now();
 
-    this.broadcastMessage(username, data.message);
+    let query = "INSERT INTO messages (username, message, timestamp";
+    let values = [username, data.message, timestamp];
+    let placeholders = "?, ?, ?";
+
+    if (linkMetadata) {
+      query += ", link_url, link_title, link_description, link_image";
+      values.push(linkMetadata.url, linkMetadata.title, linkMetadata.description, linkMetadata.image);
+      placeholders += ", ?, ?, ?, ?";
+    }
+
+    query += `) VALUES (${placeholders})`;
+
+    await this.env.DB.prepare(query).bind(...values).run();
+
+    this.broadcastMessage(username, data.message, linkMetadata);
   }
 
   async webSocketClose(ws: WebSocket) {
@@ -63,13 +81,14 @@ export class ChatRoom extends DurableObject<Env> {
     this.broadcastUserEvent("user_left", state.username);
   }
 
-  private broadcastMessage(username: string, message: string) {
+  private broadcastMessage(username: string, message: string, linkMetadata?: LinkMetadata) {
     const webSockets = this.ctx.getWebSockets();
     const payload = JSON.stringify({
       type: "chat",
       username,
       message,
       timestamp: Date.now(),
+      linkMetadata,
     });
 
     for (const ws of webSockets) {
@@ -107,7 +126,7 @@ export class ChatRoom extends DurableObject<Env> {
 
   private async sendChatHistory(ws: WebSocket) {
     const { results } = await this.env.DB.prepare(
-      "SELECT username, message, timestamp FROM messages ORDER BY timestamp DESC LIMIT 50"
+      "SELECT username, message, timestamp, link_url, link_title, link_description, link_image FROM messages ORDER BY timestamp DESC LIMIT 50"
     ).all();
 
     const history = results.reverse();
@@ -115,5 +134,105 @@ export class ChatRoom extends DurableObject<Env> {
       type: "history",
       messages: history,
     }));
+  }
+
+  private async fetchLinkMetadata(message: string): Promise<LinkMetadata | null> {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const matches = message.match(urlRegex);
+
+    if (!matches) return null;
+
+    const url = matches[0];
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        },
+      });
+
+      if (!response.ok) return null;
+
+      const html = await response.text();
+
+      let title = '';
+      let description = '';
+      let image = '';
+
+      const urlObj = new URL(url);
+
+      if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
+        const videoId = this.extractYouTubeVideoId(url);
+
+        if (videoId) {
+          image = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+          const ytTitleMatch = html.match(/"title":"([^"]+)"/i) ||
+                              html.match(/<meta itemprop="name" content="([^"]+)"/i);
+          if (ytTitleMatch) {
+            title = ytTitleMatch[1].replace(/\\u0026/g, '&').replace(/\\u003c/g, '<').replace(/\\u003e/g, '>');
+          }
+
+          const ytDescMatch = html.match(/"shortDescription":"([^"]+)"/i);
+          if (ytDescMatch) {
+            description = ytDescMatch[1].replace(/\\n/g, ' ').replace(/\\u0026/g, '&');
+          }
+        }
+      }
+
+      if (!image) {
+        const imageMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+                          html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
+        image = imageMatch ? imageMatch[1] : '';
+      }
+
+      if (!title) {
+        const titleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
+                          html.match(/<meta[^>]+name=["']twitter:title["'][^>]+content=["']([^"']+)["']/i);
+        title = titleMatch ? titleMatch[1] : '';
+      }
+
+      if (!title) {
+        const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+        title = titleMatch ? titleMatch[1].trim() : url;
+      }
+
+      if (!description) {
+        const descMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta[^>]+name=["']twitter:description["'][^>]+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
+        description = descMatch ? (descMatch[1] || descMatch[2] || descMatch[3]) : '';
+      }
+
+      if (title || description || image) {
+        return {
+          url,
+          title,
+          description,
+          image,
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error fetching link metadata:', error);
+      return null;
+    }
+  }
+
+  private extractYouTubeVideoId(url: string): string | null {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([^&\n?#]+)/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+
+    return null;
   }
 }

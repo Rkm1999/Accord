@@ -79,11 +79,35 @@ function displayMessage(data) {
     const time = new Date(data.timestamp).toLocaleTimeString();
     const msgEl = document.createElement('div');
     msgEl.className = 'message';
-    msgEl.innerHTML = `
+
+    let messageContent = `
         <span class="time">${time}</span>
         <span class="username">${escapeHtml(data.username)}:</span>
         <span class="content">${escapeHtml(data.message)}</span>
     `;
+
+    const linkMetadata = data.linkMetadata || {
+        url: data.link_url,
+        title: data.link_title,
+        description: data.link_description,
+        image: data.link_image
+    };
+
+    if (linkMetadata && linkMetadata.url) {
+        const hasImage = !!linkMetadata.image;
+        messageContent += `
+            <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="link-preview${!hasImage ? ' no-image' : ''}">
+                ${hasImage ? `<img src="${escapeHtml(linkMetadata.image)}" alt="Link preview" class="link-preview-image" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/default/0.jpg';">` : ''}
+                <div class="link-preview-content">
+                    <div class="link-preview-title">${escapeHtml(linkMetadata.title)}</div>
+                    ${linkMetadata.description ? `<div class="link-preview-description">${escapeHtml(linkMetadata.description)}</div>` : ''}
+                    <div class="link-preview-domain">${escapeHtml(linkMetadata.url)}</div>
+                </div>
+            </a>
+        `;
+    }
+
+    msgEl.innerHTML = messageContent;
     chatHistory.appendChild(msgEl);
     chatHistory.scrollTop = chatHistory.scrollHeight;
 }
