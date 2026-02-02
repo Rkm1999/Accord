@@ -296,12 +296,171 @@ button[type="submit"]:active {
 .chat-form {
     padding: 15px;
     border-top: 1px solid #e0e0e0;
+}
+
+.chat-input-wrapper {
     display: flex;
+    align-items: center;
     gap: 10px;
+    position: relative;
 }
 
 .chat-form input[type="text"] {
     flex: 1;
+    padding: 12px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+
+.chat-form input[type="text"]:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.file-input-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    background: #f0f0f0;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #666;
+}
+
+.file-input-label:hover {
+    background: #e0e0e0;
+    border-color: #667eea;
+    color: #667eea;
+}
+
+.file-input-label:active {
+    transform: scale(0.95);
+}
+
+#fileInput {
+    display: none;
+}
+
+.file-preview {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 10px;
+    max-width: 100%;
+}
+
+.file-preview.hidden {
+    display: none;
+}
+
+.file-preview-item {
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 300px;
+}
+
+.file-preview-item img {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.file-preview-item .file-icon {
+    font-size: 24px;
+}
+
+.file-preview-item .file-name {
+    flex: 1;
+    font-size: 13px;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-preview-item .remove-file {
+    background: #dc3545;
+    color: white;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.file-preview-item .remove-file:hover {
+    background: #c82333;
+}
+
+.file-attachment {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 10px;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s;
+}
+
+.file-attachment:hover {
+    background: #e8e8e8;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.file-attachment .file-image {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.file-attachment .file-icon {
+    font-size: 40px;
+    flex-shrink: 0;
+}
+
+.file-attachment .file-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.file-attachment .file-name {
+    font-weight: 500;
+    color: #333;
+    font-size: 14px;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-attachment .file-size {
+    font-size: 12px;
+    color: #999;
 }
 
 /* Responsive Design */

@@ -4,6 +4,7 @@ import { ChatRoom } from "./ChatRoom";
 export interface Env {
   CHAT_ROOM: DurableObjectNamespace<ChatRoom>;
   DB: D1Database;
+  BUCKET: R2Bucket;
 }
 
 export default {
@@ -20,6 +21,24 @@ export default {
       return stub.fetch(request);
     }
 
+    if (url.pathname.startsWith("/api/file/")) {
+      const key = url.pathname.replace("/api/file/", "");
+      if (!key) {
+        return new Response("File key required", { status: 400 });
+      }
+
+      const object = await env.BUCKET.get(key);
+      if (!object) {
+        return new Response("File not found", { status: 404 });
+      }
+
+      const headers = new Headers();
+      object.writeHttpMetadata(headers);
+      headers.set("Access-Control-Allow-Origin", "*");
+
+      return new Response(object.body, { headers });
+    }
+
     if (url.pathname === "/api/users") {
       const stub = env.CHAT_ROOM.getByName("main-room");
       const response = await stub.fetch(request);
@@ -28,7 +47,7 @@ export default {
 
     if (url.pathname === "/api/history") {
       const { results } = await env.DB.prepare(
-        "SELECT username, message, timestamp, link_url, link_title, link_description, link_image FROM messages ORDER BY timestamp DESC LIMIT 100"
+        "SELECT username, message, timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key FROM messages ORDER BY timestamp DESC LIMIT 100"
       ).all();
 
       return Response.json(results.reverse());

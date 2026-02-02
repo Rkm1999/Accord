@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 
 export interface Env {
   DB: D1Database;
+  BUCKET: R2Bucket;
 }
 
 interface UserState {
@@ -14,6 +15,13 @@ interface LinkMetadata {
   title: string;
   description: string;
   image: string;
+}
+
+interface FileAttachment {
+  name: string;
+  type: string;
+  size: number;
+  key: string;
 }
 
 export class ChatRoom extends DurableObject<Env> {
@@ -57,6 +65,7 @@ export class ChatRoom extends DurableObject<Env> {
     }
 
     const linkMetadata = await this.fetchLinkMetadata(data.message);
+    const fileAttachment = data.file ? await this.uploadFile(data.file) : null;
     const timestamp = Date.now();
 
     let query = "INSERT INTO messages (username, message, timestamp";
@@ -69,11 +78,17 @@ export class ChatRoom extends DurableObject<Env> {
       placeholders += ", ?, ?, ?, ?";
     }
 
+    if (fileAttachment) {
+      query += ", file_name, file_type, file_size, file_key";
+      values.push(fileAttachment.name, fileAttachment.type, fileAttachment.size, fileAttachment.key);
+      placeholders += ", ?, ?, ?, ?";
+    }
+
     query += `) VALUES (${placeholders})`;
 
     await this.env.DB.prepare(query).bind(...values).run();
 
-    this.broadcastMessage(username, data.message, linkMetadata);
+    this.broadcastMessage(username, data.message, linkMetadata, fileAttachment);
   }
 
   async webSocketClose(ws: WebSocket) {
@@ -81,7 +96,7 @@ export class ChatRoom extends DurableObject<Env> {
     this.broadcastUserEvent("user_left", state.username);
   }
 
-  private broadcastMessage(username: string, message: string, linkMetadata?: LinkMetadata) {
+  private broadcastMessage(username: string, message: string, linkMetadata?: LinkMetadata, fileAttachment?: FileAttachment) {
     const webSockets = this.ctx.getWebSockets();
     const payload = JSON.stringify({
       type: "chat",
@@ -89,6 +104,7 @@ export class ChatRoom extends DurableObject<Env> {
       message,
       timestamp: Date.now(),
       linkMetadata,
+      fileAttachment,
     });
 
     for (const ws of webSockets) {
@@ -126,7 +142,7 @@ export class ChatRoom extends DurableObject<Env> {
 
   private async sendChatHistory(ws: WebSocket) {
     const { results } = await this.env.DB.prepare(
-      "SELECT username, message, timestamp, link_url, link_title, link_description, link_image FROM messages ORDER BY timestamp DESC LIMIT 50"
+      "SELECT username, message, timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key FROM messages ORDER BY timestamp DESC LIMIT 50"
     ).all();
 
     const history = results.reverse();
@@ -234,5 +250,44 @@ export class ChatRoom extends DurableObject<Env> {
     }
 
     return null;
+  }
+
+  private async uploadFile(file: { name: string; type: string; data: string }): Promise<FileAttachment | null> {
+    if (!file || !file.data) return null;
+
+    try {
+      const fileData = this.base64ToArrayBuffer(file.data);
+      const timestamp = Date.now();
+      const key = `${timestamp}-${this.sanitizeFileName(file.name)}`;
+
+      await this.env.BUCKET.put(key, fileData, {
+        httpMetadata: {
+          contentType: file.type,
+        },
+      });
+
+      return {
+        name: file.name,
+        type: file.type,
+        size: fileData.byteLength,
+        key: key,
+      };
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      return null;
+    }
+  }
+
+  private base64ToArrayBuffer(base64: string): ArrayBuffer {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  private sanitizeFileName(fileName: string): string {
+    return fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
   }
 }

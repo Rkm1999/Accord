@@ -7,6 +7,7 @@ let ws;
 let isConnected = false;
 let typingTimeout;
 let typingUsers = new Set();
+let selectedFile = null;
 
 function connect() {
     ws = new WebSocket(wsUrl);
@@ -105,6 +106,41 @@ function displayMessage(data) {
                 </div>
             </a>
         `;
+    }
+
+    const fileAttachment = data.fileAttachment || {
+        name: data.file_name,
+        type: data.file_type,
+        size: data.file_size,
+        key: data.file_key
+    };
+
+    if (fileAttachment && fileAttachment.key) {
+        const fileUrl = isLocalDev
+            ? `http://localhost:8787/api/file/${fileAttachment.key}`
+            : `/api/file/${fileAttachment.key}`;
+
+        if (fileAttachment.type && fileAttachment.type.startsWith('image/')) {
+            messageContent += `
+                <div class="file-attachment">
+                    <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="file-image" onclick="window.open('${fileUrl}', '_blank')">
+                    <div class="file-info">
+                        <span class="file-name">${escapeHtml(fileAttachment.name)}</span>
+                        <span class="file-size">${formatFileSize(fileAttachment.size)}</span>
+                    </div>
+                </div>
+            `;
+        } else {
+            messageContent += `
+                <a href="${fileUrl}" target="_blank" class="file-attachment">
+                    <div class="file-icon">${getFileIcon(fileAttachment.type)}</div>
+                    <div class="file-info">
+                        <span class="file-name">${escapeHtml(fileAttachment.name)}</span>
+                        <span class="file-size">${formatFileSize(fileAttachment.size)}</span>
+                    </div>
+                </a>
+            `;
+        }
     }
 
     msgEl.innerHTML = messageContent;
@@ -216,17 +252,122 @@ function handleTyping() {
     }, 30000);
 }
 
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) {
+        selectedFile = null;
+        hideFilePreview();
+        return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+        alert('File size must be less than 10MB');
+        event.target.value = '';
+        selectedFile = null;
+        hideFilePreview();
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        selectedFile = {
+            name: file.name,
+            type: file.type,
+            data: e.target.result.split(',')[1]
+        };
+        showFilePreview(file);
+    };
+    reader.readAsDataURL(file);
+}
+
+function showFilePreview(file) {
+    const preview = document.getElementById('filePreview');
+    preview.classList.remove('hidden');
+
+    if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            preview.innerHTML = `
+                <div class="file-preview-item">
+                    <img src="${e.target.result}" alt="Preview">
+                    <span class="file-name">${escapeHtml(file.name)}</span>
+                    <button type="button" class="remove-file" onclick="removeFile()">×</button>
+                </div>
+            `;
+        };
+        reader.readAsDataURL(file);
+    } else {
+        preview.innerHTML = `
+            <div class="file-preview-item">
+                <div class="file-icon">📄</div>
+                <span class="file-name">${escapeHtml(file.name)}</span>
+                <button type="button" class="remove-file" onclick="removeFile()">×</button>
+            </div>
+        `;
+    }
+}
+
+function hideFilePreview() {
+    const preview = document.getElementById('filePreview');
+    preview.classList.add('hidden');
+    preview.innerHTML = '';
+}
+
+function removeFile() {
+    selectedFile = null;
+    const fileInput = document.getElementById('fileInput');
+    fileInput.value = '';
+    hideFilePreview();
+}
+
+window.removeFile = removeFile;
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+function getFileIcon(type) {
+    if (!type) return '📄';
+
+    if (type.startsWith('image/')) return '🖼️';
+    if (type.startsWith('video/')) return '🎬';
+    if (type.startsWith('audio/')) return '🎵';
+    if (type.includes('pdf')) return '📕';
+    if (type.includes('word') || type.includes('document')) return '📘';
+    if (type.includes('excel') || type.includes('spreadsheet')) return '📗';
+    if (type.includes('powerpoint') || type.includes('presentation')) return '📙';
+    if (type.includes('zip') || type.includes('rar') || type.includes('compressed')) return '📦';
+    if (type.includes('text')) return '📝';
+
+    return '📄';
+}
+
+document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
 document.getElementById('chatForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const input = document.getElementById('message');
     const message = input.value.trim();
 
-    if (message && isConnected) {
-        ws.send(JSON.stringify({
+    if (!message && !selectedFile) return;
+
+    if (isConnected) {
+        const payload = {
             type: 'chat',
             message
-        }));
+        };
+
+        if (selectedFile) {
+            payload.file = selectedFile;
+        }
+
+        ws.send(JSON.stringify(payload));
         input.value = '';
+        removeFile();
         sendTypingStatus(false);
     }
 });

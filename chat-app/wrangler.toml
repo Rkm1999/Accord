@@ -1,6 +1,11 @@
 name = "chat-app"
 compatibility_date = "2024-01-01"
 
+# R2 bucket binding
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "chat-files"
+
 # Bind D1 database for chat history
 [[d1_databases]]
 binding = "DB"
