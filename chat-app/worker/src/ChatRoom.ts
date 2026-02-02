@@ -42,13 +42,20 @@ export class ChatRoom extends DurableObject<Env> {
     const state = ws.deserializeAttachment() as UserState;
     const { username } = state;
 
+    const data = JSON.parse(message);
+
+    if (data.type === "typing") {
+      this.broadcastTypingIndicator(username, data.isTyping);
+      return;
+    }
+
     await this.env.DB.prepare(
       "INSERT INTO messages (username, message, timestamp) VALUES (?, ?, ?)"
     )
-      .bind(username, message, Date.now())
+      .bind(username, data.message, Date.now())
       .run();
 
-    this.broadcastMessage(username, message);
+    this.broadcastMessage(username, data.message);
   }
 
   async webSocketClose(ws: WebSocket) {
@@ -78,6 +85,19 @@ export class ChatRoom extends DurableObject<Env> {
       event: eventType,
       username,
       userCount,
+    });
+
+    for (const ws of webSockets) {
+      ws.send(payload);
+    }
+  }
+
+  private broadcastTypingIndicator(username: string, isTyping: boolean) {
+    const webSockets = this.ctx.getWebSockets();
+    const payload = JSON.stringify({
+      type: "typing",
+      username,
+      isTyping,
     });
 
     for (const ws of webSockets) {

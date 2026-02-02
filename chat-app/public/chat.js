@@ -5,6 +5,8 @@ const wsUrl = isLocalDev
     : `ws://${window.location.host}/ws?username=${encodeURIComponent(username)}`;
 let ws;
 let isConnected = false;
+let typingTimeout;
+let typingUsers = new Set();
 
 function connect() {
     ws = new WebSocket(wsUrl);
@@ -27,6 +29,9 @@ function connect() {
                 break;
             case 'presence':
                 updatePresence(data);
+                break;
+            case 'typing':
+                updateTypingIndicator(data);
                 break;
         }
     };
@@ -139,16 +144,70 @@ function removeUserFromList(username) {
     }
 }
 
+function updateTypingIndicator(data) {
+    if (data.username === username) return;
+
+    if (data.isTyping) {
+        typingUsers.add(data.username);
+    } else {
+        typingUsers.delete(data.username);
+    }
+
+    showTypingIndicator();
+}
+
+function showTypingIndicator() {
+    const typingIndicator = document.getElementById('typingIndicator');
+    const users = Array.from(typingUsers);
+
+    if (users.length === 0) {
+        typingIndicator.innerHTML = '';
+        return;
+    }
+
+    if (users.length === 1) {
+        typingIndicator.innerHTML = `${escapeHtml(users[0])} is typing...`;
+    } else if (users.length === 2) {
+        typingIndicator.innerHTML = `${escapeHtml(users[0])} and ${escapeHtml(users[1])} are typing...`;
+    } else {
+        typingIndicator.innerHTML = `${users.length} people are typing...`;
+    }
+}
+
+function sendTypingStatus(isTyping) {
+    if (isConnected) {
+        ws.send(JSON.stringify({
+            type: 'typing',
+            isTyping
+        }));
+    }
+}
+
+function handleTyping() {
+    sendTypingStatus(true);
+
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+        sendTypingStatus(false);
+    }, 30000);
+}
+
 document.getElementById('chatForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const input = document.getElementById('message');
     const message = input.value.trim();
 
     if (message && isConnected) {
-        ws.send(message);
+        ws.send(JSON.stringify({
+            type: 'chat',
+            message
+        }));
         input.value = '';
+        sendTypingStatus(false);
     }
 });
+
+document.getElementById('message').addEventListener('input', handleTyping);
 
 document.getElementById('message').addEventListener('keypress', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
