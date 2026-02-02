@@ -26,13 +26,17 @@
                             <path d="M16.88 9.1A4 4 0 0 0 13.41 6h-1.42a4 4 0 0 0-3.42 2H7a4 4 0 0 0 0 8h1.29l1.07 3.22A1 1 0 0 0 10.35 20h4.3a1 1 0 0 0 1-.35-.78L14.71 16h1.29a4 4 0 0 0 3.12-6.9zM7 8h1a2 2 0 0 1 2 2v1H7a2 2 0 0 1 0-4zm2 10H7l.63-1.9A4 4 0 0 0 10 16h-.29l-.63 2zm8-4H9v-1a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1zm-1 4h-2l.63-2h1.42L16 18z"/>
                         </svg>
                     </label>
-                    <input type="file" id="fileInput" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar">
+                    <input type="file" id="fileInput" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar" multiple>
                     <div id="filePreview" class="file-preview hidden"></div>
-                    <input type="text" id="message" placeholder="Type a message..." required autocomplete="off">
+                    <input type="text" id="message" placeholder="Type a message..." autocomplete="off">
                     <button type="submit">Send</button>
                 </div>
             </form>
         </div>
+    </div>
+    <div id="imageModal" class="image-modal hidden" onclick="closeImageModal()">
+        <span class="image-modal-close">&times;</span>
+        <img id="imageModalImg" src="" alt="Full size">
     </div>
     <script src="chat.js"></script>
 </body>

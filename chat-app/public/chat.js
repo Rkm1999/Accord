@@ -7,7 +7,7 @@ let ws;
 let isConnected = false;
 let typingTimeout;
 let typingUsers = new Set();
-let selectedFile = null;
+let selectedFiles = [];
 
 function connect() {
     ws = new WebSocket(wsUrl);
@@ -72,7 +72,11 @@ function displayHistory(messages) {
         return;
     }
 
-    messages.forEach(msg => displayMessage(msg));
+    messages.forEach(msg => {
+        if (msg.message || msg.file_name) {
+            displayMessage(msg);
+        }
+    });
 }
 
 function displayMessage(data) {
@@ -81,11 +85,13 @@ function displayMessage(data) {
     const msgEl = document.createElement('div');
     msgEl.className = 'message';
 
-    let messageContent = `
-        <span class="time">${time}</span>
-        <span class="username">${escapeHtml(data.username)}:</span>
-        <span class="content">${escapeHtml(data.message)}</span>
-    `;
+    if (data.message) {
+        msgEl.innerHTML += `
+            <span class="time">${time}</span>
+            <span class="username">${escapeHtml(data.username)}:</span>
+            <span class="content">${escapeHtml(data.message)}</span>
+        `;
+    }
 
     const linkMetadata = data.linkMetadata || {
         url: data.link_url,
@@ -96,7 +102,7 @@ function displayMessage(data) {
 
     if (linkMetadata && linkMetadata.url) {
         const hasImage = !!linkMetadata.image;
-        messageContent += `
+        msgEl.innerHTML += `
             <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="link-preview${!hasImage ? ' no-image' : ''}">
                 ${hasImage ? `<img src="${escapeHtml(linkMetadata.image)}" alt="Link preview" class="link-preview-image" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/default/0.jpg';">` : ''}
                 <div class="link-preview-content">
@@ -121,17 +127,13 @@ function displayMessage(data) {
             : `/api/file/${fileAttachment.key}`;
 
         if (fileAttachment.type && fileAttachment.type.startsWith('image/')) {
-            messageContent += `
+            msgEl.innerHTML += `
                 <div class="file-attachment">
-                    <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="file-image" onclick="window.open('${fileUrl}', '_blank')">
-                    <div class="file-info">
-                        <span class="file-name">${escapeHtml(fileAttachment.name)}</span>
-                        <span class="file-size">${formatFileSize(fileAttachment.size)}</span>
-                    </div>
+                    <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="file-image" onclick="openImageModal('${fileUrl}')" onerror="this.style.display='none'">
                 </div>
             `;
         } else {
-            messageContent += `
+            msgEl.innerHTML += `
                 <a href="${fileUrl}" target="_blank" class="file-attachment">
                     <div class="file-icon">${getFileIcon(fileAttachment.type)}</div>
                     <div class="file-info">
@@ -143,7 +145,6 @@ function displayMessage(data) {
         }
     }
 
-    msgEl.innerHTML = messageContent;
     chatHistory.appendChild(msgEl);
     chatHistory.scrollTop = chatHistory.scrollHeight;
 }
@@ -253,58 +254,89 @@ function handleTyping() {
 }
 
 function handleFileSelect(event) {
-    const file = event.target.files[0];
-    if (!file) {
-        selectedFile = null;
-        hideFilePreview();
+    const files = Array.from(event.target.files);
+
+    if (files.length === 0) {
         return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-        alert('File size must be less than 10MB');
-        event.target.value = '';
-        selectedFile = null;
-        hideFilePreview();
+    const currentCount = selectedFiles.length;
+    const newCount = currentCount + files.length;
+
+    if (newCount > 10) {
+        alert(`You can only upload up to 10 files at a time. Currently selected: ${currentCount}, trying to add: ${files.length}`);
         return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        selectedFile = {
-            name: file.name,
-            type: file.type,
-            data: e.target.result.split(',')[1]
-        };
-        showFilePreview(file);
-    };
-    reader.readAsDataURL(file);
-}
+    const validFiles = [];
+    let invalidFiles = false;
 
-function showFilePreview(file) {
-    const preview = document.getElementById('filePreview');
-    preview.classList.remove('hidden');
+    files.forEach(file => {
+        if (file.size > 10 * 1024 * 1024) {
+            alert(`File "${file.name}" is too large. Maximum size is 10MB per file.`);
+            invalidFiles = true;
+            return;
+        }
+        validFiles.push(file);
+    });
 
-    if (file.type.startsWith('image/')) {
+    if (invalidFiles) {
+        return;
+    }
+
+    let processedCount = 0;
+
+    validFiles.forEach(file => {
         const reader = new FileReader();
         reader.onload = (e) => {
-            preview.innerHTML = `
-                <div class="file-preview-item">
-                    <img src="${e.target.result}" alt="Preview">
-                    <span class="file-name">${escapeHtml(file.name)}</span>
-                    <button type="button" class="remove-file" onclick="removeFile()">×</button>
-                </div>
-            `;
+            selectedFiles.push({
+                name: file.name,
+                type: file.type,
+                data: e.target.result.split(',')[1]
+            });
+            processedCount++;
+
+            if (processedCount === validFiles.length) {
+                showFilePreview();
+            }
         };
         reader.readAsDataURL(file);
-    } else {
-        preview.innerHTML = `
-            <div class="file-preview-item">
-                <div class="file-icon">📄</div>
-                <span class="file-name">${escapeHtml(file.name)}</span>
-                <button type="button" class="remove-file" onclick="removeFile()">×</button>
-            </div>
-        `;
+    });
+}
+
+function showFilePreview() {
+    const preview = document.getElementById('filePreview');
+
+    if (selectedFiles.length === 0) {
+        hideFilePreview();
+        return;
     }
+
+    preview.classList.remove('hidden');
+    let previewHtml = '';
+
+    selectedFiles.forEach((file, index) => {
+        if (file.type.startsWith('image/')) {
+            const imageDataUrl = `data:${file.type};base64,${file.data}`;
+            previewHtml += `
+                <div class="file-preview-item">
+                    <img src="${imageDataUrl}" alt="Preview">
+                    <span class="file-name">${escapeHtml(file.name)}</span>
+                    <button type="button" class="remove-file" onclick="removeFile(${index})">×</button>
+                </div>
+            `;
+        } else {
+            previewHtml += `
+                <div class="file-preview-item">
+                    <div class="file-icon">📄</div>
+                    <span class="file-name">${escapeHtml(file.name)}</span>
+                    <button type="button" class="remove-file" onclick="removeFile(${index})">×</button>
+                </div>
+            `;
+        }
+    });
+
+    preview.innerHTML = previewHtml;
 }
 
 function hideFilePreview() {
@@ -313,11 +345,16 @@ function hideFilePreview() {
     preview.innerHTML = '';
 }
 
-function removeFile() {
-    selectedFile = null;
-    const fileInput = document.getElementById('fileInput');
-    fileInput.value = '';
-    hideFilePreview();
+function removeFile(index) {
+    selectedFiles.splice(index, 1);
+
+    if (selectedFiles.length === 0) {
+        const fileInput = document.getElementById('fileInput');
+        fileInput.value = '';
+        hideFilePreview();
+    } else {
+        showFilePreview();
+    }
 }
 
 window.removeFile = removeFile;
@@ -348,26 +385,38 @@ function getFileIcon(type) {
 
 document.getElementById('fileInput').addEventListener('change', handleFileSelect);
 
-document.getElementById('chatForm').addEventListener('submit', (e) => {
+document.getElementById('chatForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const input = document.getElementById('message');
     const message = input.value.trim();
 
-    if (!message && !selectedFile) return;
+    if (!message && selectedFiles.length === 0) return;
 
     if (isConnected) {
-        const payload = {
-            type: 'chat',
-            message
-        };
+        const filesToSend = [...selectedFiles];
 
-        if (selectedFile) {
-            payload.file = selectedFile;
+        if (message) {
+            const payload = {
+                type: 'chat',
+                message
+            };
+            ws.send(JSON.stringify(payload));
+            input.value = '';
         }
 
-        ws.send(JSON.stringify(payload));
-        input.value = '';
-        removeFile();
+        for (const file of filesToSend) {
+            const payload = {
+                type: 'chat',
+                message: '',
+                file: file
+            };
+            ws.send(JSON.stringify(payload));
+        }
+
+        selectedFiles = [];
+        const fileInput = document.getElementById('fileInput');
+        fileInput.value = '';
+        hideFilePreview();
         sendTypingStatus(false);
     }
 });
@@ -393,3 +442,18 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log(`Connecting as: ${username}`);
     connect();
 });
+
+function openImageModal(imageUrl) {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('imageModalImg');
+    modalImg.src = imageUrl;
+    modal.classList.remove('hidden');
+}
+
+function closeImageModal() {
+    const modal = document.getElementById('imageModal');
+    modal.classList.add('hidden');
+}
+
+window.openImageModal = openImageModal;
+window.closeImageModal = closeImageModal;
