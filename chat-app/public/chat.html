@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h3>Connected Users</h3>
+            <div id="userCount" class="user-count">Loading...</div>
+            <ul id="userList"></ul>
+            <button id="leaveBtn" class="leave-btn">Leave Chat</button>
+        </div>
+        <div class="chat-area">
+            <div id="chatHistory" class="chat-history">
+                <div class="system-message">Connecting to chat server...</div>
+            </div>
+            <form id="chatForm" class="chat-form">
+                <input type="text" id="message" placeholder="Type a message..." required autocomplete="off">
+                <button type="submit">Send</button>
+            </form>
+        </div>
+    </div>
+    <script src="chat.js"></script>
+</body>
+</html>
