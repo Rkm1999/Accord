@@ -1,8 +1,9 @@
 const username = localStorage.getItem('chatUsername') || 'Anonymous';
 const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const currentChannelId = parseInt(localStorage.getItem('currentChannelId') || '1');
 const wsUrl = isLocalDev
-    ? `ws://localhost:8787/ws?username=${encodeURIComponent(username)}`
-    : `ws://${window.location.host}/ws?username=${encodeURIComponent(username)}`;
+    ? `ws://localhost:8787/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}`
+    : `ws://${window.location.host}/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}`;
 let ws;
 let isConnected = false;
 let typingTimeout;
@@ -10,6 +11,7 @@ let typingUsers = new Set();
 let selectedFiles = [];
 let replyingTo = null;
 let editingMessageId = null;
+let channels = [];
 
 function connect() {
     ws = new WebSocket(wsUrl);
@@ -45,6 +47,9 @@ function connect() {
                 break;
             case 'typing':
                 updateTypingIndicator(data);
+                break;
+            case 'channel_switched':
+                console.log(`Switched to channel ${data.channelId}`);
                 break;
             case 'error':
                 alert(data.message);
@@ -82,8 +87,13 @@ function displayHistory(messages) {
     const chatHistory = document.getElementById('chatHistory');
     chatHistory.innerHTML = '';
 
+    const currentChannel = channels.find(c => c.id === currentChannelId);
+    const channelName = currentChannel ? `#${currentChannel.name}` : 'Chat';
+
+    document.title = `Chat App - ${channelName}`;
+
     if (messages.length === 0) {
-        showSystemMessage('No messages yet. Be the first to say hello!');
+        showSystemMessage(`No messages yet in ${channelName}. Be the first to say hello!`);
         return;
     }
 
@@ -766,8 +776,14 @@ if (leaveBtnEl) {
     });
 }
 
+const createChannelBtnEl = document.getElementById('createChannelBtn');
+if (createChannelBtnEl) {
+    createChannelBtnEl.addEventListener('click', openCreateChannelModal);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    console.log(`Connecting as: ${username}`);
+    console.log(`Connecting as: ${username} to channel ${currentChannelId}`);
+    fetchChannels();
     connect();
 });
 
@@ -786,6 +802,144 @@ function closeImageModal() {
         modal.classList.add('hidden');
     }
 }
+
+async function fetchChannels() {
+    try {
+        const apiUrl = isLocalDev
+            ? 'http://localhost:8787/api/channels'
+            : '/api/channels';
+        const response = await fetch(apiUrl);
+        channels = await response.json();
+        displayChannels();
+    } catch (error) {
+        console.error('Error fetching channels:', error);
+    }
+}
+
+function displayChannels() {
+    const channelList = document.getElementById('channelList');
+    if (!channelList) return;
+
+    channelList.innerHTML = '';
+
+    channels.forEach(channel => {
+        const channelEl = document.createElement('div');
+        channelEl.className = 'channel-item';
+        if (channel.id === currentChannelId) {
+            channelEl.classList.add('active');
+        }
+
+        channelEl.innerHTML = `
+            <span class="channel-name"># ${escapeHtml(channel.name)}</span>
+            ${channel.id !== 1 ? `
+                <div class="channel-actions">
+                    <button class="delete-channel-btn" onclick="deleteChannel(${channel.id})">🗑</button>
+                </div>
+            ` : ''}
+        `;
+
+        channelEl.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('delete-channel-btn')) {
+                switchChannel(channel.id);
+            }
+        });
+
+        channelList.appendChild(channelEl);
+    });
+}
+
+function switchChannel(channelId) {
+    if (channelId === currentChannelId) return;
+
+    localStorage.setItem('currentChannelId', channelId);
+    window.location.reload();
+}
+
+function openCreateChannelModal() {
+    const modal = document.getElementById('createChannelModal');
+    const input = document.getElementById('newChannelName');
+    input.value = '';
+    modal.classList.remove('hidden');
+    input.focus();
+}
+
+function closeCreateChannelModal() {
+    const modal = document.getElementById('createChannelModal');
+    modal.classList.add('hidden');
+}
+
+async function createChannel() {
+    const input = document.getElementById('newChannelName');
+    const channelName = input.value.trim();
+
+    if (!channelName) {
+        alert('Channel name cannot be empty');
+        return;
+    }
+
+    try {
+        const apiUrl = isLocalDev
+            ? 'http://localhost:8787/api/channels'
+            : '/api/channels';
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: channelName,
+                createdBy: username,
+            }),
+        });
+
+        if (response.ok) {
+            closeCreateChannelModal();
+            await fetchChannels();
+        } else if (response.status === 409) {
+            alert('Channel name already exists');
+        } else {
+            alert('Failed to create channel');
+        }
+    } catch (error) {
+        console.error('Error creating channel:', error);
+        alert('Failed to create channel');
+    }
+}
+
+async function deleteChannel(channelId) {
+    if (!confirm('Are you sure you want to delete this channel? All messages in this channel will be deleted.')) {
+        return;
+    }
+
+    try {
+        const apiUrl = isLocalDev
+            ? `http://localhost:8787/api/channels/${channelId}`
+            : `/api/channels/${channelId}`;
+
+        const response = await fetch(apiUrl, {
+            method: 'DELETE',
+        });
+
+        if (response.ok) {
+            if (currentChannelId === channelId) {
+                localStorage.setItem('currentChannelId', '1');
+                window.location.reload();
+            } else {
+                await fetchChannels();
+            }
+        } else {
+            alert('Failed to delete channel');
+        }
+    } catch (error) {
+        console.error('Error deleting channel:', error);
+        alert('Failed to delete channel');
+    }
+}
+
+window.openCreateChannelModal = openCreateChannelModal;
+window.closeCreateChannelModal = closeCreateChannelModal;
+window.createChannel = createChannel;
+window.deleteChannel = deleteChannel;
 
 // Global scope binding for HTML inline events
 window.openImageModal = openImageModal;

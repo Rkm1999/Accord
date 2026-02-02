@@ -8,6 +8,7 @@ export interface Env {
 interface UserState {
   username: string;
   joinedAt: number;
+  channelId: number;
 }
 
 interface LinkMetadata {
@@ -32,6 +33,7 @@ export class ChatRoom extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const username = url.searchParams.get("username") || "Anonymous";
+    const channelId = parseInt(url.searchParams.get("channelId") || "1");
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -41,11 +43,12 @@ export class ChatRoom extends DurableObject<Env> {
     server.serializeAttachment({
       username,
       joinedAt: Date.now(),
+      channelId,
     } as UserState);
 
-    this.broadcastUserEvent("user_joined", username);
+    this.broadcastUserEvent("user_joined", username, channelId);
 
-    await this.sendChatHistory(server);
+    await this.sendChatHistory(server, channelId);
 
     return new Response(null, {
       status: 101,
@@ -55,22 +58,40 @@ export class ChatRoom extends DurableObject<Env> {
 
   async webSocketMessage(ws: WebSocket, message: string) {
     const state = ws.deserializeAttachment() as UserState;
-    const { username } = state;
+    const { username, channelId } = state;
 
     const data = JSON.parse(message);
 
+    if (data.type === "switch_channel") {
+      const newChannelId = data.channelId;
+      ws.serializeAttachment({
+        username,
+        joinedAt: Date.now(),
+        channelId: newChannelId,
+      } as UserState);
+
+      await this.sendChatHistory(ws, newChannelId);
+
+      ws.send(JSON.stringify({
+        type: "channel_switched",
+        channelId: newChannelId,
+      }));
+
+      return;
+    }
+
     if (data.type === "typing") {
-      this.broadcastTypingIndicator(username, data.isTyping);
+      this.broadcastTypingIndicator(username, data.isTyping, channelId);
       return;
     }
 
     if (data.type === "edit") {
-      await this.editMessage(data.messageId, data.newMessage, username);
+      await this.editMessage(data.messageId, data.newMessage, username, channelId);
       return;
     }
 
     if (data.type === "delete") {
-      await this.deleteMessage(data.messageId, username);
+      await this.deleteMessage(data.messageId, username, channelId);
       return;
     }
 
@@ -81,8 +102,8 @@ export class ChatRoom extends DurableObject<Env> {
     let replyData = null;
     if (data.replyTo) {
       const result = await this.env.DB.prepare(
-        "SELECT id, username, message, timestamp, file_name, file_type, file_size, file_key FROM messages WHERE id = ?"
-      ).bind(data.replyTo).first();
+        "SELECT id, username, message, timestamp, file_name, file_type, file_size, file_key FROM messages WHERE id = ? AND channel_id = ?"
+      ).bind(data.replyTo, channelId).first();
 
       if (result) {
         replyData = {
@@ -98,9 +119,9 @@ export class ChatRoom extends DurableObject<Env> {
       }
     }
 
-    let query = "INSERT INTO messages (username, message, timestamp";
-    let values = [username, data.message, timestamp];
-    let placeholders = "?, ?, ?";
+    let query = "INSERT INTO messages (username, message, timestamp, channel_id";
+    let values = [username, data.message, timestamp, channelId];
+    let placeholders = "?, ?, ?, ?";
 
     if (replyData) {
       query += ", reply_to, reply_username, reply_message, reply_timestamp";
@@ -125,7 +146,7 @@ export class ChatRoom extends DurableObject<Env> {
     const result = await this.env.DB.prepare(query).bind(...values).run();
     const messageId = result.meta.last_row_id;
 
-    this.broadcastMessage(username, data.message, linkMetadata, fileAttachment, replyData, messageId);
+    this.broadcastMessage(username, data.message, linkMetadata, fileAttachment, replyData, messageId, channelId);
   }
 
   async webSocketClose(ws: WebSocket) {
@@ -142,7 +163,7 @@ export class ChatRoom extends DurableObject<Env> {
     replyFileType?: string | null;
     replyFileSize?: number | null;
     replyFileKey?: string | null;
-  }, messageId?: number) {
+  }, messageId?: number, channelId?: number) {
     const webSockets = this.ctx.getWebSockets();
     const payload = JSON.stringify({
       type: "chat",
@@ -163,11 +184,14 @@ export class ChatRoom extends DurableObject<Env> {
     });
 
     for (const ws of webSockets) {
-      ws.send(payload);
+      const state = ws.deserializeAttachment<UserState>();
+      if (state.channelId === channelId) {
+        ws.send(payload);
+      }
     }
   }
 
-  private broadcastUserEvent(eventType: string, username: string) {
+  private broadcastUserEvent(eventType: string, username: string, channelId?: number) {
     const webSockets = this.ctx.getWebSockets();
     const userCount = webSockets.length;
     const payload = JSON.stringify({
@@ -175,14 +199,18 @@ export class ChatRoom extends DurableObject<Env> {
       event: eventType,
       username,
       userCount,
+      channelId,
     });
 
     for (const ws of webSockets) {
-      ws.send(payload);
+      const state = ws.deserializeAttachment<UserState>();
+      if (state.channelId === channelId) {
+        ws.send(payload);
+      }
     }
   }
 
-  private broadcastTypingIndicator(username: string, isTyping: boolean) {
+  private broadcastTypingIndicator(username: string, isTyping: boolean, channelId?: number) {
     const webSockets = this.ctx.getWebSockets();
     const payload = JSON.stringify({
       type: "typing",
@@ -191,14 +219,17 @@ export class ChatRoom extends DurableObject<Env> {
     });
 
     for (const ws of webSockets) {
-      ws.send(payload);
+      const state = ws.deserializeAttachment<UserState>();
+      if (state.channelId === channelId) {
+        ws.send(payload);
+      }
     }
   }
 
-  private async sendChatHistory(ws: WebSocket) {
+  private async sendChatHistory(ws: WebSocket, channelId: number) {
     const { results } = await this.env.DB.prepare(
-      "SELECT id, username, message, timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key, reply_to, reply_username, reply_message, reply_timestamp, is_edited, edited_at FROM messages ORDER BY timestamp DESC LIMIT 50"
-    ).all();
+      "SELECT id, username, message, timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key, reply_to, reply_username, reply_message, reply_timestamp, is_edited, edited_at, channel_id FROM messages WHERE channel_id = ? ORDER BY timestamp DESC LIMIT 50"
+    ).bind(channelId).all();
 
     const history = results.reverse();
     ws.send(JSON.stringify({
@@ -346,11 +377,11 @@ export class ChatRoom extends DurableObject<Env> {
     return fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
   }
 
-  private async editMessage(messageId: number, newMessage: string, username: string): Promise<boolean> {
+  private async editMessage(messageId: number, newMessage: string, username: string, channelId: number): Promise<boolean> {
     try {
       const result = await this.env.DB.prepare(
-        "SELECT username, reply_to, reply_username, reply_message, reply_timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key FROM messages WHERE id = ?"
-      ).bind(messageId).first();
+        "SELECT username, reply_to, reply_username, reply_message, reply_timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key FROM messages WHERE id = ? AND channel_id = ?"
+      ).bind(messageId, channelId).first();
 
       if (!result) {
         return false;
@@ -395,7 +426,7 @@ export class ChatRoom extends DurableObject<Env> {
         editData.file_key = originalFileKey;
       }
 
-      this.broadcastEdit(messageId, newMessage, editData);
+      this.broadcastEdit(messageId, newMessage, editData, channelId);
       return true;
     } catch (error) {
       console.error('Error editing message:', error);
@@ -403,11 +434,11 @@ export class ChatRoom extends DurableObject<Env> {
     }
   }
 
-  private async deleteMessage(messageId: number, username: string): Promise<boolean> {
+  private async deleteMessage(messageId: number, username: string, channelId: number): Promise<boolean> {
     try {
       const result = await this.env.DB.prepare(
-        "SELECT username FROM messages WHERE id = ?"
-      ).bind(messageId).first();
+        "SELECT username FROM messages WHERE id = ? AND channel_id = ?"
+      ).bind(messageId, channelId).first();
 
       if (!result) {
         return false;
@@ -422,7 +453,7 @@ export class ChatRoom extends DurableObject<Env> {
         "DELETE FROM messages WHERE id = ?"
       ).bind(messageId).run();
 
-      await this.broadcastDelete(messageId);
+      await this.broadcastDelete(messageId, channelId);
       return true;
     } catch (error) {
       console.error('Error deleting message:', error);
@@ -430,7 +461,7 @@ export class ChatRoom extends DurableObject<Env> {
     }
   }
 
-  private broadcastEdit(messageId: number, newMessage: string, replyData?: any) {
+  private broadcastEdit(messageId: number, newMessage: string, replyData?: any, channelId?: number) {
     const webSockets = this.ctx.getWebSockets();
 
     const payload = JSON.stringify({
@@ -441,11 +472,14 @@ export class ChatRoom extends DurableObject<Env> {
     });
 
     for (const ws of webSockets) {
-      ws.send(payload);
+      const state = ws.deserializeAttachment<UserState>();
+      if (state.channelId === channelId) {
+        ws.send(payload);
+      }
     }
   }
 
-  private broadcastDelete(messageId: number) {
+  private broadcastDelete(messageId: number, channelId?: number) {
     const webSockets = this.ctx.getWebSockets();
     const payload = JSON.stringify({
       type: "delete",
@@ -453,7 +487,10 @@ export class ChatRoom extends DurableObject<Env> {
     });
 
     for (const ws of webSockets) {
-      ws.send(payload);
+      const state = ws.deserializeAttachment<UserState>();
+      if (state.channelId === channelId) {
+        ws.send(payload);
+      }
     }
   }
 
