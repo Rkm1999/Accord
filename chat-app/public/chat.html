@@ -13,6 +13,9 @@
             <div id="channelList" class="channel-list"></div>
             <button id="createChannelBtn" class="create-channel-btn">+ Create Channel</button>
             <hr>
+            <h3>Search</h3>
+            <button id="searchBtn" class="search-btn">🔍 Search Messages</button>
+            <hr>
             <h3>Connected Users</h3>
             <div id="userCount" class="user-count">Loading...</div>
             <ul id="userList"></ul>
@@ -62,6 +65,33 @@
             <div class="edit-modal-actions">
                 <button type="button" class="cancel-edit" onclick="closeCreateChannelModal()">Cancel</button>
                 <button type="button" class="save-edit" onclick="createChannel()">Create</button>
+            </div>
+        </div>
+    </div>
+    <div id="searchModal" class="edit-modal hidden" onclick="if(event.target.id === 'searchModal') closeSearchModal()">
+        <div class="search-modal-content" onclick="event.stopPropagation()">
+            <h3>Search Messages</h3>
+            <div class="search-form">
+                <input type="text" id="searchQuery" placeholder="Search text...">
+                <input type="text" id="searchUsername" placeholder="Search by username...">
+                <select id="searchChannelId">
+                    <option value="all">All Channels</option>
+                </select>
+                <div class="date-inputs">
+                    <div>
+                        <label>From:</label>
+                        <input type="date" id="searchStartDate">
+                    </div>
+                    <div>
+                        <label>To:</label>
+                        <input type="date" id="searchEndDate">
+                    </div>
+                </div>
+                <button type="button" class="search-submit-btn" onclick="performSearch()">Search</button>
+            </div>
+            <div id="searchResults" class="search-results"></div>
+            <div class="edit-modal-actions">
+                <button type="button" class="cancel-edit" onclick="closeSearchModal()">Close</button>
             </div>
         </div>
     </div>

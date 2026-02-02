@@ -781,6 +781,11 @@ if (createChannelBtnEl) {
     createChannelBtnEl.addEventListener('click', openCreateChannelModal);
 }
 
+const searchBtnEl = document.getElementById('searchBtn');
+if (searchBtnEl) {
+    searchBtnEl.addEventListener('click', openSearchModal);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log(`Connecting as: ${username} to channel ${currentChannelId}`);
     fetchChannels();
@@ -940,6 +945,111 @@ window.openCreateChannelModal = openCreateChannelModal;
 window.closeCreateChannelModal = closeCreateChannelModal;
 window.createChannel = createChannel;
 window.deleteChannel = deleteChannel;
+
+function openSearchModal() {
+    const modal = document.getElementById('searchModal');
+    const channelIdSelect = document.getElementById('searchChannelId');
+
+    channelIdSelect.innerHTML = '<option value="all">All Channels</option>';
+    channels.forEach(channel => {
+        channelIdSelect.innerHTML += `<option value="${channel.id}">${escapeHtml(channel.name)}</option>`;
+    });
+
+    document.getElementById('searchQuery').value = '';
+    document.getElementById('searchUsername').value = '';
+    document.getElementById('searchStartDate').value = '';
+    document.getElementById('searchEndDate').value = '';
+    document.getElementById('searchResults').innerHTML = '';
+
+    modal.classList.remove('hidden');
+    document.getElementById('searchQuery').focus();
+}
+
+function closeSearchModal() {
+    const modal = document.getElementById('searchModal');
+    modal.classList.add('hidden');
+}
+
+async function performSearch() {
+    const query = document.getElementById('searchQuery').value.trim();
+    const username = document.getElementById('searchUsername').value.trim();
+    const channelId = document.getElementById('searchChannelId').value;
+    const startDate = document.getElementById('searchStartDate').value;
+    const endDate = document.getElementById('searchEndDate').value;
+
+    if (!query && !username && channelId === 'all' && !startDate && !endDate) {
+        alert('Please enter at least one search criteria');
+        return;
+    }
+
+    const searchResultsEl = document.getElementById('searchResults');
+    searchResultsEl.innerHTML = '<div class="no-results">Searching...</div>';
+
+    try {
+        const apiUrl = isLocalDev
+            ? 'http://localhost:8787/api/search'
+            : '/api/search';
+
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query,
+                username,
+                channelId,
+                startDate,
+                endDate,
+            }),
+        });
+
+        const results = await response.json();
+        displaySearchResults(results);
+    } catch (error) {
+        console.error('Error searching messages:', error);
+        searchResultsEl.innerHTML = '<div class="no-results">Error searching messages</div>';
+    }
+}
+
+function displaySearchResults(results) {
+    const searchResultsEl = document.getElementById('searchResults');
+
+    if (results.length === 0) {
+        searchResultsEl.innerHTML = '<div class="no-results">No results found</div>';
+        return;
+    }
+
+    searchResultsEl.innerHTML = '';
+
+    results.forEach(result => {
+        const time = new Date(result.timestamp).toLocaleString();
+        const resultEl = document.createElement('div');
+        resultEl.className = 'search-result-item';
+        resultEl.innerHTML = `
+            <div class="search-result-header">
+                <span class="search-result-username">${escapeHtml(result.username)}</span>
+                <span class="search-result-channel">#${escapeHtml(result.channel_name)}</span>
+                <span class="search-result-time">${time}</span>
+            </div>
+            <div class="search-result-message">${escapeHtml(result.message || '<i>File attachment</i>')}</div>
+        `;
+
+        resultEl.addEventListener('click', () => {
+            if (result.channel_id !== currentChannelId) {
+                localStorage.setItem('currentChannelId', result.channel_id);
+                window.location.reload();
+            }
+            closeSearchModal();
+        });
+
+        searchResultsEl.appendChild(resultEl);
+    });
+}
+
+window.openSearchModal = openSearchModal;
+window.closeSearchModal = closeSearchModal;
+window.performSearch = performSearch;
 
 // Global scope binding for HTML inline events
 window.openImageModal = openImageModal;

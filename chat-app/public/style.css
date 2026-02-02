@@ -168,6 +168,142 @@ button[type="submit"]:active {
     background: #5568d3;
 }
 
+.search-btn {
+    width: 100%;
+    padding: 10px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+    margin-bottom: 15px;
+}
+
+.search-btn:hover {
+    background: #5568d3;
+}
+
+.search-modal-content {
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.search-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.search-form input,
+.search-form select {
+    padding: 10px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.search-form input:focus,
+.search-form select:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.date-inputs {
+    display: flex;
+    gap: 15px;
+}
+
+.date-inputs > div {
+    flex: 1;
+}
+
+.date-inputs label {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.date-inputs input {
+    width: 100%;
+}
+
+.search-submit-btn {
+    padding: 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.search-submit-btn:hover {
+    transform: translateY(-2px);
+}
+
+.search-results {
+    max-height: 300px;
+    overflow-y: auto;
+    border-top: 1px solid #e0e0e0;
+    padding-top: 15px;
+}
+
+.search-result-item {
+    padding: 10px;
+    border-bottom: 1px solid #e0e0e0;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.search-result-item:hover {
+    background: #f8f9fa;
+}
+
+.search-result-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+    font-size: 12px;
+    color: #666;
+}
+
+.search-result-username {
+    font-weight: 600;
+    color: #667eea;
+}
+
+.search-result-channel {
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.search-result-message {
+    color: #333;
+    font-size: 14px;
+    word-break: break-word;
+}
+
+.search-result-time {
+    color: #999;
+    font-size: 11px;
+    margin-left: auto;
+}
+
+.no-results {
+    text-align: center;
+    color: #666;
+    padding: 20px;
+}
+
 hr {
     border: none;
     border-top: 1px solid #e0e0e0;

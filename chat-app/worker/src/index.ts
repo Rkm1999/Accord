@@ -125,6 +125,56 @@ export default {
       return new Response("Channel deleted", { status: 200, headers });
     }
 
+    if (url.pathname === "/api/search" && request.method === "POST") {
+      const { query, username, channelId, startDate, endDate } = await request.json();
+
+      let sql = `
+        SELECT m.id, m.username, m.message, m.timestamp, m.channel_id, c.name as channel_name,
+               m.link_url, m.link_title, m.link_description, m.link_image,
+               m.file_name, m.file_type, m.file_size, m.file_key,
+               m.reply_to, m.reply_username, m.reply_message, m.reply_timestamp,
+               m.is_edited, m.edited_at
+        FROM messages m
+        LEFT JOIN channels c ON m.channel_id = c.id
+        WHERE 1=1
+      `;
+      const params = [];
+
+      if (query && query.trim()) {
+        sql += " AND (m.message LIKE ? OR m.link_title LIKE ?)";
+        const searchTerm = `%${query.trim()}%`;
+        params.push(searchTerm, searchTerm);
+      }
+
+      if (username && username.trim()) {
+        sql += " AND m.username LIKE ?";
+        params.push(`%${username.trim()}%`);
+      }
+
+      if (channelId && channelId !== "all") {
+        sql += " AND m.channel_id = ?";
+        params.push(channelId);
+      }
+
+      if (startDate) {
+        sql += " AND m.timestamp >= ?";
+        params.push(new Date(startDate).getTime());
+      }
+
+      if (endDate) {
+        sql += " AND m.timestamp <= ?";
+        params.push(new Date(endDate).getTime());
+      }
+
+      sql += " ORDER BY m.timestamp DESC LIMIT 100";
+
+      const { results } = await env.DB.prepare(sql).bind(...params).all();
+
+      const headers = new Headers();
+      headers.set("Access-Control-Allow-Origin", "*");
+      return new Response(JSON.stringify(results), { headers });
+    }
+
     if (request.method === "OPTIONS") {
       const headers = new Headers();
       headers.set("Access-Control-Allow-Origin", "*");
