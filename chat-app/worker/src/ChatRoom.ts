@@ -64,13 +64,49 @@ export class ChatRoom extends DurableObject<Env> {
       return;
     }
 
+    if (data.type === "edit") {
+      await this.editMessage(data.messageId, data.newMessage, username);
+      return;
+    }
+
+    if (data.type === "delete") {
+      await this.deleteMessage(data.messageId, username);
+      return;
+    }
+
     const linkMetadata = await this.fetchLinkMetadata(data.message);
     const fileAttachment = data.file ? await this.uploadFile(data.file) : null;
     const timestamp = Date.now();
 
+    let replyData = null;
+    if (data.replyTo) {
+      const result = await this.env.DB.prepare(
+        "SELECT id, username, message, timestamp, file_name, file_type, file_size, file_key FROM messages WHERE id = ?"
+      ).bind(data.replyTo).first();
+
+      if (result) {
+        replyData = {
+          replyTo: result.id as number,
+          replyUsername: result.username as string,
+          replyMessage: result.message as string,
+          replyTimestamp: result.timestamp as number,
+          replyFileName: result.file_name as string | null,
+          replyFileType: result.file_type as string | null,
+          replyFileSize: result.file_size as number | null,
+          replyFileKey: result.file_key as string | null,
+        };
+      }
+    }
+
     let query = "INSERT INTO messages (username, message, timestamp";
     let values = [username, data.message, timestamp];
     let placeholders = "?, ?, ?";
+
+    if (replyData) {
+      query += ", reply_to, reply_username, reply_message, reply_timestamp";
+      values.push(replyData.replyTo, replyData.replyUsername, replyData.replyMessage, replyData.replyTimestamp);
+      placeholders += ", ?, ?, ?, ?";
+    }
 
     if (linkMetadata) {
       query += ", link_url, link_title, link_description, link_image";
@@ -86,9 +122,10 @@ export class ChatRoom extends DurableObject<Env> {
 
     query += `) VALUES (${placeholders})`;
 
-    await this.env.DB.prepare(query).bind(...values).run();
+    const result = await this.env.DB.prepare(query).bind(...values).run();
+    const messageId = result.meta.last_row_id;
 
-    this.broadcastMessage(username, data.message, linkMetadata, fileAttachment);
+    this.broadcastMessage(username, data.message, linkMetadata, fileAttachment, replyData, messageId);
   }
 
   async webSocketClose(ws: WebSocket) {
@@ -96,15 +133,33 @@ export class ChatRoom extends DurableObject<Env> {
     this.broadcastUserEvent("user_left", state.username);
   }
 
-  private broadcastMessage(username: string, message: string, linkMetadata?: LinkMetadata, fileAttachment?: FileAttachment) {
+  private broadcastMessage(username: string, message: string, linkMetadata?: LinkMetadata, fileAttachment?: FileAttachment, replyData?: {
+    replyTo: number;
+    replyUsername: string;
+    replyMessage: string;
+    replyTimestamp: number;
+    replyFileName?: string | null;
+    replyFileType?: string | null;
+    replyFileSize?: number | null;
+    replyFileKey?: string | null;
+  }, messageId?: number) {
     const webSockets = this.ctx.getWebSockets();
     const payload = JSON.stringify({
       type: "chat",
+      id: messageId,
       username,
       message,
       timestamp: Date.now(),
       linkMetadata,
       fileAttachment,
+      reply_to: replyData?.replyTo,
+      reply_username: replyData?.replyUsername,
+      reply_message: replyData?.replyMessage,
+      reply_timestamp: replyData?.replyTimestamp,
+      reply_file_name: replyData?.replyFileName,
+      reply_file_type: replyData?.replyFileType,
+      reply_file_size: replyData?.replyFileSize,
+      reply_file_key: replyData?.replyFileKey,
     });
 
     for (const ws of webSockets) {
@@ -142,7 +197,7 @@ export class ChatRoom extends DurableObject<Env> {
 
   private async sendChatHistory(ws: WebSocket) {
     const { results } = await this.env.DB.prepare(
-      "SELECT username, message, timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key FROM messages ORDER BY timestamp DESC LIMIT 50"
+      "SELECT id, username, message, timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key, reply_to, reply_username, reply_message, reply_timestamp, is_edited, edited_at FROM messages ORDER BY timestamp DESC LIMIT 50"
     ).all();
 
     const history = results.reverse();
@@ -289,5 +344,129 @@ export class ChatRoom extends DurableObject<Env> {
 
   private sanitizeFileName(fileName: string): string {
     return fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+  }
+
+  private async editMessage(messageId: number, newMessage: string, username: string): Promise<boolean> {
+    try {
+      const result = await this.env.DB.prepare(
+        "SELECT username, reply_to, reply_username, reply_message, reply_timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key FROM messages WHERE id = ?"
+      ).bind(messageId).first();
+
+      if (!result) {
+        return false;
+      }
+
+      if (result.username !== username) {
+        this.broadcastError(username, "You can only edit your own messages");
+        return false;
+      }
+
+      const hasReply = result.reply_to ? true : false;
+      const originalFileKey = result.file_key;
+      const originalLinkUrl = result.link_url;
+
+      await this.env.DB.prepare(
+        "UPDATE messages SET message = ?, is_edited = 1, edited_at = ? WHERE id = ?"
+      ).bind(newMessage, Date.now(), messageId).run();
+
+      const editData: any = {
+        messageId,
+        newMessage
+      };
+
+      if (hasReply) {
+        editData.reply_to = result.reply_to;
+        editData.reply_username = result.reply_username;
+        editData.reply_message = result.reply_message;
+        editData.reply_timestamp = result.reply_timestamp;
+      }
+
+      if (originalLinkUrl) {
+        editData.link_url = originalLinkUrl;
+        editData.link_title = result.link_title;
+        editData.link_description = result.link_description;
+        editData.link_image = result.link_image;
+      }
+
+      if (originalFileKey) {
+        editData.file_name = result.file_name;
+        editData.file_type = result.file_type;
+        editData.file_size = result.file_size;
+        editData.file_key = originalFileKey;
+      }
+
+      this.broadcastEdit(messageId, newMessage, editData);
+      return true;
+    } catch (error) {
+      console.error('Error editing message:', error);
+      return false;
+    }
+  }
+
+  private async deleteMessage(messageId: number, username: string): Promise<boolean> {
+    try {
+      const result = await this.env.DB.prepare(
+        "SELECT username FROM messages WHERE id = ?"
+      ).bind(messageId).first();
+
+      if (!result) {
+        return false;
+      }
+
+      if (result.username !== username) {
+        this.broadcastError(username, "You can only edit your own messages");
+        return false;
+      }
+
+      await this.env.DB.prepare(
+        "DELETE FROM messages WHERE id = ?"
+      ).bind(messageId).run();
+
+      await this.broadcastDelete(messageId);
+      return true;
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      return false;
+    }
+  }
+
+  private broadcastEdit(messageId: number, newMessage: string, replyData?: any) {
+    const webSockets = this.ctx.getWebSockets();
+
+    const payload = JSON.stringify({
+      type: "edit",
+      messageId,
+      newMessage,
+      ...replyData
+    });
+
+    for (const ws of webSockets) {
+      ws.send(payload);
+    }
+  }
+
+  private broadcastDelete(messageId: number) {
+    const webSockets = this.ctx.getWebSockets();
+    const payload = JSON.stringify({
+      type: "delete",
+      messageId,
+    });
+
+    for (const ws of webSockets) {
+      ws.send(payload);
+    }
+  }
+
+  private broadcastError(username: string, message: string) {
+    const webSockets = this.ctx.getWebSockets();
+
+    for (const ws of webSockets) {
+      if (ws.deserializeAttachment<UserState>().username === username) {
+        ws.send(JSON.stringify({
+          type: "error",
+          message,
+        }));
+      }
+    }
   }
 }

@@ -19,7 +19,12 @@
                 <div class="system-message">Connecting to chat server...</div>
             </div>
             <div id="typingIndicator" class="typing-indicator"></div>
+            <div id="replyBanner" class="reply-banner hidden">
+                <span class="reply-text">Replying to <strong id="replyToUsername"></strong></span>
+                <button type="button" class="cancel-reply" onclick="cancelReply()">✕</button>
+            </div>
             <form id="chatForm" class="chat-form">
+                <input type="hidden" id="replyTo" value="">
                 <div class="chat-input-wrapper">
                     <label for="fileInput" class="file-input-label">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -37,6 +42,16 @@
     <div id="imageModal" class="image-modal hidden" onclick="closeImageModal()">
         <span class="image-modal-close">&times;</span>
         <img id="imageModalImg" src="" alt="Full size">
+    </div>
+    <div id="editModal" class="edit-modal hidden" onclick="if(event.target.id === 'editModal') closeEditModal()">
+        <div class="edit-modal-content" onclick="event.stopPropagation()">
+            <h3>Edit Message</h3>
+            <textarea id="editMessageInput" rows="4"></textarea>
+            <div class="edit-modal-actions">
+                <button type="button" class="cancel-edit" onclick="closeEditModal()">Cancel</button>
+                <button type="button" class="save-edit" onclick="saveEdit()">Save</button>
+            </div>
+        </div>
     </div>
     <script src="chat.js"></script>
 </body>

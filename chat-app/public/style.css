@@ -519,6 +519,213 @@ button[type="submit"]:active {
     white-space: nowrap;
 }
 
+.message-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+    align-items: center;
+}
+
+.action-btn {
+    background: #f0f0f0;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    opacity: 0;
+}
+
+.message:hover .action-btn {
+    opacity: 1;
+}
+
+.action-btn:hover {
+    background: #e0e0e0;
+    transform: scale(1.05);
+}
+
+.edited {
+    font-size: 11px;
+    color: #999;
+    font-style: italic;
+    margin-left: 4px;
+}
+
+.reply-info {
+    background: #f0f4f8;
+    border-left: 3px solid #4a90e2;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 10px;
+}
+
+.reply-header {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.reply-username {
+    font-weight: 600;
+    color: #4a90e2;
+}
+
+.reply-time {
+    font-size: 11px;
+    color: #999;
+}
+
+.reply-message {
+    color: #666;
+    font-size: 14px;
+    padding: 8px 0;
+    border-radius: 6px;
+    background: white;
+}
+
+.reply-message {
+    color: #666;
+    font-size: 14px;
+    padding: 8px 0;
+    border-radius: 6px;
+    background: white;
+}
+
+.reply-file {
+    margin-top: 8px;
+    display: block;
+    max-width: 200px;
+}
+
+.reply-banner {
+    background: #e3f2fd;
+    padding: 10px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    border-bottom: 2px solid #4a90e2;
+}
+
+.reply-banner.hidden {
+    display: none;
+}
+
+.reply-text {
+    color: #4a90e2;
+    font-weight: 500;
+}
+
+.cancel-reply {
+    background: transparent;
+    border: none;
+    color: #666;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.cancel-reply:hover {
+    background: #c82333;
+    color: white;
+}
+
+.edit-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 20px;
+}
+
+.edit-modal.hidden {
+    display: none;
+}
+
+.edit-modal:not(.hidden) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.edit-modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 600px;
+    width: 90%;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.edit-modal-content h3 {
+    margin: 0 0 20px 0;
+    color: #333;
+    font-size: 18px;
+}
+
+.edit-modal-content textarea {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 16px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 100px;
+}
+
+.edit-modal-content textarea:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.edit-modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: flex-end;
+}
+
+.cancel-edit {
+    padding: 10px 20px;
+    background: #f0f0f0;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.cancel-edit:hover {
+    background: #e0e0e0;
+}
+
+.save-edit {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.save-edit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
 .file-attachment .file-size {
     font-size: 12px;
     color: #999;

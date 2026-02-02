@@ -47,7 +47,7 @@ export default {
 
     if (url.pathname === "/api/history") {
       const { results } = await env.DB.prepare(
-        "SELECT username, message, timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key FROM messages ORDER BY timestamp DESC LIMIT 100"
+        "SELECT id, username, message, timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key, reply_to, reply_username, reply_message, reply_timestamp, is_edited, edited_at FROM messages ORDER BY timestamp DESC LIMIT 100"
       ).all();
 
       return Response.json(results.reverse());
