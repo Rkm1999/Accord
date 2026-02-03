@@ -157,6 +157,11 @@ export class ChatRoom extends DurableObject<Env> {
         return;
     }
 
+    if (data.type === "load_more") {
+      await this.sendChatHistory(ws, channelId, data.offset || 0);
+      return;
+    }
+
     const linkMetadata = await this.fetchLinkMetadata(data.message);
 
     const fileAttachment = data.file ? await this.uploadFile(data.file) : null;
@@ -377,11 +382,10 @@ export class ChatRoom extends DurableObject<Env> {
     }
   }
 
-  private async sendChatHistory(ws: WebSocket, channelId: number) {
-    // Get user's last read message ID
+  private async sendChatHistory(ws: WebSocket, channelId: number, offset = 0) {
     const state = ws.deserializeAttachment<UserState>();
     const username = state.username;
-    
+
     const lastRead = await this.env.DB.prepare(
         "SELECT message_id FROM channel_last_read WHERE username = ? AND channel_id = ?"
     ).bind(username, channelId).first<{ message_id: number }>();
@@ -391,8 +395,8 @@ export class ChatRoom extends DurableObject<Env> {
        FROM messages m 
        LEFT JOIN users u ON m.username = u.username 
        WHERE m.channel_id = ? 
-       ORDER BY m.timestamp DESC LIMIT 50`
-    ).bind(channelId).all() as { results: any[] };
+       ORDER BY m.timestamp DESC LIMIT 25 OFFSET ?`
+    ).bind(channelId, offset).all() as { results: any[] };
 
     if (messages.length > 0) {
       const messageIds = messages.map(m => m.id);
@@ -407,9 +411,16 @@ export class ChatRoom extends DurableObject<Env> {
     }
 
     const history = messages.reverse();
+
+    const totalCount = await this.env.DB.prepare(
+      "SELECT COUNT(*) as count FROM messages WHERE channel_id = ?"
+    ).bind(channelId).first<{ count: number }>();
+
     ws.send(JSON.stringify({
       type: "history",
       messages: history,
+      offset: offset,
+      hasMore: offset + 25 < (totalCount?.count || 0),
       lastReadMessageId: lastRead?.message_id || 0
     }));
   }

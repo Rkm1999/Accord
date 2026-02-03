@@ -9,8 +9,9 @@ let avatarKey = localStorage.getItem('avatarKey') || '';
 const currentChannelId = parseInt(localStorage.getItem('currentChannelId') || '1');
 
 const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const apiBaseUrl = isLocalDev ? window.location.origin : '';
 const wsUrl = isLocalDev
-    ? `ws://localhost:8787/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}`
+    ? `ws://${window.location.host}/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}`
     : `ws://${window.location.host}/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}`;
 
 let ws;
@@ -30,6 +31,20 @@ let selectedAutocompleteIndex = 0;
 let filteredUsers = [];
 let unreadChannels = new Set(JSON.parse(localStorage.getItem('unreadChannels') || '[]'));
 
+// Chat history pagination variables
+let currentOffset = 0;
+let hasMoreMessages = false;
+let isLoadingMore = false;
+let isAutoLoading = false;
+let lastScrollTop = 0;
+
+// Search pagination variables
+let searchOffset = 0;
+let searchHasMore = false;
+let searchIsLoading = false;
+let searchIsAutoLoading = false;
+let currentSearchParams = {};
+
 
 function escapeHtml(text) {
     if (!text) return '';
@@ -39,7 +54,7 @@ function escapeHtml(text) {
 
     // Replace custom emojis :name:
     customEmojis.forEach(emoji => {
-        const emojiTag = `<img src="${isLocalDev ? 'http://localhost:8787/api/file/' : '/api/file/'}${emoji.file_key}" alt=":${emoji.name}:" title=":${emoji.name}:" class="inline-block w-6 h-6 mx-0.5 align-bottom">`;
+        const emojiTag = `<img src="${isLocalDev ? `${apiBaseUrl}/api/file/` : '/api/file/'}${emoji.file_key}" alt=":${emoji.name}:" title=":${emoji.name}:" class="inline-block w-6 h-6 mx-0.5 align-bottom">`;
         const regex = new RegExp(`:${emoji.name}:`, 'g');
         html = html.replace(regex, emojiTag);
     });
@@ -103,7 +118,11 @@ function connect() {
 
         switch (data.type) {
             case 'history':
-                displayHistory(data.messages, data.lastReadMessageId);
+                if (data.offset && data.offset > 0) {
+                    displayMoreMessages(data.messages, data.offset, data.hasMore);
+                } else {
+                    displayHistory(data.messages, data.lastReadMessageId, data.offset || 0, data.hasMore || false);
+                }
                 break;
             case 'chat':
 
@@ -182,9 +201,14 @@ function showSystemMessage(message) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-function displayHistory(messages, lastReadMessageId = 0) {
+function displayHistory(messages, lastReadMessageId = 0, offset = 0, hasMore = false) {
     const messagesContainer = document.getElementById('messages-container');
     messagesContainer.innerHTML = '';
+
+    currentOffset = offset;
+    hasMoreMessages = hasMore;
+    isLoadingMore = false;
+    isAutoLoading = false;
 
     const currentChannel = channels.find(c => c.id === currentChannelId);
     const channelName = currentChannel ? `#${currentChannel.name}` : '#general';
@@ -205,6 +229,18 @@ function displayHistory(messages, lastReadMessageId = 0) {
         `;
         lucide.createIcons();
         return;
+    }
+
+    if (hasMore) {
+        const loadMoreBtn = document.createElement('div');
+        loadMoreBtn.className = 'text-center py-4';
+        loadMoreBtn.id = 'load-more-button';
+        loadMoreBtn.innerHTML = `
+            <button onclick="loadMoreMessages()" class="bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium py-2 px-4 rounded transition-colors">
+                Load More Messages
+            </button>
+        `;
+        messagesContainer.appendChild(loadMoreBtn);
     }
 
     let unreadDividerShown = false;
@@ -241,6 +277,7 @@ function displayHistory(messages, lastReadMessageId = 0) {
     // Use a small timeout to ensure DOM is fully rendered and layout is settled
     setTimeout(() => {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        lastScrollTop = messagesContainer.scrollHeight; // Initialize scroll tracking
     }, 0);
 
     if (unreadDividerShown) {
@@ -379,7 +416,7 @@ document.getElementById('messages-container').addEventListener('scroll', () => {
     // Scroll to bottom button logic
     // Show if we are more than 200px away from bottom
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
-    
+
     if (scrollBottomBtn) {
         if (!isNearBottom) {
             scrollBottomBtn.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-2');
@@ -387,7 +424,281 @@ document.getElementById('messages-container').addEventListener('scroll', () => {
             scrollBottomBtn.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
         }
     }
+
+    // Auto-load more messages when scrolling near top
+    const isNearTop = container.scrollTop < 100;
+    const scrollDistance = Math.abs(container.scrollTop - lastScrollTop);
+    const isScrollingUp = lastScrollTop > container.scrollTop && scrollDistance > 10;
+
+    if (isNearTop && hasMoreMessages && !isLoadingMore && currentOffset >= 0 && !isAutoLoading && isScrollingUp) {
+        isAutoLoading = true;
+        loadMoreMessages();
+
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.className = 'text-center py-4';
+        loadingIndicator.id = 'auto-loading-indicator';
+        loadingIndicator.innerHTML = '<div class="flex items-center justify-center"><div class="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent"></div>Loading older messages...</div>';
+        container.insertBefore(loadingIndicator, container.firstChild);
+
+        // Debounce: prevent rapid repeated loading
+        setTimeout(() => {
+            isAutoLoading = false;
+        }, 500);
+    }
+
+    lastScrollTop = container.scrollTop;
 });
+
+function createMessageElement(data, isHistory = false) {
+    const time = new Date(data.timestamp).toLocaleTimeString();
+    const date = new Date(data.timestamp).toLocaleDateString();
+    const isOwnMessage = data.username === username;
+
+    const display_name = data.displayName || data.display_name || data.username;
+    const avatar_key = data.avatarKey || data.avatar_key || data.user_avatar;
+
+    const avatarUrl = avatar_key
+        ? (isLocalDev ? `${apiBaseUrl}/api/file/${avatar_key}` : `/api/file/${avatar_key}`)
+        : `https://ui-avatars.com/api/?name=${encodeURIComponent(display_name)}&background=random`;
+
+    const linkMetadata = data.linkMetadata || {
+        url: data.link_url,
+        title: data.link_title,
+        description: data.link_description,
+        image: data.link_image
+    };
+
+    const fileAttachment = data.fileAttachment || {
+        name: data.file_name,
+        type: data.file_type,
+        size: data.file_size,
+        key: data.file_key
+    };
+
+    let messageHtml = '';
+
+    messageHtml += `
+        <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+            <img src="${avatarUrl}" alt="${escapeHtml(display_name)}" class="w-10 h-10 rounded-full object-cover">
+        </div>
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center">
+                <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                    ${escapeHtml(display_name)}
+                </span>
+                <span class="text-xs text-[#949BA4] ml-1">${date} at ${time}</span>
+            </div>
+    `;
+
+    if (data.message) {
+        messageHtml += `<p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">${escapeHtml(data.message)}${data.is_edited ? '<span class="edited-text">(edited)</span>' : ''}</p>`;
+    }
+
+    if (linkMetadata && linkMetadata.url) {
+        const hasImage = !!linkMetadata.image;
+        messageHtml += `
+            <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="block mt-2 ${!hasImage ? 'border-l-2 border-[#5865F2] pl-3' : ''}">
+                ${hasImage ? `<img src="${escapeHtml(linkMetadata.image)}" alt="Link preview" class="rounded-lg max-w-full mb-2">` : ''}
+                ${linkMetadata.title ? `<div class="text-[#00A8FC] hover:underline font-medium">${escapeHtml(linkMetadata.title)}</div>` : ''}
+                ${linkMetadata.description ? `<div class="text-sm text-[#949BA4] mt-1">${escapeHtml(linkMetadata.description)}</div>` : ''}
+            </a>
+        `;
+    }
+
+    if (fileAttachment && fileAttachment.key) {
+        const fileUrl = isLocalDev
+            ? `${apiBaseUrl}/api/file/${fileAttachment.key}`
+            : `/api/file/${fileAttachment.key}`;
+
+        if (fileAttachment.type && fileAttachment.type.startsWith('image/')) {
+            messageHtml += `
+                <div class="mt-2">
+                    <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="rounded-lg max-w-[300px] cursor-pointer hover:opacity-90" onclick="openImageModal('${fileUrl}')" onerror="this.style.display='none'">
+                </div>
+            `;
+        } else {
+            messageHtml += `
+                <a href="${fileUrl}" target="_blank" class="flex items-center mt-2 bg-[#2B2D31] hover:bg-[#36383E] p-3 rounded-lg transition-colors">
+                    <div class="text-2xl mr-3">${getFileIcon(fileAttachment.type)}</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-[#dbdee1] font-medium truncate">${escapeHtml(fileAttachment.name)}</div>
+                        <div class="text-xs text-[#949BA4]">${formatFileSize(fileAttachment.size)}</div>
+                    </div>
+                </a>
+            `;
+        }
+    }
+
+    if (data.reply_to) {
+        const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
+        const replyFileUrl = data.reply_file_key
+            ? (isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
+            : null;
+
+        messageHtml += `
+            <div class="mt-2 bg-[#2B2D31] p-2 rounded-lg border-l-2 border-[#5865F2] opacity-90">
+                <div class="flex items-center text-xs text-[#949BA4] mb-1">
+                    <i data-lucide="corner-up-right" class="w-3 h-3 mr-1"></i>
+                    <span class="font-semibold">${escapeHtml(data.reply_username)}</span>
+                    <span class="ml-1">${replyTime}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    ${replyFileUrl && data.reply_file_type?.startsWith('image/') ? `
+                        <img src="${replyFileUrl}" class="w-12 h-12 rounded object-cover flex-shrink-0">
+                    ` : ''}
+                    <div class="flex-1 min-w-0">
+                        ${data.reply_message ? `<p class="text-sm text-[#B5BAC1] truncate">${escapeHtml(data.reply_message)}</p>` : ''}
+                        ${data.reply_file_name && !data.reply_file_type?.startsWith('image/') ? `
+                            <div class="flex items-center text-xs text-[#949BA4] mt-0.5">
+                                <i data-lucide="file" class="w-3 h-3 mr-1"></i>
+                                <span class="truncate">${escapeHtml(data.reply_file_name)}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    let reactionsHtml = `<div class="reactions-container flex flex-wrap mt-1" id="reactions-${data.id}">`;
+    if (data.reactions && data.reactions.length > 0) {
+        const grouped = data.reactions.reduce((acc, r) => {
+            acc[r.emoji] = acc[r.emoji] || [];
+            acc[r.emoji].push(r.username);
+            return acc;
+        }, {});
+
+        Object.entries(grouped).forEach(([emoji, users]) => {
+            const hasReacted = users.includes(username);
+            const isCustom = emoji.startsWith(':') && emoji.endsWith(':');
+            let emojiDisplay = emoji;
+
+            if (isCustom) {
+                const name = emoji.slice(1, -1);
+                const customEmoji = customEmojis.find(e => e.name === name);
+                if (customEmoji) {
+                    emojiDisplay = `<img src="${isLocalDev ? `${apiBaseUrl}/api/file/` : '/api/file/'}${customEmoji.file_key}" class="w-4 h-4 inline-block">`;
+                }
+            }
+
+            reactionsHtml += `
+                <div class="reaction-badge ${hasReacted ? 'active' : ''}" onclick="event.stopPropagation(); toggleReaction(${data.id}, '${emoji}')" title="${users.join(', ')}">
+                    <span>${emojiDisplay}</span>
+                    <span class="reaction-count">${users.length}</span>
+                </div>
+            `;
+        });
+    }
+    reactionsHtml += '</div>';
+    messageHtml += reactionsHtml;
+
+    messageHtml += `
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, ${data.id})" title="Add Reaction">
+                    <i data-lucide="smile" class="w-[18px] h-[18px]"></i>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(${data.id})" title="Reply">
+                    <i data-lucide="reply" class="w-[18px] h-[18px]"></i>
+                </div>
+                ${isOwnMessage ? `
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="openEditModal(${data.id})" title="Edit">
+                        <i data-lucide="edit-2" class="w-[16px] h-[16px]"></i>
+                    </div>
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-red-400 hover:text-red-500" onclick="deleteMessage(${data.id})" title="Delete">
+                        <i data-lucide="trash-2" class="w-[16px] h-[16px]"></i>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+    const msgEl = document.createElement('div');
+    msgEl.className = `group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 relative message-group`;
+    msgEl.dataset.messageId = data.id || '';
+
+    msgEl.dataset.username = data.username;
+    msgEl.dataset.timestamp = data.timestamp;
+    msgEl.dataset.text = data.message || '';
+    if (fileAttachment && fileAttachment.key) {
+        msgEl.dataset.fileKey = fileAttachment.key;
+        msgEl.dataset.fileName = fileAttachment.name;
+        msgEl.dataset.fileType = fileAttachment.type;
+    }
+
+    msgEl.innerHTML = messageHtml;
+    return msgEl;
+}
+
+function loadMoreMessages() {
+    if (!isConnected) return;
+
+    isLoadingMore = true;
+    const newOffset = currentOffset + 25;
+
+    ws.send(JSON.stringify({
+        type: 'load_more',
+        offset: newOffset
+    }));
+
+    const loadMoreBtn = document.getElementById('load-more-button');
+    if (loadMoreBtn) {
+        loadMoreBtn.innerHTML = '<div class="flex items-center justify-center"><div class="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent mr-2"></div>Loading...</div>';
+    }
+}
+
+function displayMoreMessages(messages, newOffset, hasMore) {
+    const messagesContainer = document.getElementById('messages-container');
+    const loadMoreBtn = document.getElementById('load-more-button');
+    const loadingIndicator = document.getElementById('auto-loading-indicator');
+
+    currentOffset = newOffset;
+    hasMoreMessages = hasMore;
+    isLoadingMore = false;
+    isAutoLoading = false;
+
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    messages.forEach(msg => {
+        if (msg.message || msg.file_name) {
+            const msgEl = createMessageElement(msg, true);
+            fragment.appendChild(msgEl);
+        }
+    });
+
+    // Get current scroll position and height before inserting
+    const oldScrollTop = messagesContainer.scrollTop;
+    const oldScrollHeight = messagesContainer.scrollHeight;
+
+    // Insert new messages at top (above button or at container start)
+    messagesContainer.insertBefore(fragment, loadMoreBtn ? loadMoreBtn.nextSibling : messagesContainer.firstChild);
+
+    lucide.createIcons();
+
+    // Calculate how much content was added
+    const heightDifference = messagesContainer.scrollHeight - oldScrollHeight;
+
+    // Preserve scroll position by adjusting scrollTop
+    if (heightDifference > 0) {
+        messagesContainer.scrollTop = oldScrollTop + heightDifference;
+        lastScrollTop = oldScrollTop + heightDifference;
+    }
+
+    if (!hasMore || messages.length === 0) {
+        if (loadMoreBtn) {
+            loadMoreBtn.remove();
+        }
+    } else if (loadMoreBtn) {
+        loadMoreBtn.innerHTML = `
+            <button onclick="loadMoreMessages()" class="bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium py-2 px-4 rounded transition-colors">
+                Load More Messages
+            </button>
+        `;
+    }
+}
 
 function displayMessage(data, isHistory = false) {
 
@@ -401,7 +712,7 @@ function displayMessage(data, isHistory = false) {
     const avatar_key = data.avatarKey || data.avatar_key || data.user_avatar;
     
     const avatarUrl = avatar_key 
-        ? (isLocalDev ? `http://localhost:8787/api/file/${avatar_key}` : `/api/file/${avatar_key}`)
+        ? (isLocalDev ? `${apiBaseUrl}/api/file/${avatar_key}` : `/api/file/${avatar_key}`)
         : `https://ui-avatars.com/api/?name=${encodeURIComponent(display_name)}&background=random`;
 
     const linkMetadata = data.linkMetadata || {
@@ -490,7 +801,7 @@ function displayMessage(data, isHistory = false) {
 
     if (fileAttachment && fileAttachment.key) {
         const fileUrl = isLocalDev
-            ? `http://localhost:8787/api/file/${fileAttachment.key}`
+            ? `${apiBaseUrl}/api/file/${fileAttachment.key}`
             : `/api/file/${fileAttachment.key}`;
 
         if (fileAttachment.type && fileAttachment.type.startsWith('image/')) {
@@ -515,7 +826,7 @@ function displayMessage(data, isHistory = false) {
     if (data.reply_to) {
         const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
         const replyFileUrl = data.reply_file_key 
-            ? (isLocalDev ? `http://localhost:8787/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
+            ? (isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
             : null;
 
         messageHtml += `
@@ -561,7 +872,7 @@ function displayMessage(data, isHistory = false) {
                 const name = emoji.slice(1, -1);
                 const customEmoji = customEmojis.find(e => e.name === name);
                 if (customEmoji) {
-                    emojiDisplay = `<img src="${isLocalDev ? 'http://localhost:8787/api/file/' : '/api/file/'}${customEmoji.file_key}" class="w-4 h-4 inline-block">`;
+                    emojiDisplay = `<img src="${isLocalDev ? `${apiBaseUrl}/api/file/` : '/api/file/'}${customEmoji.file_key}" class="w-4 h-4 inline-block">`;
                 }
             }
 
@@ -597,17 +908,31 @@ function displayMessage(data, isHistory = false) {
         `;
 
 
-    msgEl.innerHTML = messageHtml;
-    messagesContainer.appendChild(msgEl);
-    
     if (!isHistory) {
-        // Use a small timeout to ensure DOM update is complete including any images/embeds that might shift layout
-        setTimeout(() => {
+        // Preserve scroll position before appending new message
+        const wasNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 100;
+        const oldScrollTop = messagesContainer.scrollTop;
+
+        msgEl.innerHTML = messageHtml;
+        messagesContainer.appendChild(msgEl);
+
+        lucide.createIcons();
+
+        // Only auto-scroll to bottom if user was already near bottom
+        // This prevents losing scroll position when reading older messages
+        if (wasNearBottom) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }, 0);
+            lastScrollTop = messagesContainer.scrollHeight;
+        } else {
+            // Restore previous scroll position
+            messagesContainer.scrollTop = oldScrollTop;
+            lastScrollTop = oldScrollTop;
+        }
+    } else {
+        msgEl.innerHTML = messageHtml;
+        messagesContainer.appendChild(msgEl);
+        lucide.createIcons();
     }
-    
-    lucide.createIcons();
 }
 
 
@@ -627,7 +952,7 @@ function startReply(messageId) {
         if (msgEl.dataset.fileKey) {
             replyToMediaEl.classList.remove('hidden');
             const fileUrl = isLocalDev 
-                ? `http://localhost:8787/api/file/${msgEl.dataset.fileKey}` 
+                ? `${apiBaseUrl}/api/file/${msgEl.dataset.fileKey}` 
                 : `/api/file/${msgEl.dataset.fileKey}`;
             
             if (msgEl.dataset.fileType && msgEl.dataset.fileType.startsWith('image/')) {
@@ -905,7 +1230,7 @@ function removeFile(index) {
 async function fetchChannels() {
     try {
         const apiUrl = isLocalDev
-            ? 'http://localhost:8787/api/channels'
+            ? `${apiBaseUrl}/api/channels`
             : '/api/channels';
         const response = await fetch(apiUrl);
         channels = await response.json();
@@ -918,7 +1243,7 @@ async function fetchChannels() {
 async function fetchCustomEmojis() {
     try {
         const apiUrl = isLocalDev
-            ? 'http://localhost:8787/api/emojis'
+            ? `${apiBaseUrl}/api/emojis`
             : '/api/emojis';
         const response = await fetch(apiUrl);
         customEmojis = await response.json();
@@ -930,7 +1255,7 @@ async function fetchCustomEmojis() {
 async function fetchRegisteredUsers() {
     try {
         const apiUrl = isLocalDev
-            ? 'http://localhost:8787/api/users/list'
+            ? `${apiBaseUrl}/api/users/list`
             : '/api/users/list';
         const response = await fetch(apiUrl);
         allUsers = await response.json();
@@ -1065,7 +1390,7 @@ async function createChannel() {
 
     try {
         const apiUrl = isLocalDev
-            ? 'http://localhost:8787/api/channels'
+            ? `${apiBaseUrl}/api/channels`
             : '/api/channels';
         const response = await fetch(apiUrl, {
             method: 'POST',
@@ -1121,7 +1446,7 @@ async function deleteChannel(channelId) {
 
     try {
         const apiUrl = isLocalDev
-            ? `http://localhost:8787/api/channels/${channelId}`
+            ? `${apiBaseUrl}/api/channels/${channelId}`
             : `/api/channels/${channelId}`;
 
         // Add visual feedback - remove the channel element immediately
@@ -1198,12 +1523,21 @@ async function performSearch() {
         return;
     }
 
+    searchOffset = 0;
+    currentSearchParams = {
+        query,
+        username: usernameInput,
+        channelId,
+        startDate,
+        endDate,
+    };
+
     const searchResultsEl = document.getElementById('searchResults');
     searchResultsEl.innerHTML = '<div class="p-4 text-[#949BA4]">Searching...</div>';
 
     try {
         const apiUrl = isLocalDev
-            ? 'http://localhost:8787/api/search'
+            ? `${apiBaseUrl}/api/search`
             : '/api/search';
 
         const response = await fetch(apiUrl, {
@@ -1212,31 +1546,42 @@ async function performSearch() {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                query,
-                username: usernameInput,
-                channelId,
-                startDate,
-                endDate,
+                ...currentSearchParams,
+                offset: 0,
             }),
         });
 
         const results = await response.json();
-        displaySearchResults(results);
+        displaySearchResults(results.results, 0, results.hasMore, results.total);
     } catch (error) {
         console.error('Error searching messages:', error);
         searchResultsEl.innerHTML = '<div class="p-4 text-red-400">Error searching messages</div>';
     }
 }
 
-function displaySearchResults(results) {
+function displaySearchResults(results, offset = 0, hasMore = false, total = 0) {
     const searchResultsEl = document.getElementById('searchResults');
 
-    if (results.length === 0) {
+    searchOffset = offset;
+    searchHasMore = hasMore;
+    searchIsLoading = false;
+    searchIsAutoLoading = false;
+
+    if (results.length === 0 && offset === 0) {
         searchResultsEl.innerHTML = '<div class="p-4 text-[#949BA4]">No results found</div>';
         return;
     }
 
-    searchResultsEl.innerHTML = '';
+    if (offset === 0) {
+        searchResultsEl.innerHTML = '';
+    }
+
+    const loadMoreBtn = document.getElementById('search-load-more-button');
+    const loadingIndicator = document.getElementById('search-loading-indicator');
+
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+    }
 
     results.forEach(result => {
         const time = new Date(result.timestamp).toLocaleString();
@@ -1264,9 +1609,142 @@ function displaySearchResults(results) {
             }
         });
 
-
         searchResultsEl.appendChild(resultEl);
     });
+
+    lucide.createIcons();
+
+    if (hasMore && !loadMoreBtn && offset >= 0) {
+        const loadMoreBtnEl = document.createElement('div');
+        loadMoreBtnEl.className = 'text-center py-4';
+        loadMoreBtnEl.id = 'search-load-more-button';
+        loadMoreBtnEl.innerHTML = `
+            <button onclick="loadMoreSearchResults()" class="bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium py-2 px-4 rounded transition-colors">
+                Load More Results (${total - offset - results.length} more)
+            </button>
+        `;
+        searchResultsEl.appendChild(loadMoreBtnEl);
+    }
+
+    if (!hasMore && loadMoreBtn) {
+        loadMoreBtn.remove();
+    } else if (hasMore && loadMoreBtn) {
+        loadMoreBtn.innerHTML = `
+            <button onclick="loadMoreSearchResults()" class="bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium py-2 px-4 rounded transition-colors">
+                Load More Results (${total - offset - results.length} more)
+            </button>
+        `;
+    }
+}
+
+async function loadMoreSearchResults() {
+    if (searchIsLoading) return;
+
+    searchIsLoading = true;
+    const newOffset = searchOffset + 25;
+
+    const loadMoreBtn = document.getElementById('search-load-more-button');
+    if (loadMoreBtn) {
+        loadMoreBtn.innerHTML = '<div class="flex items-center justify-center"><div class="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent mr-2"></div>Loading...</div>';
+    }
+
+    try {
+        const apiUrl = isLocalDev
+            ? `${apiBaseUrl}/api/search`
+            : '/api/search';
+
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                ...currentSearchParams,
+                offset: newOffset,
+            }),
+        });
+
+        const results = await response.json();
+        displayMoreSearchResults(results.results, newOffset, results.hasMore, results.total);
+    } catch (error) {
+        console.error('Error searching messages:', error);
+        searchIsLoading = false;
+
+        const loadMoreBtn = document.getElementById('search-load-more-button');
+        if (loadMoreBtn) {
+            loadMoreBtn.innerHTML = `
+                <button onclick="loadMoreSearchResults()" class="bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium py-2 px-4 rounded transition-colors">
+                    Load More Results
+                </button>
+            `;
+        }
+    }
+}
+
+function displayMoreSearchResults(results, newOffset, hasMore, total) {
+    const searchResultsEl = document.getElementById('searchResults');
+    const loadMoreBtn = document.getElementById('search-load-more-button');
+    const loadingIndicator = document.getElementById('search-loading-indicator');
+
+    searchOffset = newOffset;
+    searchHasMore = hasMore;
+    searchIsLoading = false;
+    searchIsAutoLoading = false;
+
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    results.forEach(result => {
+        const time = new Date(result.timestamp).toLocaleString();
+        const resultEl = document.createElement('div');
+        resultEl.className = 'px-4 py-3 hover:bg-[#2e3035] cursor-pointer transition-colors border-b border-[#26272D]';
+        resultEl.innerHTML = `
+            <div class="flex items-center mb-2">
+                <span class="font-medium text-[#dbdee1] mr-2">${escapeHtml(result.username)}</span>
+                <span class="text-xs text-[#949BA4] bg-[#2B2D31] px-2 py-0.5 rounded">#${escapeHtml(result.channel_name)}</span>
+                <span class="text-xs text-[#949BA4] ml-auto">${time}</span>
+            </div>
+            <div class="text-sm text-[#dbdee1]">${escapeHtml(result.message || '<i>File attachment</i>')}</div>
+        `;
+
+        resultEl.addEventListener('click', () => {
+            console.log('Search result clicked:', result);
+            localStorage.setItem('searchTargetMessageId', result.id);
+            if (result.channel_id !== currentChannelId) {
+                localStorage.setItem('currentChannelId', result.channel_id);
+                closeSearchModal();
+                window.location.reload();
+            } else {
+                closeSearchModal();
+                scrollToMessage(result.id);
+            }
+        });
+
+        fragment.appendChild(resultEl);
+    });
+
+    if (loadMoreBtn) {
+        searchResultsEl.insertBefore(fragment, loadMoreBtn);
+    } else {
+        searchResultsEl.appendChild(fragment);
+    }
+
+    lucide.createIcons();
+
+    if (!hasMore || results.length === 0) {
+        if (loadMoreBtn) {
+            loadMoreBtn.remove();
+        }
+    } else if (loadMoreBtn) {
+        loadMoreBtn.innerHTML = `
+            <button onclick="loadMoreSearchResults()" class="bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium py-2 px-4 rounded transition-colors">
+                Load More Results (${total - newOffset - results.length} more)
+            </button>
+        `;
+    }
 }
 
 function renderMembers() {
@@ -1290,7 +1768,7 @@ function renderMembers() {
     const renderUser = (user, isOnline) => {
         const displayName = user.display_name || user.username;
         const avatarUrl = user.avatar_key
-            ? (isLocalDev ? `http://localhost:8787/api/file/${user.avatar_key}` : `/api/file/${user.avatar_key}`)
+            ? (isLocalDev ? `${apiBaseUrl}/api/file/${user.avatar_key}` : `/api/file/${user.avatar_key}`)
             : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
         
         return `
@@ -1364,7 +1842,7 @@ async function uploadEmoji() {
     reader.onload = async (e) => {
         const image = e.target.result;
         try {
-            const apiUrl = isLocalDev ? 'http://localhost:8787/api/emojis' : '/api/emojis';
+            const apiUrl = isLocalDev ? `${apiBaseUrl}/api/emojis` : '/api/emojis';
             const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1396,7 +1874,7 @@ function openProfileModal() {
 
     nameInput.value = displayName;
     preview.src = avatarKey 
-        ? (isLocalDev ? `http://localhost:8787/api/file/${avatarKey}` : `/api/file/${avatarKey}`)
+        ? (isLocalDev ? `${apiBaseUrl}/api/file/${avatarKey}` : `/api/file/${avatarKey}`)
         : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
 
     modal.classList.remove('hidden');
@@ -1438,7 +1916,7 @@ async function updateProfile() {
     }
 
     try {
-        const apiUrl = isLocalDev ? 'http://localhost:8787/api/user/profile' : '/api/user/profile';
+        const apiUrl = isLocalDev ? `${apiBaseUrl}/api/user/profile` : '/api/user/profile';
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1520,7 +1998,7 @@ function renderAutocomplete(users, atIndex) {
     autocomplete.innerHTML = users.map((user, index) => {
         const displayName = user.display_name || user.username;
         const avatarUrl = user.avatar_key
-            ? (isLocalDev ? `http://localhost:8787/api/file/${user.avatar_key}` : `/api/file/${user.avatar_key}`)
+            ? (isLocalDev ? `${apiBaseUrl}/api/file/${user.avatar_key}` : `/api/file/${user.avatar_key}`)
             : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
             
         return `
@@ -1586,7 +2064,7 @@ async function regenerateRecoveryKey() {
     if (!confirm('This will invalidate your old recovery key. Are you sure?')) return;
 
     try {
-        const apiUrl = isLocalDev ? 'http://localhost:8787/api/user/profile' : '/api/user/profile';
+        const apiUrl = isLocalDev ? `${apiBaseUrl}/api/user/profile` : '/api/user/profile';
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1640,7 +2118,7 @@ function toggleReactionPicker(event, messageId) {
         } else {
             customSection.innerHTML = customEmojis.map(emoji => `
                 <button class="hover:bg-[#35373C] p-1 rounded transition-colors" onclick="sendReaction(':${emoji.name}:')" title=":${emoji.name}:">
-                    <img src="${isLocalDev ? 'http://localhost:8787/api/file/' : '/api/file/'}${emoji.file_key}" class="w-6 h-6 object-contain pointer-events-none">
+                    <img src="${isLocalDev ? `${apiBaseUrl}/api/file/` : '/api/file/'}${emoji.file_key}" class="w-6 h-6 object-contain pointer-events-none">
                 </button>
             `).join('');
         }
@@ -1712,7 +2190,7 @@ function updateMessageReactions(messageId, reactions) {
             const name = emoji.slice(1, -1);
             const customEmoji = customEmojis.find(e => e.name === name);
             if (customEmoji) {
-                emojiDisplay = `<img src="${isLocalDev ? 'http://localhost:8787/api/file/' : '/api/file/'}${customEmoji.file_key}" class="w-4 h-4 inline-block">`;
+                emojiDisplay = `<img src="${isLocalDev ? `${apiBaseUrl}/api/file/` : '/api/file/'}${customEmoji.file_key}" class="w-4 h-4 inline-block">`;
             }
         }
 
@@ -1797,7 +2275,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const avatarDisplay = document.querySelector('#user-avatar-initial').parentElement;
     if (avatarKey) {
-        const url = isLocalDev ? `http://localhost:8787/api/file/${avatarKey}` : `/api/file/${avatarKey}`;
+        const url = isLocalDev ? `${apiBaseUrl}/api/file/${avatarKey}` : `/api/file/${avatarKey}`;
         avatarDisplay.innerHTML = `<img src="${url}" class="w-8 h-8 rounded-full object-cover">`;
     }
 
@@ -1897,6 +2375,25 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleMembersBtnEl.addEventListener('click', (e) => {
             e.stopPropagation();
             toggleSidebar('members-sidebar');
+        });
+    }
+
+    // Add scroll listener to search results for auto-loading
+    const searchResultsContainer = document.getElementById('searchResults');
+    if (searchResultsContainer) {
+        searchResultsContainer.addEventListener('scroll', () => {
+            const isNearBottom = searchResultsContainer.scrollHeight - searchResultsContainer.scrollTop - searchResultsContainer.clientHeight < 100;
+
+            if (isNearBottom && searchHasMore && !searchIsLoading && searchOffset >= 0 && !searchIsAutoLoading) {
+                searchIsAutoLoading = true;
+                loadMoreSearchResults();
+
+                const loadingIndicator = document.createElement('div');
+                loadingIndicator.className = 'text-center py-4';
+                loadingIndicator.id = 'search-loading-indicator';
+                loadingIndicator.innerHTML = '<div class="flex items-center justify-center"><div class="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent"></div>Loading more results...</div>';
+                searchResultsContainer.appendChild(loadingIndicator);
+            }
         });
     }
 });

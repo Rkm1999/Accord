@@ -996,9 +996,10 @@ hr {
 
     .link-preview-content {
         padding: 10px;
-
+    }
 /* Mention Highlight */
 .mention-highlight {
     background-color: rgba(250, 168, 26, 0.15) !important;
 }
 
+}

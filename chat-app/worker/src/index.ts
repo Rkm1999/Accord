@@ -240,13 +240,18 @@ export default {
 
     if (url.pathname === "/api/history") {
       const channelId = url.searchParams.get("channelId") || "1";
+      const offset = parseInt(url.searchParams.get("offset") || "0");
       const { results: messages } = await env.DB.prepare(
-        `SELECT m.*, u.display_name, u.avatar_key as user_avatar 
-         FROM messages m 
-         LEFT JOIN users u ON m.username = u.username 
-         WHERE m.channel_id = ? 
-         ORDER BY m.timestamp DESC LIMIT 100`
-      ).bind(channelId).all() as { results: any[] };
+        `SELECT m.*, u.display_name, u.avatar_key as user_avatar
+         FROM messages m
+         LEFT JOIN users u ON m.username = u.username
+         WHERE m.channel_id = ?
+         ORDER BY m.timestamp DESC LIMIT 25 OFFSET ?`
+      ).bind(channelId, offset).all() as { results: any[] };
+
+      const totalCount = await env.DB.prepare(
+        "SELECT COUNT(*) as count FROM messages WHERE channel_id = ?"
+      ).bind(channelId).first<{ count: number }>();
 
       if (messages.length > 0) {
         const messageIds = messages.map(m => m.id);
@@ -258,38 +263,73 @@ export default {
           m.reactions = reactions.filter(r => r.message_id === m.id);
         });
       }
-      return corsResponse(messages.reverse(), 200, corsHeaders);
+      return corsResponse({
+        messages: messages.reverse(),
+        offset: offset,
+        hasMore: offset + 25 < (totalCount?.count || 0),
+        total: totalCount?.count || 0
+      }, 200, corsHeaders);
     }
 
     if (url.pathname === "/api/search" && request.method === "POST") {
-      const { query, username: searchUser, channelId, startDate, endDate } = await request.json();
-      let sql = `SELECT m.*, c.name as channel_name, u.display_name, u.avatar_key as user_avatar FROM messages m 
+      const { query, username: searchUser, channelId, startDate, endDate, offset = 0 } = await request.json();
+
+      let countSql = `SELECT COUNT(*) as count FROM messages m
+                    LEFT JOIN channels c ON m.channel_id = c.id
+                    LEFT JOIN users u ON m.username = u.username WHERE 1=1`;
+      const countParams = [];
+
+      let sql = `SELECT m.*, c.name as channel_name, u.display_name, u.avatar_key as user_avatar FROM messages m
                  LEFT JOIN channels c ON m.channel_id = c.id LEFT JOIN users u ON m.username = u.username WHERE 1=1`;
       const params = [];
+
       if (query && query.trim()) {
-        sql += " AND (m.message LIKE ? OR m.link_title LIKE ?)";
+        const searchCondition = " AND (m.message LIKE ? OR m.link_title LIKE ?)";
         const searchTerm = `%${query.trim()}%`;
+        sql += searchCondition;
+        countSql += searchCondition;
         params.push(searchTerm, searchTerm);
+        countParams.push(searchTerm, searchTerm);
       }
       if (searchUser && searchUser.trim()) {
         sql += " AND m.username LIKE ?";
+        countSql += " AND m.username LIKE ?";
         params.push(`%${searchUser.trim()}%`);
+        countParams.push(`%${searchUser.trim()}%`);
       }
       if (channelId && channelId !== "all") {
         sql += " AND m.channel_id = ?";
+        countSql += " AND m.channel_id = ?";
         params.push(channelId);
+        countParams.push(channelId);
       }
       if (startDate) {
         sql += " AND m.timestamp >= ?";
+        countSql += " AND m.timestamp >= ?";
         params.push(new Date(startDate).getTime());
+        countParams.push(new Date(startDate).getTime());
       }
       if (endDate) {
         sql += " AND m.timestamp <= ?";
+        countSql += " AND m.timestamp <= ?";
         params.push(new Date(endDate).getTime());
+        countParams.push(new Date(endDate).getTime());
       }
-      sql += " ORDER BY m.timestamp DESC LIMIT 100";
+
+      sql += " ORDER BY m.timestamp DESC LIMIT 100 OFFSET ?";
+      countSql += " ORDER BY m.timestamp DESC";
+      params.push(offset);
+
       const { results } = await env.DB.prepare(sql).bind(...params).all();
-      return corsResponse(results, 200, corsHeaders);
+
+      const totalCountResult = await env.DB.prepare(countSql).bind(...countParams).first<{ count: number }>();
+
+      return corsResponse({
+        results,
+        offset,
+        hasMore: offset + 100 < (totalCountResult?.count || 0),
+        total: totalCountResult?.count || 0
+      }, 200, corsHeaders);
     }
 
     try {
