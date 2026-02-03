@@ -150,10 +150,20 @@ export class ChatRoom extends DurableObject<Env> {
     let placeholders = "?, ?, ?, ?";
 
     if (replyData) {
-      query += ", reply_to, reply_username, reply_message, reply_timestamp";
-      values.push(replyData.replyTo, replyData.replyUsername, replyData.replyMessage, replyData.replyTimestamp);
-      placeholders += ", ?, ?, ?, ?";
+      query += ", reply_to, reply_username, reply_message, reply_timestamp, reply_file_name, reply_file_type, reply_file_size, reply_file_key";
+      values.push(
+        replyData.replyTo, 
+        replyData.replyUsername, 
+        replyData.replyMessage, 
+        replyData.replyTimestamp,
+        replyData.replyFileName || null,
+        replyData.replyFileType || null,
+        replyData.replyFileSize || null,
+        replyData.replyFileKey || null
+      );
+      placeholders += ", ?, ?, ?, ?, ?, ?, ?, ?";
     }
+
 
     if (linkMetadata) {
       query += ", link_url, link_title, link_description, link_image";

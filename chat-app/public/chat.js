@@ -236,6 +236,13 @@ function displayMessage(data, isHistory = false) {
 
     msgEl.dataset.username = data.username;
     msgEl.dataset.timestamp = data.timestamp;
+    msgEl.dataset.text = data.message || '';
+    if (fileAttachment && fileAttachment.key) {
+        msgEl.dataset.fileKey = fileAttachment.key;
+        msgEl.dataset.fileName = fileAttachment.name;
+        msgEl.dataset.fileType = fileAttachment.type;
+    }
+
 
     let messageHtml = '';
 
@@ -303,14 +310,31 @@ function displayMessage(data, isHistory = false) {
 
     if (data.reply_to) {
         const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
+        const replyFileUrl = data.reply_file_key 
+            ? (isLocalDev ? `http://localhost:8787/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
+            : null;
+
         messageHtml += `
-            <div class="mt-2 bg-[#2B2D31] p-2 rounded-lg border-l-2 border-[#5865F2]">
+            <div class="mt-2 bg-[#2B2D31] p-2 rounded-lg border-l-2 border-[#5865F2] opacity-90">
                 <div class="flex items-center text-xs text-[#949BA4] mb-1">
                     <i data-lucide="corner-up-right" class="w-3 h-3 mr-1"></i>
-                    <span>${escapeHtml(data.reply_username)}</span>
+                    <span class="font-semibold">${escapeHtml(data.reply_username)}</span>
                     <span class="ml-1">${replyTime}</span>
                 </div>
-                ${data.reply_message ? `<p class="text-sm text-[#dbdee1]">${escapeHtml(data.reply_message)}</p>` : ''}
+                <div class="flex items-center gap-2">
+                    ${replyFileUrl && data.reply_file_type?.startsWith('image/') ? `
+                        <img src="${replyFileUrl}" class="w-12 h-12 rounded object-cover flex-shrink-0">
+                    ` : ''}
+                    <div class="flex-1 min-w-0">
+                        ${data.reply_message ? `<p class="text-sm text-[#B5BAC1] truncate">${escapeHtml(data.reply_message)}</p>` : ''}
+                        ${data.reply_file_name && !data.reply_file_type?.startsWith('image/') ? `
+                            <div class="flex items-center text-xs text-[#949BA4] mt-0.5">
+                                <i data-lucide="file" class="w-3 h-3 mr-1"></i>
+                                <span class="truncate">${escapeHtml(data.reply_file_name)}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -379,23 +403,48 @@ function startReply(messageId) {
 
     const replyBanner = document.getElementById('replyBanner');
     const replyToUsernameEl = document.getElementById('reply-to-username');
+    const replyToContentEl = document.getElementById('reply-to-content');
+    const replyToMediaEl = document.getElementById('reply-to-media');
 
     const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
     if (msgEl) {
         replyToUsernameEl.textContent = msgEl.dataset.username;
+        replyToContentEl.textContent = msgEl.dataset.text || '';
+        
+        if (msgEl.dataset.fileKey) {
+            replyToMediaEl.classList.remove('hidden');
+            const fileUrl = isLocalDev 
+                ? `http://localhost:8787/api/file/${msgEl.dataset.fileKey}` 
+                : `/api/file/${msgEl.dataset.fileKey}`;
+            
+            if (msgEl.dataset.fileType && msgEl.dataset.fileType.startsWith('image/')) {
+                replyToMediaEl.innerHTML = `<img src="${fileUrl}" class="w-12 h-12 rounded object-cover">`;
+            } else {
+                replyToMediaEl.innerHTML = `<div class="bg-[#2B2D31] p-1 rounded"><i data-lucide="file" class="w-6 h-6"></i></div>`;
+            }
+        } else {
+            replyToMediaEl.classList.add('hidden');
+            replyToMediaEl.innerHTML = '';
+        }
     } else {
         replyToUsernameEl.textContent = 'Unknown';
+        replyToContentEl.textContent = '';
+        replyToMediaEl.classList.add('hidden');
     }
 
     replyBanner.classList.remove('hidden');
+    lucide.createIcons();
     document.getElementById('message-input').focus();
 }
 
 function cancelReply() {
     replyingTo = null;
     const replyBanner = document.getElementById('replyBanner');
+    const replyToMediaEl = document.getElementById('reply-to-media');
     replyBanner.classList.add('hidden');
+    if (replyToMediaEl) replyToMediaEl.innerHTML = '';
 }
+
 
 function openEditModal(messageId) {
     const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);

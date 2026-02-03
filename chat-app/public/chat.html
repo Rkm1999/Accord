@@ -276,12 +276,19 @@
                 <div id="replyBanner" class="hidden mb-2 bg-[#232428] rounded-lg px-3 py-2 flex items-center justify-between">
                     <div class="flex items-center flex-1 overflow-hidden">
                         <span class="text-xs text-[#949BA4] mr-2">Replying to</span>
-                        <span class="text-sm font-semibold text-white" id="reply-to-username"></span>
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <span class="text-sm font-semibold text-white whitespace-nowrap" id="reply-to-username"></span>
+                            <span class="text-xs text-[#949BA4] truncate" id="reply-to-content"></span>
+                        </div>
                     </div>
-                    <button type="button" class="text-[#949BA4] hover:text-white transition-colors" onclick="cancelReply()">
+                    <div id="reply-to-media" class="mx-2 hidden">
+                        <!-- Media preview injected by JS -->
+                    </div>
+                    <button type="button" class="text-[#949BA4] hover:text-white transition-colors flex-shrink-0" onclick="cancelReply()">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
+
 
                 <div class="bg-[#383A40] rounded-lg px-4 py-2.5 flex items-center relative">
                     <div id="mentionAutocomplete" class="hidden custom-scrollbar"></div>
