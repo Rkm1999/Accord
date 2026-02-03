@@ -1360,6 +1360,41 @@ function handleAutocompleteKeydown(e) {
     }
 }
 
+async function regenerateRecoveryKey() {
+    if (!confirm('This will invalidate your old recovery key. Are you sure?')) return;
+
+    try {
+        const apiUrl = isLocalDev ? 'http://localhost:8787/api/user/profile' : '/api/user/profile';
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                username, 
+                displayName, 
+                generateNewRecoveryKey: true 
+            })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            const container = document.getElementById('newRecoveryKeyContainer');
+            const display = document.getElementById('newRecoveryKeyDisplay');
+            display.textContent = result.newRecoveryKey;
+            container.classList.remove('hidden');
+            lucide.createIcons();
+            alert('New recovery key generated! Please save it safely.');
+        }
+    } catch (error) {
+        console.error('Regenerate key error:', error);
+    }
+}
+
+function copyNewRecoveryKey() {
+    const key = document.getElementById('newRecoveryKeyDisplay').textContent;
+    navigator.clipboard.writeText(key);
+    alert('Copied to clipboard!');
+}
+
 function toggleReactionPicker(event, messageId) {
     event.stopPropagation();
     const picker = document.getElementById('reactionPicker');
@@ -1666,5 +1701,7 @@ window.previewAvatar = previewAvatar;
 window.updateProfile = updateProfile;
 window.closeAllSidebars = closeAllSidebars;
 window.selectMention = selectMention;
+window.regenerateRecoveryKey = regenerateRecoveryKey;
+window.copyNewRecoveryKey = copyNewRecoveryKey;
 
 
