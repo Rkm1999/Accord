@@ -239,8 +239,23 @@
         </div>
 
         <!-- 2. Main Chat Area -->
-        <div class="flex-1 flex flex-col min-w-0 bg-[#313338]">
+        <div class="flex-1 flex flex-col min-w-0 bg-[#313338] relative">
+            <!-- Unread Banner -->
+            <div id="unread-banner" class="absolute top-14 left-4 right-4 bg-[#5865F2]/90 backdrop-blur hover:bg-[#5865F2] text-white px-4 py-2 rounded-t-none rounded-b-md shadow-lg cursor-pointer flex items-center justify-between z-40 transition-all duration-300 transform -translate-y-full opacity-0 hidden" onclick="jumpToUnread()">
+                <div class="flex items-center">
+                    <i data-lucide="arrow-up" class="w-4 h-4 mr-2 animate-bounce"></i>
+                    <span class="font-semibold text-sm">Unread Messages</span>
+                </div>
+                <span class="text-xs bg-white/20 px-2 py-0.5 rounded">Jump</span>
+            </div>
+
+            <!-- Scroll to Bottom Button -->
+            <div id="scroll-bottom-btn" class="absolute bottom-24 right-6 bg-[#313338] hover:bg-[#35373C] text-[#B5BAC1] hover:text-[#dbdee1] p-2.5 rounded-full shadow-lg cursor-pointer border border-[#26272D] transition-all duration-200 opacity-0 pointer-events-none z-40 transform translate-y-2" onclick="scrollToBottom()">
+                <i data-lucide="chevron-down" class="w-5 h-5"></i>
+            </div>
+
             <!-- Chat Header -->
+
             <header class="h-12 px-4 flex items-center shadow-sm border-b border-[#26272D] flex-shrink-0 justify-between relative z-50 bg-[#313338]">
                 <div class="flex items-center overflow-hidden">
                     <!-- Toggle Channel Button (Mobile) -->

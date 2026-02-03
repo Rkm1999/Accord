@@ -103,9 +103,10 @@ function connect() {
 
         switch (data.type) {
             case 'history':
-                displayHistory(data.messages);
+                displayHistory(data.messages, data.lastReadMessageId);
                 break;
             case 'chat':
+
                 if (data.channelId === currentChannelId) {
                     displayMessage(data);
                 } else {
@@ -181,7 +182,7 @@ function showSystemMessage(message) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-function displayHistory(messages) {
+function displayHistory(messages, lastReadMessageId = 0) {
     const messagesContainer = document.getElementById('messages-container');
     messagesContainer.innerHTML = '';
 
@@ -206,16 +207,122 @@ function displayHistory(messages) {
         return;
     }
 
+    let unreadDividerShown = false;
+    let maxMessageId = 0;
+
     messages.forEach(msg => {
         if (msg.message || msg.file_name) {
+            if (msg.id > maxMessageId) maxMessageId = msg.id;
+
+            // Check if we need to insert the unread divider
+            if (lastReadMessageId > 0 && !unreadDividerShown && msg.id > lastReadMessageId) {
+                const divider = document.createElement('div');
+                divider.className = 'flex items-center my-4 unread-divider';
+                divider.id = 'unread-divider';
+                divider.innerHTML = `
+                    <div class="flex-grow h-[1px] bg-red-500 opacity-50"></div>
+                    <span class="px-2 text-xs font-bold text-red-500 uppercase">New Messages</span>
+                    <div class="flex-grow h-[1px] bg-red-500 opacity-50"></div>
+                `;
+                messagesContainer.appendChild(divider);
+                unreadDividerShown = true;
+            }
+
             displayMessage(msg, true);
         }
     });
 
     lucide.createIcons();
+
+    // Scroll to bottom after loading history
+    // Use a small timeout to ensure DOM is fully rendered and layout is settled
+    setTimeout(() => {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }, 0);
+
+    if (unreadDividerShown) {
+        showUnreadBanner();
+    }
+
+    // Mark messages as read (update server)
+    if (isConnected && maxMessageId > lastReadMessageId) {
+        ws.send(JSON.stringify({
+            type: 'mark_read',
+            messageId: maxMessageId
+        }));
+    }
 }
 
+
+function showUnreadBanner() {
+    const banner = document.getElementById('unread-banner');
+    if (banner) {
+        banner.classList.remove('hidden');
+        banner.classList.remove('-translate-y-full', 'opacity-0');
+    }
+}
+
+function hideUnreadBanner() {
+    const banner = document.getElementById('unread-banner');
+    if (banner) {
+        banner.classList.add('-translate-y-full', 'opacity-0');
+        setTimeout(() => {
+            banner.classList.add('hidden');
+        }, 300);
+    }
+}
+
+function jumpToUnread() {
+    const divider = document.getElementById('unread-divider');
+    if (divider) {
+        divider.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        hideUnreadBanner();
+    }
+}
+
+function scrollToBottom() {
+    const messagesContainer = document.getElementById('messages-container');
+    messagesContainer.scrollTo({
+        top: messagesContainer.scrollHeight,
+        behavior: 'smooth'
+    });
+}
+
+// Add scroll listener to auto-hide banner if we scroll up to the divider
+document.getElementById('messages-container').addEventListener('scroll', () => {
+    const container = document.getElementById('messages-container');
+    const banner = document.getElementById('unread-banner');
+    const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
+    
+    // Unread banner logic
+    if (banner && !banner.classList.contains('hidden')) {
+        const divider = document.getElementById('unread-divider');
+        if (divider) {
+            const rect = divider.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            
+            // If divider is within view
+            if (rect.top >= containerRect.top && rect.bottom <= containerRect.bottom) {
+                hideUnreadBanner();
+            }
+        }
+    }
+
+    // Scroll to bottom button logic
+    // Show if we are more than 200px away from bottom
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
+    
+    if (scrollBottomBtn) {
+        if (!isNearBottom) {
+            scrollBottomBtn.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-2');
+        } else {
+            scrollBottomBtn.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
+        }
+    }
+});
+
 function displayMessage(data, isHistory = false) {
+
     const messagesContainer = document.getElementById('messages-container');
     const time = new Date(data.timestamp).toLocaleTimeString();
     const date = new Date(data.timestamp).toLocaleDateString();
@@ -422,9 +529,17 @@ function displayMessage(data, isHistory = false) {
 
     msgEl.innerHTML = messageHtml;
     messagesContainer.appendChild(msgEl);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    if (!isHistory) {
+        // Use a small timeout to ensure DOM update is complete including any images/embeds that might shift layout
+        setTimeout(() => {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }, 0);
+    }
+    
     lucide.createIcons();
 }
+
 
 function startReply(messageId) {
     replyingTo = { messageId };

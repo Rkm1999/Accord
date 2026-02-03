@@ -150,6 +150,13 @@ export class ChatRoom extends DurableObject<Env> {
       return;
     }
 
+    if (data.type === "mark_read") {
+        await this.env.DB.prepare(
+            "INSERT INTO channel_last_read (username, channel_id, message_id, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(username, channel_id) DO UPDATE SET message_id = ?, updated_at = ?"
+        ).bind(username, channelId, data.messageId, Date.now(), data.messageId, Date.now()).run();
+        return;
+    }
+
     const linkMetadata = await this.fetchLinkMetadata(data.message);
 
     const fileAttachment = data.file ? await this.uploadFile(data.file) : null;
@@ -371,6 +378,14 @@ export class ChatRoom extends DurableObject<Env> {
   }
 
   private async sendChatHistory(ws: WebSocket, channelId: number) {
+    // Get user's last read message ID
+    const state = ws.deserializeAttachment<UserState>();
+    const username = state.username;
+    
+    const lastRead = await this.env.DB.prepare(
+        "SELECT message_id FROM channel_last_read WHERE username = ? AND channel_id = ?"
+    ).bind(username, channelId).first<{ message_id: number }>();
+
     const { results: messages } = await this.env.DB.prepare(
       `SELECT m.*, u.display_name as displayName, u.avatar_key as avatarKey 
        FROM messages m 
@@ -395,6 +410,7 @@ export class ChatRoom extends DurableObject<Env> {
     ws.send(JSON.stringify({
       type: "history",
       messages: history,
+      lastReadMessageId: lastRead?.message_id || 0
     }));
   }
 
