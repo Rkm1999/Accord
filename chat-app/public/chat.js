@@ -570,18 +570,18 @@ function displayChannels() {
     channels.forEach(channel => {
         const isActive = channel.id === currentChannelId;
         const channelEl = document.createElement('div');
-        channelEl.className = `flex items-center mx-2 px-2 py-[6px] rounded-[4px] cursor-pointer group mb-[2px] ${isActive ? 'bg-[#404249] text-white' : 'text-[#949BA4] hover:bg-[#35373C] hover:text-[#dbdee1]'}`;
+        channelEl.className = `channel-item flex items-center px-2 py-[6px] rounded-[4px] cursor-pointer group mb-[2px] ${isActive ? 'bg-[#404249] text-white' : 'text-[#949BA4] hover:bg-[#35373C] hover:text-[#dbdee1]'}`;
         channelEl.onclick = () => switchChannel(channel.id);
 
         channelEl.innerHTML = `
-            <i data-lucide="hash" class="mr-1.5 w-5 h-5 text-[#80848E]"></i>
+            <i data-lucide="hash" class="mr-1.5 w-5 h-5 text-[#80848E] flex-shrink-0"></i>
             <span class="font-medium truncate flex-1">${escapeHtml(channel.name)}</span>
             ${channel.id !== 1 ? `
-                <div class="ml-auto hidden group-hover:flex">
-                    <button class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-white" onclick="event.stopPropagation(); deleteChannel(${channel.id})">
-                        <i data-lucide="trash-2" class="w-[14px] h-[14px]"></i>
-                    </button>
-                </div>
+                <button class="delete-btn ml-auto opacity-0 group-hover:opacity-100 hover:bg-red-500/20 hover:text-red-400 text-[#949BA4] p-1 rounded cursor-pointer" 
+                        onclick="event.stopPropagation(); if(confirm('Are you sure you want to delete this channel? All messages in this channel will be deleted.')) deleteChannel(${channel.id})" 
+                        title="Delete channel">
+                    <i data-lucide="trash-2" class="w-[14px] h-[14px]"></i>
+                </button>
             ` : ''}
         `;
 
@@ -600,27 +600,76 @@ function switchChannel(channelId) {
     window.location.reload();
 }
 
+let escapeHandler = null;
+
 function openCreateChannelModal() {
     const modal = document.getElementById('createChannelModal');
     const input = document.getElementById('newChannelName');
     input.value = '';
     modal.classList.remove('hidden');
-    input.focus();
+    
+    // Remove any error states
+    input.classList.remove('ring-2', 'ring-red-500');
+    input.placeholder = 'e.g., general, random, announcements';
+    
+    // Focus input after a brief delay to ensure modal is visible
+    setTimeout(() => {
+        input.focus();
+        input.select();
+    }, 100);
+    
+    // Remove existing handler and add new one
+    if (escapeHandler) {
+        document.removeEventListener('keydown', escapeHandler);
+    }
+    
+    // Add escape key handler
+    escapeHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeCreateChannelModal();
+        }
+    };
+    document.addEventListener('keydown', escapeHandler);
 }
 
 function closeCreateChannelModal() {
     const modal = document.getElementById('createChannelModal');
+    const input = document.getElementById('newChannelName');
+    
     modal.classList.add('hidden');
+    input.value = '';
+    input.classList.remove('ring-2', 'ring-red-500');
+    
+    // Remove escape key listener
+    if (escapeHandler) {
+        document.removeEventListener('keydown', escapeHandler);
+        escapeHandler = null;
+    }
 }
 
 async function createChannel() {
     const input = document.getElementById('newChannelName');
     const channelName = input.value.trim();
+    const createBtn = document.getElementById('createChannelBtn');
 
     if (!channelName) {
-        alert('Channel name cannot be empty');
+        input.focus();
+        input.classList.add('ring-2', 'ring-red-500');
+        setTimeout(() => input.classList.remove('ring-2', 'ring-red-500'), 2000);
         return;
     }
+
+    if (channelName.length < 2) {
+        input.focus();
+        input.classList.add('ring-2', 'ring-red-500');
+        setTimeout(() => input.classList.remove('ring-2', 'ring-red-500'), 2000);
+        return;
+    }
+
+    // Disable button and show loading state
+    createBtn.disabled = true;
+    createBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i>Creating...';
+    lucide.createIcons();
 
     try {
         const apiUrl = isLocalDev
@@ -640,19 +689,41 @@ async function createChannel() {
         if (response.ok) {
             closeCreateChannelModal();
             await fetchChannels();
+            // Show success feedback
+            const newChannel = await response.json();
+            if (newChannel && newChannel.id) {
+                switchChannel(newChannel.id);
+            }
         } else if (response.status === 409) {
-            alert('Channel name already exists');
+            input.focus();
+            input.classList.add('ring-2', 'ring-red-500');
+            input.value = '';
+            input.placeholder = 'Channel name already exists!';
+            setTimeout(() => {
+                input.classList.remove('ring-2', 'ring-red-500');
+                input.placeholder = 'e.g., general, random, announcements';
+            }, 2000);
         } else {
-            alert('Failed to create channel');
+            throw new Error('Failed to create channel');
         }
     } catch (error) {
         console.error('Error creating channel:', error);
-        alert('Failed to create channel');
+        input.focus();
+        input.classList.add('ring-2', 'ring-red-500');
+        setTimeout(() => input.classList.remove('ring-2', 'ring-red-500'), 2000);
+    } finally {
+        // Reset button state
+        createBtn.disabled = false;
+        createBtn.innerHTML = '<i data-lucide="plus" class="w-4 h-4 mr-2"></i>Create Channel';
+        lucide.createIcons();
     }
 }
 
 async function deleteChannel(channelId) {
-    if (!confirm('Are you sure you want to delete this channel? All messages in this channel will be deleted.')) {
+    const channel = channels.find(c => c.id === channelId);
+    const channelName = channel ? channel.name : 'this channel';
+    
+    if (!confirm(`Are you sure you want to delete #${channelName}? All messages in this channel will be permanently deleted.`)) {
         return;
     }
 
@@ -660,6 +731,13 @@ async function deleteChannel(channelId) {
         const apiUrl = isLocalDev
             ? `http://localhost:8787/api/channels/${channelId}`
             : `/api/channels/${channelId}`;
+
+        // Add visual feedback - remove the channel element immediately
+        const channelEl = document.querySelector(`[onclick="switchChannel(${channelId})"]`);
+        if (channelEl) {
+            channelEl.style.opacity = '0.5';
+            channelEl.style.pointerEvents = 'none';
+        }
 
         const response = await fetch(apiUrl, {
             method: 'DELETE',
@@ -673,11 +751,20 @@ async function deleteChannel(channelId) {
                 await fetchChannels();
             }
         } else {
-            alert('Failed to delete channel');
+            // Restore the channel element if deletion failed
+            if (channelEl) {
+                channelEl.style.opacity = '1';
+                channelEl.style.pointerEvents = 'auto';
+            }
+            throw new Error('Failed to delete channel');
         }
     } catch (error) {
         console.error('Error deleting channel:', error);
-        alert('Failed to delete channel');
+        const channelEl = document.querySelector(`[onclick="switchChannel(${channelId})"]`);
+        if (channelEl) {
+            channelEl.style.opacity = '1';
+            channelEl.style.pointerEvents = 'auto';
+        }
     }
 }
 
