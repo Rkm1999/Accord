@@ -10,9 +10,8 @@ const currentChannelId = parseInt(localStorage.getItem('currentChannelId') || '1
 
 const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const apiBaseUrl = isLocalDev ? window.location.origin : '';
-const wsUrl = isLocalDev
-    ? `ws://${window.location.host}/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}`
-    : `ws://${window.location.host}/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}`;
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const wsUrl = `${protocol}//${window.location.host}/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}`;
 
 let ws;
 let isConnected = false;

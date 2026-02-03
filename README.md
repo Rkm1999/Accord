@@ -79,6 +79,25 @@ chat-app/
 └── .gitignore
 ```
 
+## Quick Start
+
+**Deploy to Cloudflare:**
+```bash
+cd chat-app/worker
+npx wrangler d1 create chat-history  # Create D1 database
+npx wrangler r2 bucket create chat-files  # Create R2 bucket
+# Update wrangler.toml with database_id
+npx wrangler d1 execute chat-history --remote --file="../database/migrations/0001_messages.sql"
+# Run remaining migrations (0002-0006)
+npx wrangler deploy  # Deploy to production
+```
+
+**Local Development:**
+```bash
+cd chat-app/worker
+npx wrangler dev  # Starts on http://localhost:8787
+```
+
 ## Prerequisites
 
 - Node.js 16.17.0 or later
@@ -192,27 +211,123 @@ Test with multiple browser tabs to simulate multiple users.
 
 ## Deployment
 
-### Deploy the Worker
+### Production Deployment
+
+Follow these steps to deploy Accord to Cloudflare:
+
+#### 1. Verify Authentication
+
+Check if you're logged in to Cloudflare:
+
+```bash
+npx wrangler whoami
+```
+
+If not logged in, authenticate:
+```bash
+npx wrangler login
+```
+
+#### 2. Create D1 Database
+
+```bash
+cd chat-app/worker
+npx wrangler d1 create chat-history
+```
+
+Copy the `database_id` from the output (e.g., `be39a7e7-1885-4867-aff9-41c7eb3fa850`).
+
+#### 3. Create R2 Bucket
+
+```bash
+npx wrangler r2 bucket create chat-files
+```
+
+#### 4. Update wrangler.toml
+
+Copy the example config and add your database_id:
+
+```bash
+cd chat-app/worker
+cp wrangler.toml.example wrangler.toml
+```
+
+Update `chat-app/worker/wrangler.toml` with the database_id:
+
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "chat-history"
+database_id = "be39a7e7-1885-4867-aff9-41c7eb3fa850"
+```
+
+**Note:** `wrangler.toml` is in `.gitignore` to avoid committing your database_id. Use `wrangler.toml.example` as a template.
+
+#### 5. Apply Database Migrations (Remote)
+
+Apply all migrations to the production database:
+
+```bash
+npx wrangler d1 execute chat-history --remote --file="../database/migrations/0001_messages.sql"
+npx wrangler d1 execute chat-history --remote --file="../database/migrations/0002_channels.sql"
+npx wrangler d1 execute chat-history --remote --file="../database/migrations/0003_users.sql"
+npx wrangler d1 execute chat-history --remote --file="../database/migrations/0004_reactions.sql"
+npx wrangler d1 execute chat-history --remote --file="../database/migrations/0005_custom_emojis.sql"
+npx wrangler d1 execute chat-history --remote --file="../database/migrations/0006_channel_last_read.sql"
+```
+
+#### 6. Deploy Worker
+
+```bash
+npx wrangler deploy
+```
+
+The deployment will output your live URL, for example:
+```
+https://chat-worker.junida1999.workers.dev
+```
+
+#### 7. Verify Deployment
+
+1. Visit your worker URL in a browser
+2. Test user registration
+3. Login and verify WebSocket connects (check browser console for "Connected to chat server")
+4. Test messaging, file uploads, and other features
+
+### Adding a Custom Domain
+
+To use your own domain:
+
+1. **Add Custom Domain** via Cloudflare Dashboard:
+   - Go to Workers & Pages
+   - Select your worker
+   - Click "Custom Domains"
+   - Add your domain (e.g., `chat.example.com`)
+
+2. **Configure DNS** (if using a non-Cloudflare domain):
+   - Add CNAME record pointing to your worker's URL
+
+### Updating Your Deployment
+
+After making code changes:
 
 ```bash
 cd chat-app/worker
 npx wrangler deploy
 ```
 
-### Deploy Pages (if using separate Pages project)
-
-```bash
-cd chat-app
-npx wrangler pages deploy public
-```
-
-Your chat application will be live at the URL provided by Wrangler!
+This will automatically upload and deploy updated files.
 
 ## API Endpoints
 
 ### WebSocket Connection
 
 **Endpoint:** `ws://<your-domain>/ws?username=<username>&channelId=<channelId>`
+
+- **Local development:** `ws://localhost:8787/ws?...`
+- **Production:** `wss://<your-domain>/ws?...` (secure WebSocket)
+
+The frontend automatically uses the correct protocol (`ws://` for HTTP, `wss://` for HTTPS).
 
 Connects to the chat room and establishes a WebSocket connection.
 
@@ -438,6 +553,13 @@ Messages are delivered instantly to all connected users using WebSocket connecti
 - Date range filtering
 
 ## Troubleshooting
+
+### Mixed Content Error (ws:// vs wss://)
+If you see "Mixed Content: The page was loaded over HTTPS, but attempted to connect to insecure WebSocket endpoint", ensure:
+- The WebSocket protocol matches the page protocol (`wss://` for HTTPS pages)
+- The code in `chat.js` uses dynamic protocol detection
+
+**Fix:** The deployment uses dynamic protocol detection to automatically use `wss://` on HTTPS.
 
 ### WebSocket Connection Fails
 - Ensure Worker dev server is running (`npx wrangler dev` in worker directory)

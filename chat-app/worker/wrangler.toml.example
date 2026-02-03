@@ -13,10 +13,12 @@ name = "CHAT_ROOM"
 class_name = "ChatRoom"
 
 # D1 database binding
+# Create database with: npx wrangler d1 create chat-history
+# Copy the database_id from output and update below
 [[d1_databases]]
 binding = "DB"
 database_name = "chat-history"
-database_id = "be39a7e7-1885-4867-aff9-41c7eb3fa850"
+database_id = "YOUR_DATABASE_ID_HERE"
 
 # Migrations for Durable Object
 [[migrations]]
@@ -26,5 +28,3 @@ new_sqlite_classes = ["ChatRoom"]
 [assets]
 directory = "public"
 binding = "ASSETS"
-
-
