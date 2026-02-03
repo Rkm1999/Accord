@@ -14,6 +14,7 @@ let replyingTo = null;
 let editingMessageId = null;
 let reactionPickerMessageId = null;
 let channels = [];
+let customEmojis = [];
 let onlineUsers = new Set();
 
 
@@ -21,8 +22,18 @@ function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
-    return div.innerHTML;
+    let html = div.innerHTML;
+
+    // Replace custom emojis :name:
+    customEmojis.forEach(emoji => {
+        const emojiTag = `<img src="${isLocalDev ? 'http://localhost:8787/api/file/' : '/api/file/'}${emoji.file_key}" alt=":${emoji.name}:" title=":${emoji.name}:" class="inline-block w-6 h-6 mx-0.5 align-bottom">`;
+        const regex = new RegExp(`:${emoji.name}:`, 'g');
+        html = html.replace(regex, emojiTag);
+    });
+
+    return html;
 }
+
 
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
@@ -282,9 +293,20 @@ function displayMessage(data, isHistory = false) {
 
         Object.entries(grouped).forEach(([emoji, users]) => {
             const hasReacted = users.includes(username);
+            const isCustom = emoji.startsWith(':') && emoji.endsWith(':');
+            let emojiDisplay = emoji;
+
+            if (isCustom) {
+                const name = emoji.slice(1, -1);
+                const customEmoji = customEmojis.find(e => e.name === name);
+                if (customEmoji) {
+                    emojiDisplay = `<img src="${isLocalDev ? 'http://localhost:8787/api/file/' : '/api/file/'}${customEmoji.file_key}" class="w-4 h-4 inline-block">`;
+                }
+            }
+
             reactionsHtml += `
                 <div class="reaction-badge ${hasReacted ? 'active' : ''}" onclick="event.stopPropagation(); toggleReaction(${data.id}, '${emoji}')" title="${users.join(', ')}">
-                    <span>${emoji}</span>
+                    <span>${emojiDisplay}</span>
                     <span class="reaction-count">${users.length}</span>
                 </div>
             `;
@@ -592,7 +614,20 @@ async function fetchChannels() {
     }
 }
 
+async function fetchCustomEmojis() {
+    try {
+        const apiUrl = isLocalDev
+            ? 'http://localhost:8787/api/emojis'
+            : '/api/emojis';
+        const response = await fetch(apiUrl);
+        customEmojis = await response.json();
+    } catch (error) {
+        console.error('Error fetching emojis:', error);
+    }
+}
+
 function displayChannels() {
+
     const channelsContainer = document.getElementById('channels-container');
     if (!channelsContainer) return;
 
@@ -949,6 +984,55 @@ function openUserSettings() {
     }
 }
 
+function openEmojiModal() {
+    const modal = document.getElementById('emojiUploadModal');
+    modal.classList.remove('hidden');
+    document.getElementById('emojiNameInput').focus();
+}
+
+function closeEmojiModal() {
+    document.getElementById('emojiUploadModal').classList.add('hidden');
+}
+
+async function uploadEmoji() {
+    const nameInput = document.getElementById('emojiNameInput');
+    const fileInput = document.getElementById('emojiFileInput');
+    const name = nameInput.value.trim();
+    const file = fileInput.files[0];
+
+    if (!name || !file) {
+        alert('Please provide both a name and an image.');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const image = e.target.result;
+        try {
+            const apiUrl = isLocalDev ? 'http://localhost:8787/api/emojis' : '/api/emojis';
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, image, username })
+            });
+
+            if (response.ok) {
+                alert('Emoji uploaded!');
+                closeEmojiModal();
+                await fetchCustomEmojis();
+                nameInput.value = '';
+                fileInput.value = '';
+            } else {
+                const err = await response.text();
+                alert('Upload failed: ' + err);
+            }
+        } catch (error) {
+            console.error('Emoji upload error:', error);
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
 function toggleReactionPicker(event, messageId) {
     event.stopPropagation();
     const picker = document.getElementById('reactionPicker');
@@ -960,12 +1044,41 @@ function toggleReactionPicker(event, messageId) {
     }
 
     reactionPickerMessageId = messageId;
+    
+    // Show picker first to get dimensions
     picker.classList.remove('hidden');
+
+    // Add custom emojis to picker
+    const customSection = document.getElementById('customEmojisInPicker');
+    if (customSection) {
+        if (customEmojis.length === 0) {
+            customSection.innerHTML = '<div class="text-[10px] text-[#949BA4] w-full text-center py-2">No custom emojis</div>';
+        } else {
+            customSection.innerHTML = customEmojis.map(emoji => `
+                <button class="hover:bg-[#35373C] p-1 rounded transition-colors" onclick="sendReaction(':${emoji.name}:')" title=":${emoji.name}:">
+                    <img src="${isLocalDev ? 'http://localhost:8787/api/file/' : '/api/file/'}${emoji.file_key}" class="w-6 h-6 object-contain pointer-events-none">
+                </button>
+            `).join('');
+        }
+    }
     
     // Position picker
     const rect = event.currentTarget.getBoundingClientRect();
-    picker.style.top = `${rect.top - picker.offsetHeight - 10}px`;
-    picker.style.left = `${rect.left - picker.offsetWidth / 2 + rect.width / 2}px`;
+    const pickerHeight = picker.offsetHeight;
+    const pickerWidth = picker.offsetWidth;
+    
+    let top = rect.top - pickerHeight - 10;
+    let left = rect.left - pickerWidth / 2 + rect.width / 2;
+    
+    // Keep in viewport
+    if (top < 10) top = rect.bottom + 10;
+    if (left < 10) left = 10;
+    if (left + pickerWidth > window.innerWidth - 10) left = window.innerWidth - pickerWidth - 10;
+
+    picker.style.top = `${top}px`;
+    picker.style.left = `${left}px`;
+    
+    lucide.createIcons();
 }
 
 function toggleReaction(messageId, emoji) {
@@ -979,10 +1092,15 @@ function toggleReaction(messageId, emoji) {
 }
 
 function sendReaction(emoji) {
-    if (reactionPickerMessageId) {
+    if (reactionPickerMessageId !== null) {
         toggleReaction(reactionPickerMessageId, emoji);
-        document.getElementById('reactionPicker').classList.add('hidden');
+    } else {
+        const input = document.getElementById('message-input');
+        const space = (input.value.length > 0 && !input.value.endsWith(' ')) ? ' ' : '';
+        input.value += space + emoji + ' ';
+        input.focus();
     }
+    document.getElementById('reactionPicker').classList.add('hidden');
 }
 
 function updateMessageReactions(messageId, reactions) {
@@ -1003,9 +1121,20 @@ function updateMessageReactions(messageId, reactions) {
     let html = '';
     Object.entries(grouped).forEach(([emoji, users]) => {
         const hasReacted = users.includes(username);
+        const isCustom = emoji.startsWith(':') && emoji.endsWith(':');
+        let emojiDisplay = emoji;
+
+        if (isCustom) {
+            const name = emoji.slice(1, -1);
+            const customEmoji = customEmojis.find(e => e.name === name);
+            if (customEmoji) {
+                emojiDisplay = `<img src="${isLocalDev ? 'http://localhost:8787/api/file/' : '/api/file/'}${customEmoji.file_key}" class="w-4 h-4 inline-block">`;
+            }
+        }
+
         html += `
             <div class="reaction-badge ${hasReacted ? 'active' : ''}" onclick="event.stopPropagation(); toggleReaction(${messageId}, '${emoji}')" title="${users.join(', ')}">
-                <span>${emoji}</span>
+                <span>${emojiDisplay}</span>
                 <span class="reaction-count">${users.length}</span>
             </div>
         `;
@@ -1043,9 +1172,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('display-username').textContent = username;
     document.getElementById('user-avatar-initial').textContent = username.charAt(0).toUpperCase();
 
+    fetchCustomEmojis();
     fetchChannels();
     connect();
     renderMembers();
+
 
     const fileInputEl = document.getElementById('fileInput');
     if (fileInputEl) {
@@ -1142,4 +1273,7 @@ window.openUserSettings = openUserSettings;
 window.toggleReactionPicker = toggleReactionPicker;
 window.toggleReaction = toggleReaction;
 window.sendReaction = sendReaction;
+window.openEmojiModal = openEmojiModal;
+window.closeEmojiModal = closeEmojiModal;
+window.uploadEmoji = uploadEmoji;
 

@@ -70,6 +70,50 @@ export default {
       return new Response(JSON.stringify(messages.reverse()), { headers });
     }
 
+    if (url.pathname === "/api/emojis" && request.method === "GET") {
+      const { results } = await env.DB.prepare(
+        "SELECT id, name, file_key, created_by, created_at FROM custom_emojis ORDER BY name ASC"
+      ).all();
+
+      const headers = new Headers();
+      headers.set("Access-Control-Allow-Origin", "*");
+      return new Response(JSON.stringify(results), { headers });
+    }
+
+    if (url.pathname === "/api/emojis" && request.method === "POST") {
+      const { name, image, username } = await request.json();
+
+      if (!name || !image || !username) {
+        const headers = new Headers();
+        headers.set("Access-Control-Allow-Origin", "*");
+        return new Response("Name, image, and username are required", { status: 400, headers });
+      }
+
+      const emojiName = name.replace(/:/g, "");
+      const timestamp = Date.now();
+      const key = `emoji-${timestamp}-${emojiName}`;
+
+      try {
+        const binaryData = Uint8Array.from(atob(image.split(',')[1] || image), c => c.charCodeAt(0));
+        await env.BUCKET.put(key, binaryData, {
+          httpMetadata: { contentType: "image/png" } // Assume PNG for emojis
+        });
+
+        await env.DB.prepare(
+          "INSERT INTO custom_emojis (name, file_key, created_by, created_at) VALUES (?, ?, ?, ?)"
+        ).bind(emojiName, key, username, timestamp).run();
+
+        const headers = new Headers();
+        headers.set("Access-Control-Allow-Origin", "*");
+        return new Response(JSON.stringify({ name: emojiName, file_key: key }), { status: 201, headers });
+      } catch (error: any) {
+        console.error("Emoji upload error:", error);
+        const headers = new Headers();
+        headers.set("Access-Control-Allow-Origin", "*");
+        return new Response(error.message, { status: 500, headers });
+      }
+    }
+
 
     if (url.pathname === "/api/channels" && request.method === "GET") {
       const { results } = await env.DB.prepare(
