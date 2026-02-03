@@ -25,7 +25,14 @@ interface FileAttachment {
   key: string;
 }
 
+interface Reaction {
+  emoji: string;
+  username: string;
+  message_id?: number;
+}
+
 export class ChatRoom extends DurableObject<Env> {
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
   }
@@ -95,7 +102,13 @@ export class ChatRoom extends DurableObject<Env> {
       return;
     }
 
+    if (data.type === "reaction") {
+      await this.handleReaction(data.messageId, data.emoji, username, channelId);
+      return;
+    }
+
     const linkMetadata = await this.fetchLinkMetadata(data.message);
+
     const fileAttachment = data.file ? await this.uploadFile(data.file) : null;
     const timestamp = Date.now();
 
@@ -227,18 +240,77 @@ export class ChatRoom extends DurableObject<Env> {
   }
 
   private async sendChatHistory(ws: WebSocket, channelId: number) {
-    const { results } = await this.env.DB.prepare(
+    const { results: messages } = await this.env.DB.prepare(
       "SELECT id, username, message, timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key, reply_to, reply_username, reply_message, reply_timestamp, is_edited, edited_at, channel_id FROM messages WHERE channel_id = ? ORDER BY timestamp DESC LIMIT 50"
-    ).bind(channelId).all();
+    ).bind(channelId).all() as { results: any[] };
 
-    const history = results.reverse();
+    if (messages.length > 0) {
+      const messageIds = messages.map(m => m.id);
+      const placeholders = messageIds.map(() => '?').join(',');
+      const { results: reactions } = await this.env.DB.prepare(
+        `SELECT message_id, emoji, username FROM reactions WHERE message_id IN (${placeholders})`
+      ).bind(...messageIds).all() as { results: any[] };
+
+      messages.forEach(m => {
+        m.reactions = reactions.filter(r => r.message_id === m.id);
+      });
+    }
+
+    const history = messages.reverse();
     ws.send(JSON.stringify({
       type: "history",
       messages: history,
     }));
   }
 
+  private async handleReaction(messageId: number, emoji: string, username: string, channelId: number) {
+    try {
+      const existing = await this.env.DB.prepare(
+        "SELECT id FROM reactions WHERE message_id = ? AND username = ? AND emoji = ?"
+      ).bind(messageId, username, emoji).first();
+
+      if (existing) {
+        await this.env.DB.prepare(
+          "DELETE FROM reactions WHERE id = ?"
+        ).bind(existing.id).run();
+      } else {
+        await this.env.DB.prepare(
+          "INSERT INTO reactions (message_id, username, emoji, created_at) VALUES (?, ?, ?, ?)"
+        ).bind(messageId, username, emoji, Date.now()).run();
+      }
+
+      const reactions = await this.getMessageReactions(messageId);
+      this.broadcastReaction(messageId, reactions, channelId);
+    } catch (error) {
+      console.error('Error handling reaction:', error);
+    }
+  }
+
+  private async getMessageReactions(messageId: number) {
+    const { results } = await this.env.DB.prepare(
+      "SELECT emoji, username FROM reactions WHERE message_id = ? ORDER BY created_at ASC"
+    ).bind(messageId).all();
+    return results;
+  }
+
+  private broadcastReaction(messageId: number, reactions: any[], channelId: number) {
+    const webSockets = this.ctx.getWebSockets();
+    const payload = JSON.stringify({
+      type: "reaction",
+      messageId,
+      reactions,
+    });
+
+    for (const ws of webSockets) {
+      const state = ws.deserializeAttachment<UserState>();
+      if (state.channelId === channelId) {
+        ws.send(payload);
+      }
+    }
+  }
+
   private async fetchLinkMetadata(message: string): Promise<LinkMetadata | null> {
+
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const matches = message.match(urlRegex);
 

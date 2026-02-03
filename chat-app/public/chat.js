@@ -12,8 +12,10 @@ let typingUsers = new Set();
 let selectedFiles = [];
 let replyingTo = null;
 let editingMessageId = null;
+let reactionPickerMessageId = null;
 let channels = [];
 let onlineUsers = new Set();
+
 
 function escapeHtml(text) {
     if (!text) return '';
@@ -71,7 +73,11 @@ function connect() {
             case 'delete':
                 removeMessageElement(data.messageId);
                 break;
+            case 'reaction':
+                updateMessageReactions(data.messageId, data.reactions);
+                break;
             case 'presence':
+
                 updatePresence(data);
                 break;
             case 'typing':
@@ -265,22 +271,48 @@ function displayMessage(data, isHistory = false) {
         `;
     }
 
+    // Reactions
+    let reactionsHtml = `<div class="reactions-container flex flex-wrap mt-1" id="reactions-${data.id}">`;
+    if (data.reactions && data.reactions.length > 0) {
+        const grouped = data.reactions.reduce((acc, r) => {
+            acc[r.emoji] = acc[r.emoji] || [];
+            acc[r.emoji].push(r.username);
+            return acc;
+        }, {});
+
+        Object.entries(grouped).forEach(([emoji, users]) => {
+            const hasReacted = users.includes(username);
+            reactionsHtml += `
+                <div class="reaction-badge ${hasReacted ? 'active' : ''}" onclick="event.stopPropagation(); toggleReaction(${data.id}, '${emoji}')" title="${users.join(', ')}">
+                    <span>${emoji}</span>
+                    <span class="reaction-count">${users.length}</span>
+                </div>
+            `;
+        });
+    }
+    reactionsHtml += '</div>';
+    messageHtml += reactionsHtml;
+
     messageHtml += `
             </div>
             <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
-                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(${data.id})">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, ${data.id})" title="Add Reaction">
+                    <i data-lucide="smile" class="w-[18px] h-[18px]"></i>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(${data.id})" title="Reply">
                     <i data-lucide="reply" class="w-[18px] h-[18px]"></i>
                 </div>
                 ${isOwnMessage ? `
-                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="openEditModal(${data.id})">
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="openEditModal(${data.id})" title="Edit">
                         <i data-lucide="edit-2" class="w-[16px] h-[16px]"></i>
                     </div>
-                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-red-400 hover:text-red-500" onclick="deleteMessage(${data.id})">
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-red-400 hover:text-red-500" onclick="deleteMessage(${data.id})" title="Delete">
                         <i data-lucide="trash-2" class="w-[16px] h-[16px]"></i>
                     </div>
                 ` : ''}
             </div>
         `;
+
 
     msgEl.innerHTML = messageHtml;
     messagesContainer.appendChild(msgEl);
@@ -917,7 +949,80 @@ function openUserSettings() {
     }
 }
 
+function toggleReactionPicker(event, messageId) {
+    event.stopPropagation();
+    const picker = document.getElementById('reactionPicker');
+    const isHidden = picker.classList.contains('hidden');
+    
+    if (!isHidden && reactionPickerMessageId === messageId) {
+        picker.classList.add('hidden');
+        return;
+    }
+
+    reactionPickerMessageId = messageId;
+    picker.classList.remove('hidden');
+    
+    // Position picker
+    const rect = event.currentTarget.getBoundingClientRect();
+    picker.style.top = `${rect.top - picker.offsetHeight - 10}px`;
+    picker.style.left = `${rect.left - picker.offsetWidth / 2 + rect.width / 2}px`;
+}
+
+function toggleReaction(messageId, emoji) {
+    if (isConnected) {
+        ws.send(JSON.stringify({
+            type: 'reaction',
+            messageId,
+            emoji
+        }));
+    }
+}
+
+function sendReaction(emoji) {
+    if (reactionPickerMessageId) {
+        toggleReaction(reactionPickerMessageId, emoji);
+        document.getElementById('reactionPicker').classList.add('hidden');
+    }
+}
+
+function updateMessageReactions(messageId, reactions) {
+    const container = document.getElementById(`reactions-${messageId}`);
+    if (!container) return;
+
+    if (!reactions || reactions.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const grouped = reactions.reduce((acc, r) => {
+        acc[r.emoji] = acc[r.emoji] || [];
+        acc[r.emoji].push(r.username);
+        return acc;
+    }, {});
+
+    let html = '';
+    Object.entries(grouped).forEach(([emoji, users]) => {
+        const hasReacted = users.includes(username);
+        html += `
+            <div class="reaction-badge ${hasReacted ? 'active' : ''}" onclick="event.stopPropagation(); toggleReaction(${messageId}, '${emoji}')" title="${users.join(', ')}">
+                <span>${emoji}</span>
+                <span class="reaction-count">${users.length}</span>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+
+// Close picker when clicking outside
+document.addEventListener('click', (e) => {
+    const picker = document.getElementById('reactionPicker');
+    if (picker && !picker.contains(e.target)) {
+        picker.classList.add('hidden');
+    }
+});
+
 function openImageModal(imageUrl) {
+
     const modal = document.getElementById('imageModal');
     const modalImg = document.getElementById('imageModalImg');
     if (modal && modalImg) {
@@ -1034,3 +1139,7 @@ window.openSearchModal = openSearchModal;
 window.closeSearchModal = closeSearchModal;
 window.performSearch = performSearch;
 window.openUserSettings = openUserSettings;
+window.toggleReactionPicker = toggleReactionPicker;
+window.toggleReaction = toggleReaction;
+window.sendReaction = sendReaction;
+

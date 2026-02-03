@@ -79,8 +79,38 @@
         .modal-content {
             animation: slideIn 0.2s ease-out;
         }
+        .reaction-badge {
+            display: inline-flex;
+            align-items: center;
+            background: #2b2d31;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            padding: 2px 6px;
+            margin-right: 4px;
+            margin-top: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.1s;
+        }
+        .reaction-badge:hover {
+            border-color: #5865f2;
+            background: #35373c;
+        }
+        .reaction-badge.active {
+            background: rgba(88, 101, 242, 0.15);
+            border-color: #5865f2;
+        }
+        .reaction-count {
+            font-size: 12px;
+            margin-left: 4px;
+            color: #b5bac1;
+        }
+        .reaction-badge.active .reaction-count {
+            color: #5865f2;
+        }
     </style>
 </head>
+
 <body class="bg-[#313338] text-white font-sans overflow-hidden select-none h-screen w-full">
 
     <div id="app" class="flex h-screen w-full">
@@ -311,6 +341,19 @@
         <img id="imageModalImg" src="" alt="Full size" class="max-w-[90vw] max-h-[90vh] object-contain">
     </div>
 
+    <!-- Reaction Picker Popover (Hidden by default) -->
+    <div id="reactionPicker" class="fixed z-[100] hidden bg-[#1E1F22] border border-[#26272D] rounded-lg shadow-xl p-2 flex flex-wrap gap-1 max-w-[200px]">
+        <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('👍')">👍</button>
+        <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('❤️')">❤️</button>
+        <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('😂')">😂</button>
+        <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('😮')">😮</button>
+        <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('😢')">😢</button>
+        <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('🔥')">🔥</button>
+        <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('🎉')">🎉</button>
+        <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('✅')">✅</button>
+    </div>
+
     <script src="chat.js"></script>
+
 </body>
 </html>

@@ -49,14 +49,27 @@ export default {
 
     if (url.pathname === "/api/history") {
       const channelId = url.searchParams.get("channelId") || "1";
-      const { results } = await env.DB.prepare(
+      const { results: messages } = await env.DB.prepare(
         "SELECT id, username, message, timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key, reply_to, reply_username, reply_message, reply_timestamp, is_edited, edited_at, channel_id FROM messages WHERE channel_id = ? ORDER BY timestamp DESC LIMIT 100"
-      ).bind(channelId).all();
+      ).bind(channelId).all() as { results: any[] };
+
+      if (messages.length > 0) {
+        const messageIds = messages.map(m => m.id);
+        const placeholders = messageIds.map(() => '?').join(',');
+        const { results: reactions } = await env.DB.prepare(
+          `SELECT message_id, emoji, username FROM reactions WHERE message_id IN (${placeholders})`
+        ).bind(...messageIds).all() as { results: any[] };
+
+        messages.forEach(m => {
+          m.reactions = reactions.filter(r => r.message_id === m.id);
+        });
+      }
 
       const headers = new Headers();
       headers.set("Access-Control-Allow-Origin", "*");
-      return new Response(JSON.stringify(results.reverse()), { headers });
+      return new Response(JSON.stringify(messages.reverse()), { headers });
     }
+
 
     if (url.pathname === "/api/channels" && request.method === "GET") {
       const { results } = await env.DB.prepare(
