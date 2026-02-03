@@ -85,6 +85,11 @@ export default {
         await env.DB.prepare(
           "INSERT INTO users (username, password_hash, display_name, recovery_key_hash, created_at) VALUES (?, ?, ?, ?, ?)"
         ).bind(username, passwordHash, username, recoveryKeyHash, Date.now()).run();
+        
+        // Notify Durable Object to broadcast new user registration
+        const stub = env.CHAT_ROOM.getByName("main-room");
+        await stub.fetch(new Request("http://durable/refresh_users"));
+
         return corsResponse({ success: true, recoveryKey }, 201, corsHeaders);
       } catch (e: any) {
         console.error("Register error:", e);
@@ -206,6 +211,11 @@ export default {
         ).bind(name, createdBy, Date.now()).run();
         const channel = await env.DB.prepare("SELECT id, name, created_by, created_at FROM channels WHERE id = ?")
             .bind(result.meta.last_row_id).first();
+        
+        // Notify Durable Object to broadcast channel creation
+        const stub = env.CHAT_ROOM.getByName("main-room");
+        await stub.fetch(new Request("http://durable/refresh_channels"));
+
         return corsResponse(channel, 200, corsHeaders);
       } catch (error: any) {
         if (error.message?.includes("UNIQUE")) return corsResponse("Channel name already exists", 409, corsHeaders);
@@ -218,6 +228,11 @@ export default {
       if (channelId === "1") return corsResponse("Cannot delete general channel", 403, corsHeaders);
       await env.DB.prepare("DELETE FROM messages WHERE channel_id = ?").bind(channelId).run();
       await env.DB.prepare("DELETE FROM channels WHERE id = ?").bind(channelId).run();
+      
+      // Notify Durable Object to broadcast channel deletion
+      const stub = env.CHAT_ROOM.getByName("main-room");
+      await stub.fetch(new Request("http://durable/refresh_channels"));
+
       return corsResponse("Channel deleted", 200, corsHeaders);
     }
 

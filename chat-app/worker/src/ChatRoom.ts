@@ -42,6 +42,17 @@ export class ChatRoom extends DurableObject<Env> {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/refresh_channels") {
+      this.broadcastChannelEvent("refresh_channels");
+      return new Response("OK");
+    }
+
+    if (url.pathname === "/refresh_users") {
+      this.broadcastChannelEvent("refresh_users");
+      return new Response("OK");
+    }
+
     const username = url.searchParams.get("username") || "Anonymous";
     const channelId = parseInt(url.searchParams.get("channelId") || "1");
 
@@ -50,6 +61,16 @@ export class ChatRoom extends DurableObject<Env> {
     
     const displayName = user?.display_name || username;
     const avatarKey = user?.avatar_key || null;
+
+    // Check if user is already online in another tab BEFORE accepting this one
+    const isAlreadyOnline = this.ctx.getWebSockets().some(ws => {
+        try {
+            const state = ws.deserializeAttachment<UserState>();
+            return state && state.username === username;
+        } catch {
+            return false;
+        }
+    });
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -64,9 +85,14 @@ export class ChatRoom extends DurableObject<Env> {
       channelId,
     } as UserState);
 
-    this.broadcastUserEvent("user_joined", username, channelId, displayName, avatarKey);
+    // Only broadcast "joined" if this is the first connection for this user
+    if (!isAlreadyOnline) {
+        this.broadcastUserEvent("user_joined", username, channelId, displayName, avatarKey);
+    }
 
     await this.sendChatHistory(server, channelId);
+    this.sendOnlineUsers(server);
+    this.broadcastOnlineList(); // Sync everyone
 
     return new Response(null, {
       status: 101,
@@ -81,8 +107,12 @@ export class ChatRoom extends DurableObject<Env> {
 
     const data = JSON.parse(message);
 
+    if (data.type === "heartbeat") {
+        return; // Just to keep connection alive
+    }
 
     if (data.type === "switch_channel") {
+
       const newChannelId = data.channelId;
       ws.serializeAttachment({
         username,
@@ -199,7 +229,27 @@ export class ChatRoom extends DurableObject<Env> {
 
   async webSocketClose(ws: WebSocket) {
     const state = ws.deserializeAttachment() as UserState;
-    this.broadcastUserEvent("user_left", state.username);
+    if (!state) return;
+    const username = state.username;
+
+    // Check if any OTHER connections for this user still exist
+    const allSockets = this.ctx.getWebSockets();
+    const hasRemainingTabs = allSockets.some(s => {
+        try {
+            const sState = s.deserializeAttachment<UserState>();
+            return s !== ws && sState && sState.username === username;
+        } catch {
+            return false;
+        }
+    });
+
+    // Only broadcast "left" if no more tabs are open
+    if (!hasRemainingTabs) {
+        this.broadcastUserEvent("user_left", username);
+    }
+    
+    // Broadcast updated list to everyone EXCEPT the closing socket
+    this.broadcastOnlineList(ws); 
   }
 
   private broadcastMessage(username: string, message: string, linkMetadata?: LinkMetadata, fileAttachment?: FileAttachment, replyData?: {
@@ -243,6 +293,15 @@ export class ChatRoom extends DurableObject<Env> {
   }
 
 
+  private broadcastChannelEvent(type: string) {
+    const webSockets = this.ctx.getWebSockets();
+    const payload = JSON.stringify({ type });
+
+    for (const ws of webSockets) {
+      ws.send(payload);
+    }
+  }
+
   private broadcastUserEvent(eventType: string, username: string, channelId?: number, displayName?: string, avatarKey?: string | null) {
     const webSockets = this.ctx.getWebSockets();
     const userCount = webSockets.length;
@@ -278,6 +337,36 @@ export class ChatRoom extends DurableObject<Env> {
       if (state.channelId === channelId) {
         ws.send(payload);
       }
+    }
+  }
+
+  private sendOnlineUsers(ws: WebSocket) {
+    const webSockets = this.ctx.getWebSockets();
+    const uniqueUsernames = [...new Set(webSockets.map(s => {
+        try { return s.deserializeAttachment<UserState>()?.username; } catch { return null; }
+    }))].filter(u => u !== null);
+    
+    ws.send(JSON.stringify({
+      type: "online_list",
+      usernames: uniqueUsernames,
+    }));
+  }
+
+  private broadcastOnlineList(excludeSocket?: WebSocket) {
+    const webSockets = this.ctx.getWebSockets();
+    const uniqueUsernames = [...new Set(webSockets.map(s => {
+        if (excludeSocket && s === excludeSocket) return null;
+        try { return s.deserializeAttachment<UserState>()?.username; } catch { return null; }
+    }))].filter(u => u !== null);
+
+    const payload = JSON.stringify({
+      type: "online_list",
+      usernames: uniqueUsernames,
+    });
+
+    for (const ws of webSockets) {
+      if (excludeSocket && ws === excludeSocket) continue;
+      ws.send(payload);
     }
   }
 

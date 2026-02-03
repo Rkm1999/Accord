@@ -15,6 +15,7 @@ const wsUrl = isLocalDev
 
 let ws;
 let isConnected = false;
+let heartbeatInterval;
 let typingTimeout;
 let typingUsers = new Set();
 let selectedFiles = [];
@@ -86,6 +87,14 @@ function connect() {
         onlineUsernames.add(username);
         renderMembers();
         removeSystemMessage();
+
+        // Start heartbeat
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => {
+            if (isConnected) {
+                ws.send(JSON.stringify({ type: 'heartbeat' }));
+            }
+        }, 20000); // Every 20 seconds
     };
 
 
@@ -102,6 +111,10 @@ function connect() {
                 } else {
                     markChannelUnread(data.channelId);
                 }
+                break;
+            case 'online_list':
+                onlineUsernames = new Set(data.usernames);
+                renderMembers();
                 break;
             case 'edit':
                 updateMessageEdit(data.messageId, data.newMessage);
@@ -125,11 +138,18 @@ function connect() {
             case 'error':
                 alert(data.message);
                 break;
+            case 'refresh_channels':
+                fetchChannels();
+                break;
+            case 'refresh_users':
+                fetchRegisteredUsers();
+                break;
         }
     };
 
     ws.onclose = (event) => {
         isConnected = false;
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
         onlineUsernames.delete(username);
         renderMembers();
         console.log('Disconnected from chat server', event.code, event.reason);
@@ -528,13 +548,9 @@ function updatePresence(data) {
     const userDisplayName = data.displayName || data.username;
     if (data.event === 'user_joined') {
         onlineUsernames.add(data.username);
-        // Add to allUsers if not already there (though they should be registered)
+        // If user is not in our registered list, fetch the updated list
         if (!allUsers.find(u => u.username === data.username)) {
-            allUsers.push({
-                username: data.username,
-                display_name: userDisplayName,
-                avatar_key: data.avatarKey
-            });
+            fetchRegisteredUsers();
         }
         showPresenceMessage(`${escapeHtml(userDisplayName)} joined the chat`);
     } else if (data.event === 'user_left') {
