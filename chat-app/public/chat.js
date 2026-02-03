@@ -25,6 +25,8 @@ let channels = [];
 let customEmojis = [];
 let allUsers = [];
 let onlineUsernames = new Set();
+let selectedAutocompleteIndex = 0;
+let filteredUsers = [];
 
 
 function escapeHtml(text) {
@@ -38,6 +40,14 @@ function escapeHtml(text) {
         const emojiTag = `<img src="${isLocalDev ? 'http://localhost:8787/api/file/' : '/api/file/'}${emoji.file_key}" alt=":${emoji.name}:" title=":${emoji.name}:" class="inline-block w-6 h-6 mx-0.5 align-bottom">`;
         const regex = new RegExp(`:${emoji.name}:`, 'g');
         html = html.replace(regex, emojiTag);
+    });
+
+    // Highlight mentions @username
+    const mentionRegex = /@(\w+)/g;
+    html = html.replace(mentionRegex, (match, p1) => {
+        const user = allUsers.find(u => u.username === p1);
+        const dName = user ? (user.display_name || user.username) : p1;
+        return `<span class="user-mention">@${escapeHtml(dName)}</span>`;
     });
 
     return html;
@@ -193,7 +203,6 @@ function displayMessage(data, isHistory = false) {
         : `https://ui-avatars.com/api/?name=${encodeURIComponent(display_name)}&background=random`;
 
     const linkMetadata = data.linkMetadata || {
-
         url: data.link_url,
         title: data.link_title,
         description: data.link_description,
@@ -215,9 +224,16 @@ function displayMessage(data, isHistory = false) {
         shouldGroup = prevUsername === data.username && timeDiff < 60000;
     }
 
+    // Persistent Highlight Check
+    const isMentioned = (data.mentions && data.mentions.includes(username)) || 
+                        (data.reply_username === username) ||
+                        (data.message && data.message.includes(`@${username}`));
+
     const msgEl = document.createElement('div');
-    msgEl.className = `group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 ${shouldGroup ? 'mt-0' : 'mt-[17px]'} relative message-group`;
+    msgEl.className = `group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 ${shouldGroup ? 'mt-0' : 'mt-[17px]'} relative message-group ${isMentioned ? 'mention-highlight' : ''}`;
     msgEl.dataset.messageId = data.id || '';
+
+
     msgEl.dataset.username = data.username;
     msgEl.dataset.timestamp = data.timestamp;
 
@@ -1184,6 +1200,112 @@ async function updateProfile() {
     }
 }
 
+function handleMentionAutocomplete(e) {
+    const input = e.target;
+    const value = input.value;
+    const selectionStart = input.selectionStart;
+    
+    // Find the word before the cursor
+    const beforeCursor = value.slice(0, selectionStart);
+    const lastAt = beforeCursor.lastIndexOf('@');
+    
+    if (lastAt !== -1) {
+        const query = beforeCursor.slice(lastAt + 1);
+        // Only trigger if @ is at start of word or start of input
+        const charBeforeAt = beforeCursor[lastAt - 1];
+        if (!charBeforeAt || /\s/.test(charBeforeAt)) {
+            showAutocomplete(query, lastAt);
+            return;
+        }
+    }
+    
+    hideAutocomplete();
+}
+
+function showAutocomplete(query, atIndex) {
+    const autocomplete = document.getElementById('mentionAutocomplete');
+    filteredUsers = allUsers.filter(u => 
+        u.username.toLowerCase().includes(query.toLowerCase()) || 
+        (u.display_name && u.display_name.toLowerCase().includes(query.toLowerCase()))
+    ).slice(0, 8); // Limit to 8 results
+
+    if (filteredUsers.length === 0) {
+        hideAutocomplete();
+        return;
+    }
+
+    selectedAutocompleteIndex = 0;
+    renderAutocomplete(filteredUsers, atIndex);
+    autocomplete.classList.remove('hidden');
+}
+
+function renderAutocomplete(users, atIndex) {
+    const autocomplete = document.getElementById('mentionAutocomplete');
+    autocomplete.innerHTML = users.map((user, index) => {
+        const displayName = user.display_name || user.username;
+        const avatarUrl = user.avatar_key
+            ? (isLocalDev ? `http://localhost:8787/api/file/${user.avatar_key}` : `/api/file/${user.avatar_key}`)
+            : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
+            
+        return `
+            <div class="autocomplete-item ${index === selectedAutocompleteIndex ? 'selected' : ''}" onclick="selectMention(${JSON.stringify(user).replace(/"/g, '&quot;')}, ${atIndex})">
+                <img src="${avatarUrl}" class="w-6 h-6 rounded-full mr-2 object-cover">
+                <div class="flex flex-col">
+                    <span class="text-sm font-medium text-[#dbdee1]">${escapeHtml(displayName)}</span>
+                    <span class="text-xs text-[#949BA4]">@${escapeHtml(user.username)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function hideAutocomplete() {
+    const autocomplete = document.getElementById('mentionAutocomplete');
+    if (autocomplete) autocomplete.classList.add('hidden');
+}
+
+function selectMention(user, atIndex) {
+    if (!user) return;
+    const input = document.getElementById('message-input');
+    const value = input.value;
+    const selectionStart = input.selectionStart;
+    const beforeCursor = value.slice(0, selectionStart);
+    
+    // If atIndex not provided, find it again
+    if (atIndex === undefined) {
+        atIndex = beforeCursor.lastIndexOf('@');
+    }
+    
+    const afterMention = value.slice(selectionStart);
+    const newValue = value.slice(0, atIndex) + '@' + user.username + ' ' + afterMention;
+    
+    input.value = newValue;
+    const newCursorPos = atIndex + user.username.length + 2;
+    input.setSelectionRange(newCursorPos, newCursorPos);
+    input.focus();
+    hideAutocomplete();
+}
+
+function handleAutocompleteKeydown(e) {
+    const autocomplete = document.getElementById('mentionAutocomplete');
+    if (autocomplete.classList.contains('hidden')) return;
+
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedAutocompleteIndex = (selectedAutocompleteIndex - 1 + filteredUsers.length) % filteredUsers.length;
+        renderAutocomplete(filteredUsers);
+    } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedAutocompleteIndex = (selectedAutocompleteIndex + 1) % filteredUsers.length;
+        renderAutocomplete(filteredUsers);
+    } else if (e.key === 'Escape') {
+        hideAutocomplete();
+    } else if (e.key === 'Tab') {
+        e.preventDefault();
+        selectMention(filteredUsers[selectedAutocompleteIndex]);
+    }
+}
+
 function toggleReactionPicker(event, messageId) {
     event.stopPropagation();
     const picker = document.getElementById('reactionPicker');
@@ -1424,15 +1546,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const messageInputEl = document.getElementById('message-input');
     if (messageInputEl) {
-        messageInputEl.addEventListener('input', handleTyping);
+        messageInputEl.addEventListener('input', (e) => {
+            handleTyping();
+            handleMentionAutocomplete(e);
+        });
+        messageInputEl.addEventListener('keydown', handleAutocompleteKeydown);
         messageInputEl.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
+                const autocomplete = document.getElementById('mentionAutocomplete');
+                if (!autocomplete.classList.contains('hidden')) {
+                    e.preventDefault();
+                    selectMention(filteredUsers[selectedAutocompleteIndex]);
+                    return;
+                }
                 e.preventDefault();
                 const form = document.getElementById('message-form');
                 if (form) form.dispatchEvent(new Event('submit'));
             }
         });
     }
+
 
     const toggleChannelsBtnEl = document.getElementById('toggle-channels-btn');
     if (toggleChannelsBtnEl) {
@@ -1478,5 +1611,6 @@ window.closeProfileModal = closeProfileModal;
 window.previewAvatar = previewAvatar;
 window.updateProfile = updateProfile;
 window.closeAllSidebars = closeAllSidebars;
+window.selectMention = selectMention;
 
 

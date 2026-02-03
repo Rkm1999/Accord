@@ -172,9 +172,20 @@ export class ChatRoom extends DurableObject<Env> {
     const result = await this.env.DB.prepare(query).bind(...values).run();
     const messageId = result.meta.last_row_id;
 
-    this.broadcastMessage(username, data.message, linkMetadata, fileAttachment, replyData, messageId, channelId, displayName, avatarKey);
-  }
+    // Extract mentions
+    const mentions: string[] = [];
+    const mentionRegex = /@(\w+)/g;
+    let match;
+    while ((match = mentionRegex.exec(data.message)) !== null) {
+      mentions.push(match[1]);
+    }
 
+    if (replyData) {
+      mentions.push(replyData.replyUsername);
+    }
+
+    this.broadcastMessage(username, data.message, linkMetadata, fileAttachment, replyData, messageId, channelId, displayName, avatarKey, mentions);
+  }
 
   async webSocketClose(ws: WebSocket) {
     const state = ws.deserializeAttachment() as UserState;
@@ -190,7 +201,7 @@ export class ChatRoom extends DurableObject<Env> {
     replyFileType?: string | null;
     replyFileSize?: number | null;
     replyFileKey?: string | null;
-  }, messageId?: number, channelId?: number, displayName?: string, avatarKey?: string | null) {
+  }, messageId?: number, channelId?: number, displayName?: string, avatarKey?: string | null, mentions?: string[]) {
     const webSockets = this.ctx.getWebSockets();
     const payload = JSON.stringify({
       type: "chat",
@@ -210,7 +221,9 @@ export class ChatRoom extends DurableObject<Env> {
       reply_file_type: replyData?.replyFileType,
       reply_file_size: replyData?.replyFileSize,
       reply_file_key: replyData?.replyFileKey,
+      mentions: mentions || [],
     });
+
 
 
     for (const ws of webSockets) {

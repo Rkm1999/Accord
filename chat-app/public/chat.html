@@ -136,6 +136,49 @@
         .reaction-badge.active .reaction-count {
             color: #5865f2;
         }
+        .mention-highlight {
+            background: rgba(250, 166, 26, 0.1) !important;
+            border-left: 2px solid #faa61a !important;
+        }
+        .mention-highlight:hover {
+            background: rgba(250, 166, 26, 0.12) !important;
+        }
+        #mentionAutocomplete {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: 0;
+            background: #232428;
+            border: 1px solid #26272D;
+            border-radius: 8px 8px 0 0;
+            margin-bottom: 2px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        .autocomplete-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .autocomplete-item:hover, .autocomplete-item.selected {
+            background: #35373C;
+        }
+        .user-mention {
+            background: rgba(88, 101, 242, 0.3);
+            color: #dee0fc;
+            padding: 0 2px;
+            border-radius: 3px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .user-mention:hover {
+            background: #5865f2;
+            color: white;
+        }
     </style>
 </head>
 
@@ -240,7 +283,8 @@
                     </button>
                 </div>
 
-                <div class="bg-[#383A40] rounded-lg px-4 py-2.5 flex items-center">
+                <div class="bg-[#383A40] rounded-lg px-4 py-2.5 flex items-center relative">
+                    <div id="mentionAutocomplete" class="hidden custom-scrollbar"></div>
                     <button type="button" class="bg-[#B5BAC1] text-[#313338] rounded-full p-0.5 mr-3 hover:text-white transition-colors flex items-center justify-center" onclick="toggleReactionPicker(event, null)">
                         <i data-lucide="smile" class="w-4 h-4 font-bold"></i>
                     </button>
