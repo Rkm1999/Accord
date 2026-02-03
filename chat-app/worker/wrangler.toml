@@ -23,3 +23,8 @@ database_id = ""
 tag = "v1"
 new_sqlite_classes = ["ChatRoom"]
 
+[assets]
+directory = "public"
+binding = "ASSETS"
+
+

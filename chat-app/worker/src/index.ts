@@ -5,7 +5,9 @@ export interface Env {
   CHAT_ROOM: DurableObjectNamespace<ChatRoom>;
   DB: D1Database;
   BUCKET: R2Bucket;
+  ASSETS: Fetcher;
 }
+
 
 async function hashPassword(password: string): Promise<string> {
   const msgUint8 = new TextEncoder().encode(password);
@@ -290,8 +292,13 @@ export default {
       return corsResponse(results, 200, corsHeaders);
     }
 
-    return corsResponse("Not Found", 404, corsHeaders);
+    try {
+      return await env.ASSETS.fetch(request);
+    } catch {
+      return corsResponse("Not Found", 404, corsHeaders);
+    }
   },
 };
+
 
 export { ChatRoom };
