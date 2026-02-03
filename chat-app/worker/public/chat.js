@@ -210,6 +210,9 @@ function displayHistory(messages, lastReadMessageId = 0) {
     let unreadDividerShown = false;
     let maxMessageId = 0;
 
+    console.log('Displaying', messages.length, 'messages');
+    console.log('Message IDs:', messages.map(m => m.id));
+
     messages.forEach(msg => {
         if (msg.message || msg.file_name) {
             if (msg.id > maxMessageId) maxMessageId = msg.id;
@@ -251,6 +254,18 @@ function displayHistory(messages, lastReadMessageId = 0) {
             messageId: maxMessageId
         }));
     }
+
+    // Check if we need to jump to a searched message
+    const searchTargetId = localStorage.getItem('searchTargetMessageId');
+    console.log('Checking for search target:', searchTargetId);
+    if (searchTargetId) {
+        // Increased timeout to ensure all elements are fully rendered
+        console.log('Jumping to message in 500ms...');
+        setTimeout(() => {
+            scrollToMessage(searchTargetId);
+            localStorage.removeItem('searchTargetMessageId');
+        }, 500);
+    }
 }
 
 
@@ -286,6 +301,59 @@ function scrollToBottom() {
         top: messagesContainer.scrollHeight,
         behavior: 'smooth'
     });
+}
+
+function scrollToMessage(messageId) {
+    console.log('scrollToMessage called with ID:', messageId, 'Type:', typeof messageId);
+    
+    // Try different selector variations
+    const selector1 = `[data-message-id="${messageId}"]`;
+    const selector2 = `[data-message-id="'${messageId}'"]`;
+    const selector3 = `[data-message-id='${messageId}']`;
+    
+    console.log('Trying selector 1:', selector1);
+    const msgEl1 = document.querySelector(selector1);
+    console.log('Element 1 found:', !!msgEl1);
+    
+    if (!msgEl1) {
+        console.log('Trying selector 2:', selector2);
+        const msgEl2 = document.querySelector(selector2);
+        console.log('Element 2 found:', !!msgEl2);
+        
+        if (!msgEl2) {
+            console.log('Trying selector 3:', selector3);
+            const msgEl3 = document.querySelector(selector3);
+            console.log('Element 3 found:', !!msgEl3);
+            
+            // List all message elements for debugging
+            const allMessages = document.querySelectorAll('[data-message-id]');
+            console.log('Total messages in DOM:', allMessages.length);
+            console.log('First 5 message IDs:', Array.from(allMessages).slice(0, 5).map(el => el.getAttribute('data-message-id')));
+        }
+    }
+                  
+    const msgEl = msgEl1 || document.querySelector(selector2) || document.querySelector(selector3);
+    if (!msgEl) {
+        console.log('Message element not found for ID:', messageId);
+        return;
+    }
+
+    console.log('Found message element, scrolling to it...');
+    console.log('Element before highlight:', msgEl);
+    
+    // Apply inline styles for immediate visibility (using same color as mention highlight)
+    msgEl.style.backgroundColor = 'rgba(250, 168, 26, 0.15)';
+    msgEl.style.transition = 'background-color 0.3s ease';
+    console.log('Applied inline styles');
+    
+    // Scroll to message
+    msgEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Remove highlight after animation
+    setTimeout(() => {
+        msgEl.style.backgroundColor = '';
+        console.log('Removed inline styles');
+    }, 3000);
 }
 
 // Add scroll listener to auto-hide banner if we scroll up to the divider
@@ -366,6 +434,8 @@ function displayMessage(data, isHistory = false) {
     const msgEl = document.createElement('div');
     msgEl.className = `group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 ${shouldGroup ? 'mt-0' : 'mt-[17px]'} relative message-group ${isMentioned ? 'mention-highlight' : ''}`;
     msgEl.dataset.messageId = data.id || '';
+    console.log('Created message element with ID:', data.id);
+
 
 
     msgEl.dataset.username = data.username;
@@ -1182,14 +1252,18 @@ function displaySearchResults(results) {
         `;
 
         resultEl.addEventListener('click', () => {
+            console.log('Search result clicked:', result);
+            localStorage.setItem('searchTargetMessageId', result.id);
             if (result.channel_id !== currentChannelId) {
                 localStorage.setItem('currentChannelId', result.channel_id);
                 closeSearchModal();
                 window.location.reload();
             } else {
                 closeSearchModal();
+                scrollToMessage(result.id);
             }
         });
+
 
         searchResultsEl.appendChild(resultEl);
     });
