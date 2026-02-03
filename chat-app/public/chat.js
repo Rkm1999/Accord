@@ -82,10 +82,11 @@ function connect() {
     ws.onopen = () => {
         isConnected = true;
         console.log('Connected to chat server');
-        onlineUsers.add(username);
+        onlineUsernames.add(username);
         renderMembers();
         removeSystemMessage();
     };
+
 
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -124,12 +125,13 @@ function connect() {
 
     ws.onclose = (event) => {
         isConnected = false;
-        onlineUsers.delete(username);
+        onlineUsernames.delete(username);
         renderMembers();
         console.log('Disconnected from chat server', event.code, event.reason);
         showSystemMessage('Disconnected. Reconnecting in 3 seconds...');
         setTimeout(connect, 3000);
     };
+
 
     ws.onerror = (error) => {
         console.error('WebSocket error:', error);
@@ -1236,7 +1238,10 @@ async function updateProfile() {
             
             // Update local UI
             document.getElementById('display-username').textContent = displayName;
-            document.getElementById('user-avatar-initial').textContent = displayName.charAt(0).toUpperCase();
+            const avatarInitial = document.getElementById('user-avatar-initial');
+            if (avatarInitial) {
+                avatarInitial.textContent = displayName.charAt(0).toUpperCase();
+            }
             
             alert('Profile updated! Refresh to see changes in old messages.');
             closeProfileModal();
