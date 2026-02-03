@@ -23,7 +23,8 @@ let editingMessageId = null;
 let reactionPickerMessageId = null;
 let channels = [];
 let customEmojis = [];
-let onlineUsers = new Set();
+let allUsers = [];
+let onlineUsernames = new Set();
 
 
 function escapeHtml(text) {
@@ -453,21 +454,18 @@ function removeMessageElement(messageId) {
 function updatePresence(data) {
     const userDisplayName = data.displayName || data.username;
     if (data.event === 'user_joined') {
-        onlineUsers.add(JSON.stringify({
-            username: data.username,
-            displayName: userDisplayName,
-            avatarKey: data.avatarKey
-        }));
+        onlineUsernames.add(data.username);
+        // Add to allUsers if not already there (though they should be registered)
+        if (!allUsers.find(u => u.username === data.username)) {
+            allUsers.push({
+                username: data.username,
+                display_name: userDisplayName,
+                avatar_key: data.avatarKey
+            });
+        }
         showPresenceMessage(`${escapeHtml(userDisplayName)} joined the chat`);
     } else if (data.event === 'user_left') {
-        // Find and remove user
-        for (let userStr of onlineUsers) {
-            const user = JSON.parse(userStr);
-            if (user.username === data.username) {
-                onlineUsers.delete(userStr);
-                break;
-            }
-        }
+        onlineUsernames.delete(data.username);
         showPresenceMessage(`${escapeHtml(userDisplayName)} left the chat`, true);
     }
 
@@ -652,6 +650,19 @@ async function fetchCustomEmojis() {
         customEmojis = await response.json();
     } catch (error) {
         console.error('Error fetching emojis:', error);
+    }
+}
+
+async function fetchRegisteredUsers() {
+    try {
+        const apiUrl = isLocalDev
+            ? 'http://localhost:8787/api/users/list'
+            : '/api/users/list';
+        const response = await fetch(apiUrl);
+        allUsers = await response.json();
+        renderMembers();
+    } catch (error) {
+        console.error('Error fetching registered users:', error);
     }
 }
 
@@ -971,42 +982,51 @@ function renderMembers() {
     const membersSidebar = document.getElementById('members-sidebar');
     if (!membersSidebar) return;
 
-    const users = Array.from(onlineUsers).map(u => JSON.parse(u));
-    const currentChannel = channels.find(c => c.id === currentChannelId);
-
     membersSidebar.innerHTML = '';
 
-    if (users.length === 0) {
-        membersSidebar.innerHTML = '<div class="p-3 text-sm text-[#949BA4]">No users online</div>';
-        return;
-    }
+    const onlineUsers = allUsers.filter(u => onlineUsernames.has(u.username));
+    const offlineUsers = allUsers.filter(u => !onlineUsernames.has(u.username));
 
-    const onlineGroup = document.createElement('div');
-    onlineGroup.className = 'mb-6';
-    onlineGroup.innerHTML = `<h3 class="text-[#949BA4] text-xs font-bold uppercase mb-2 px-2">Online — ${users.length}</h3>`;
-
-    users.forEach(user => {
-        const avatarUrl = user.avatarKey
-            ? (isLocalDev ? `http://localhost:8787/api/file/${user.avatarKey}` : `/api/file/${user.avatarKey}`)
-            : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName)}&background=random`;
+    const renderUser = (user, isOnline) => {
+        const displayName = user.display_name || user.username;
+        const avatarUrl = user.avatar_key
+            ? (isLocalDev ? `http://localhost:8787/api/file/${user.avatar_key}` : `/api/file/${user.avatar_key}`)
+            : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
         
-        const userEl = document.createElement('div');
-        userEl.className = 'flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group opacity-90 hover:opacity-100';
-        userEl.innerHTML = `
-            <div class="relative mr-3">
-                <img src="${avatarUrl}" alt="${escapeHtml(user.displayName)}" class="w-8 h-8 rounded-full object-cover">
-                <div class="absolute bottom-0 right-0 w-3.5 h-3.5 border-[3px] border-[#2B2D31] rounded-full bg-green-500"></div>
-            </div>
-            <div class="flex-1 min-w-0">
-                <div class="text-[15px] font-medium leading-4 text-[#dbdee1] truncate">
-                    ${escapeHtml(user.displayName)}
+        return `
+            <div class="flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group ${isOnline ? 'opacity-100' : 'opacity-40 hover:opacity-100'}">
+                <div class="relative mr-3">
+                    <img src="${avatarUrl}" alt="${escapeHtml(displayName)}" class="w-8 h-8 rounded-full object-cover">
+                    <div class="absolute bottom-0 right-0 w-3.5 h-3.5 border-[3px] border-[#2B2D31] rounded-full ${isOnline ? 'bg-green-500' : 'bg-[#949BA4]'}"></div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-[15px] font-medium leading-4 text-[#dbdee1] truncate">
+                        ${escapeHtml(displayName)}
+                    </div>
                 </div>
             </div>
         `;
-        onlineGroup.appendChild(userEl);
-    });
+    };
 
-    membersSidebar.appendChild(onlineGroup);
+    if (onlineUsers.length > 0) {
+        const onlineGroup = document.createElement('div');
+        onlineGroup.className = 'mb-6';
+        onlineGroup.innerHTML = `
+            <h3 class="text-[#949BA4] text-xs font-bold uppercase mb-2 px-2">Online — ${onlineUsers.length}</h3>
+            ${onlineUsers.map(u => renderUser(u, true)).join('')}
+        `;
+        membersSidebar.appendChild(onlineGroup);
+    }
+
+    if (offlineUsers.length > 0) {
+        const offlineGroup = document.createElement('div');
+        offlineGroup.className = 'mb-6';
+        offlineGroup.innerHTML = `
+            <h3 class="text-[#949BA4] text-xs font-bold uppercase mb-2 px-2">Offline — ${offlineUsers.length}</h3>
+            ${offlineUsers.map(u => renderUser(u, false)).join('')}
+        `;
+        membersSidebar.appendChild(offlineGroup);
+    }
 }
 
 
@@ -1299,6 +1319,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     fetchCustomEmojis();
+    fetchRegisteredUsers();
     fetchChannels();
     connect();
     renderMembers();

@@ -153,6 +153,16 @@ export default {
         return new Response(JSON.stringify(user), { headers });
     }
 
+    if (url.pathname === "/api/users/list" && request.method === "GET") {
+      const { results } = await env.DB.prepare(
+        "SELECT username, display_name, avatar_key FROM users ORDER BY display_name ASC"
+      ).all();
+
+      const headers = new Headers();
+      headers.set("Access-Control-Allow-Origin", "*");
+      return new Response(JSON.stringify(results), { headers });
+    }
+
     if (url.pathname === "/api/emojis" && request.method === "GET") {
       const { results } = await env.DB.prepare(
         "SELECT id, name, file_key, created_by, created_at FROM custom_emojis ORDER BY name ASC"
