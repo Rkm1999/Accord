@@ -3,98 +3,262 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat App</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Accord</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+            background-color: #2B2D31;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #1A1B1E;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background-color: #2B2D31;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .edited-text {
+            color: #949BA4;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+        .message-actions {
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .message-group:hover .message-actions {
+            opacity: 1;
+        }
+        .typing-dot {
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        .typing-dot:nth-child(1) { animation-delay: 0s; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-4px); }
+        }
+        .members-sidebar-hidden {
+            display: none !important;
+        }
+    </style>
 </head>
-<body>
-    <div class="container">
-        <div class="sidebar">
-            <h3>Channels</h3>
-            <div id="channelList" class="channel-list"></div>
-            <button id="createChannelBtn" class="create-channel-btn">+ Create Channel</button>
-            <hr>
-            <h3>Search</h3>
-            <button id="searchBtn" class="search-btn">🔍 Search Messages</button>
-            <hr>
-            <h3>Connected Users</h3>
-            <div id="userCount" class="user-count">Loading...</div>
-            <ul id="userList"></ul>
-            <button id="leaveBtn" class="leave-btn">Leave Chat</button>
-        </div>
-        <div class="chat-area">
-            <div id="chatHistory" class="chat-history">
-                <div class="system-message">Connecting to chat server...</div>
+<body class="bg-[#313338] text-white font-sans overflow-hidden select-none h-screen w-full">
+
+    <div id="app" class="flex h-screen w-full">
+        <!-- 1. Channel Sidebar -->
+        <div class="w-60 bg-[#2B2D31] flex flex-col min-w-[240px]">
+            <!-- Server Header -->
+            <div class="h-12 px-4 flex items-center justify-between shadow-sm hover:bg-[#35373C] cursor-pointer transition-colors border-b border-[#1f2023]">
+                <h1 class="font-bold text-[15px] truncate">Accord</h1>
+                <i data-lucide="settings" class="w-4 h-4 text-[#B5BAC1] hover:text-white cursor-pointer" onclick="openUserSettings()"></i>
             </div>
-            <div id="typingIndicator" class="typing-indicator"></div>
-            <div id="replyBanner" class="reply-banner hidden">
-                <span class="reply-text">Replying to <strong id="replyToUsername"></strong></span>
-                <button type="button" class="cancel-reply" onclick="cancelReply()">✕</button>
+
+            <!-- Channels List -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar py-3" id="channels-container">
+                <!-- Channels injected by JS -->
             </div>
-            <form id="chatForm" class="chat-form">
-                <input type="hidden" id="replyTo" value="">
-                <div class="chat-input-wrapper">
-                    <label for="fileInput" class="file-input-label">
-                        📎
-                    </label>
-                    <input type="file" id="fileInput" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar" multiple>
-                    <div id="filePreview" class="file-preview hidden"></div>
-                    <input type="text" id="message" placeholder="Type a message..." autocomplete="off">
-                    <button type="submit">Send</button>
+
+            <!-- User Control Panel -->
+            <div class="bg-[#232428] px-2 py-1.5 flex items-center">
+                <div class="flex items-center p-1 hover:bg-[#3F4147] rounded cursor-pointer mr-auto group flex-1">
+                    <div class="relative mr-2">
+                        <div class="w-8 h-8 rounded-full bg-[#5865F2] flex items-center justify-center text-sm font-bold">
+                            <span id="user-avatar-initial">U</span>
+                        </div>
+                        <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#232428] rounded-full"></div>
+                    </div>
+                    <div class="text-sm overflow-hidden">
+                        <div class="font-semibold text-white text-[13px] leading-tight truncate" id="display-username">User</div>
+                        <div class="text-[11px] text-[#949BA4] truncate">#<span id="current-channel-badge">general</span></div>
+                    </div>
                 </div>
-            </form>
+                <div class="flex items-center">
+                    <button class="p-1.5 hover:bg-[#3F4147] rounded text-[#dbdee1]" onclick="openSearchModal()">
+                        <i data-lucide="search" class="w-[19px] h-[19px]"></i>
+                    </button>
+                </div>
+            </div>
         </div>
+
+        <!-- 2. Main Chat Area -->
+        <div class="flex-1 flex flex-col min-w-0 bg-[#313338]">
+            <!-- Chat Header -->
+            <header class="h-12 px-4 flex items-center shadow-sm border-b border-[#26272D] flex-shrink-0 justify-between">
+                <div class="flex items-center overflow-hidden">
+                    <i data-lucide="hash" class="text-[#80848E] mr-2 w-6 h-6"></i>
+                    <h3 id="header-channel-name" class="font-bold text-white mr-4 whitespace-nowrap">general</h3>
+                    <span id="header-topic" class="hidden md:block text-xs text-[#949BA4] truncate border-l border-[#3F4147] pl-4">Start of conversation</span>
+                </div>
+
+                <div class="flex items-center space-x-3 text-[#B5BAC1]">
+                    <i id="toggle-members-btn" data-lucide="users" class="w-6 h-6 hover:text-[#dbdee1] cursor-pointer text-white lg:hidden flex"></i>
+                </div>
+            </header>
+
+            <!-- Message List -->
+            <main id="messages-container" class="flex-1 overflow-y-auto custom-scrollbar flex flex-col px-4 pt-4">
+                <!-- Messages injected by JS -->
+            </main>
+
+            <!-- Input Area -->
+            <div class="px-4 pb-6 bg-[#313338] pt-2 flex-shrink-0">
+                <!-- Reply Banner -->
+                <div id="replyBanner" class="hidden mb-2 bg-[#232428] rounded-lg px-3 py-2 flex items-center justify-between">
+                    <div class="flex items-center flex-1 overflow-hidden">
+                        <span class="text-xs text-[#949BA4] mr-2">Replying to</span>
+                        <span class="text-sm font-semibold text-white" id="reply-to-username"></span>
+                    </div>
+                    <button type="button" class="text-[#949BA4] hover:text-white transition-colors" onclick="cancelReply()">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <div class="bg-[#383A40] rounded-lg px-4 py-2.5 flex items-center">
+                    <button class="bg-[#B5BAC1] text-[#313338] rounded-full p-0.5 mr-3 hover:text-white transition-colors flex items-center justify-center" onclick="document.getElementById('fileInput').click()">
+                        <i data-lucide="plus" class="w-4 h-4 font-bold"></i>
+                    </button>
+                    <input type="file" id="fileInput" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar" multiple class="hidden">
+                    <form id="message-form" class="flex-1 flex items-center">
+                        <input type="text" id="message-input" placeholder="Message #general" class="bg-transparent text-[#dbdee1] w-full focus:outline-none placeholder-[#949BA4]" autocomplete="off">
+                        <div class="flex items-center space-x-2 text-[#B5BAC1]">
+                            <button type="button" class="p-1.5 hover:bg-[#404249] rounded transition-colors" onclick="document.getElementById('fileInput').click()">
+                                <i data-lucide="paperclip" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- File Preview -->
+                <div id="filePreview" class="hidden mt-2 flex flex-wrap gap-2">
+                    <!-- File previews injected by JS -->
+                </div>
+
+                <!-- Typing Indicator -->
+                <div id="typingIndicator" class="h-6 mt-1 flex items-center hidden">
+                    <div class="flex space-x-1">
+                        <div class="w-1.5 h-1.5 bg-[#dbdee1] rounded-full typing-dot"></div>
+                        <div class="w-1.5 h-1.5 bg-[#dbdee1] rounded-full typing-dot"></div>
+                        <div class="w-1.5 h-1.5 bg-[#dbdee1] rounded-full typing-dot"></div>
+                    </div>
+                    <span class="text-xs text-[#dbdee1] font-bold ml-2" id="typing-text">Someone is typing...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Members Sidebar -->
+        <aside id="members-sidebar" class="w-[240px] bg-[#2B2D31] flex flex-col overflow-y-auto custom-scrollbar p-3 min-w-[240px] lg:flex">
+            <!-- Members injected by JS -->
+        </aside>
+
     </div>
-    <div id="imageModal" class="image-modal hidden" onclick="closeImageModal()">
-        <span class="image-modal-close">&times;</span>
-        <img id="imageModalImg" src="" alt="Full size">
-    </div>
-    <div id="editModal" class="edit-modal hidden" onclick="if(event.target.id === 'editModal') closeEditModal()">
-        <div class="edit-modal-content" onclick="event.stopPropagation()">
-            <h3>Edit Message</h3>
-            <textarea id="editMessageInput" rows="4"></textarea>
-            <div class="edit-modal-actions">
-                <button type="button" class="cancel-edit" onclick="closeEditModal()">Cancel</button>
-                <button type="button" class="save-edit" onclick="saveEdit()">Save</button>
+
+    <!-- Create Channel Modal -->
+    <div id="createChannelModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden" onclick="if(event.target.id === 'createChannelModal') closeCreateChannelModal()">
+        <div class="bg-[#313338] rounded-lg max-w-md w-full mx-4 shadow-2xl" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between p-4 border-b border-[#26272D]">
+                <h3 class="font-bold text-lg">Create Channel</h3>
+                <button class="text-[#949BA4] hover:text-white transition-colors" onclick="closeCreateChannelModal()">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <input type="text" id="newChannelName" placeholder="Channel name" maxlength="30"
+                    class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all mb-4">
+                <div class="flex space-x-2">
+                    <button type="button" class="flex-1 bg-transparent hover:underline text-[#949BA4] py-2 rounded" onclick="closeCreateChannelModal()">
+                        Cancel
+                    </button>
+                    <button type="button" class="flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2 rounded transition-colors" onclick="createChannel()">
+                        Create
+                    </button>
+                </div>
             </div>
         </div>
     </div>
-    <div id="createChannelModal" class="edit-modal hidden" onclick="if(event.target.id === 'createChannelModal') closeCreateChannelModal()">
-        <div class="edit-modal-content" onclick="event.stopPropagation()">
-            <h3>Create Channel</h3>
-            <input type="text" id="newChannelName" placeholder="Channel name" maxlength="30">
-            <div class="edit-modal-actions">
-                <button type="button" class="cancel-edit" onclick="closeCreateChannelModal()">Cancel</button>
-                <button type="button" class="save-edit" onclick="createChannel()">Create</button>
+
+    <!-- Search Modal -->
+    <div id="searchModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden" onclick="if(event.target.id === 'searchModal') closeSearchModal()">
+        <div class="bg-[#313338] rounded-lg max-w-lg w-full mx-4 shadow-2xl max-h-[80vh] overflow-hidden flex flex-col" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between p-4 border-b border-[#26272D]">
+                <h3 class="font-bold text-lg">Search Messages</h3>
+                <button class="text-[#949BA4] hover:text-white transition-colors" onclick="closeSearchModal()">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
             </div>
-        </div>
-    </div>
-    <div id="searchModal" class="edit-modal hidden" onclick="if(event.target.id === 'searchModal') closeSearchModal()">
-        <div class="search-modal-content" onclick="event.stopPropagation()">
-            <h3>Search Messages</h3>
-            <div class="search-form">
-                <input type="text" id="searchQuery" placeholder="Search text...">
-                <input type="text" id="searchUsername" placeholder="Search by username...">
-                <select id="searchChannelId">
+            <div class="p-4 space-y-3">
+                <input type="text" id="searchQuery" placeholder="Search text..."
+                    class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all">
+                <input type="text" id="searchUsername" placeholder="Search by username..."
+                    class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all">
+                <select id="searchChannelId" class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all">
                     <option value="all">All Channels</option>
                 </select>
-                <div class="date-inputs">
-                    <div>
-                        <label>From:</label>
-                        <input type="date" id="searchStartDate">
+                <div class="flex gap-3">
+                    <div class="flex-1">
+                        <label class="block text-xs text-[#949BA4] mb-1">From</label>
+                        <input type="date" id="searchStartDate" class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all">
                     </div>
-                    <div>
-                        <label>To:</label>
-                        <input type="date" id="searchEndDate">
+                    <div class="flex-1">
+                        <label class="block text-xs text-[#949BA4] mb-1">To</label>
+                        <input type="date" id="searchEndDate" class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all">
                     </div>
                 </div>
-                <button type="button" class="search-submit-btn" onclick="performSearch()">Search</button>
+                <button type="button" class="w-full bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors" onclick="performSearch()">
+                    Search
+                </button>
             </div>
-            <div id="searchResults" class="search-results"></div>
-            <div class="edit-modal-actions">
-                <button type="button" class="cancel-edit" onclick="closeSearchModal()">Close</button>
+            <div id="searchResults" class="flex-1 overflow-y-auto custom-scrollbar border-t border-[#26272D]">
+                <!-- Search results injected by JS -->
             </div>
         </div>
     </div>
+
+    <!-- Edit Message Modal -->
+    <div id="editModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden" onclick="if(event.target.id === 'editModal') closeEditModal()">
+        <div class="bg-[#313338] rounded-lg max-w-md w-full mx-4 shadow-2xl" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between p-4 border-b border-[#26272D]">
+                <h3 class="font-bold text-lg">Edit Message</h3>
+                <button class="text-[#949BA4] hover:text-white transition-colors" onclick="closeEditModal()">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <textarea id="editMessageInput" rows="4"
+                    class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all resize-none mb-4"></textarea>
+                <div class="flex space-x-2">
+                    <button type="button" class="flex-1 bg-transparent hover:underline text-[#949BA4] py-2 rounded" onclick="closeEditModal()">
+                        Cancel
+                    </button>
+                    <button type="button" class="flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2 rounded transition-colors" onclick="saveEdit()">
+                        Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="imageModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50 hidden" onclick="closeImageModal()">
+        <button class="absolute top-4 right-4 text-white hover:text-[#B5BAC1] transition-colors">
+            <i data-lucide="x" class="w-8 h-8"></i>
+        </button>
+        <img id="imageModalImg" src="" alt="Full size" class="max-w-[90vw] max-h-[90vh] object-contain">
+    </div>
+
     <script src="chat.js"></script>
 </body>
 </html>

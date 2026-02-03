@@ -1,9 +1,10 @@
 const username = localStorage.getItem('chatUsername') || 'Anonymous';
-const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const currentChannelId = parseInt(localStorage.getItem('currentChannelId') || '1');
+const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const wsUrl = isLocalDev
     ? `ws://localhost:8787/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}`
     : `ws://${window.location.host}/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}`;
+
 let ws;
 let isConnected = false;
 let typingTimeout;
@@ -12,6 +13,36 @@ let selectedFiles = [];
 let replyingTo = null;
 let editingMessageId = null;
 let channels = [];
+let onlineUsers = new Set();
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+function getFileIcon(type) {
+    if (!type) return '📄';
+    if (type.startsWith('image/')) return '🖼️';
+    if (type.startsWith('video/')) return '🎬';
+    if (type.startsWith('audio/')) return '🎵';
+    if (type.includes('pdf')) return '📕';
+    if (type.includes('word') || type.includes('document')) return '📘';
+    if (type.includes('excel') || type.includes('spreadsheet')) return '📗';
+    if (type.includes('powerpoint') || type.includes('presentation')) return '📙';
+    if (type.includes('zip') || type.includes('rar') || type.includes('compressed')) return '📦';
+    if (type.includes('text')) return '📝';
+    return '📄';
+}
 
 function connect() {
     ws = new WebSocket(wsUrl);
@@ -19,7 +50,9 @@ function connect() {
     ws.onopen = () => {
         isConnected = true;
         console.log('Connected to chat server');
-        clearSystemMessage();
+        onlineUsers.add(username);
+        renderMembers();
+        removeSystemMessage();
     };
 
     ws.onmessage = (event) => {
@@ -33,11 +66,7 @@ function connect() {
                 displayMessage(data);
                 break;
             case 'edit':
-                if (data.replyFileKey || data.replyFileName || data.replyFileType || data.replyFileSize) {
-                    updateMessageEditWithFile(data.messageId, data.newMessage, data.replyFileKey, data.replyFileName, data.replyFileType, data.replyFileSize);
-                } else {
-                    updateMessageEdit(data.messageId, data.newMessage);
-                }
+                updateMessageEdit(data.messageId, data.newMessage);
                 break;
             case 'delete':
                 removeMessageElement(data.messageId);
@@ -59,6 +88,8 @@ function connect() {
 
     ws.onclose = (event) => {
         isConnected = false;
+        onlineUsers.delete(username);
+        renderMembers();
         console.log('Disconnected from chat server', event.code, event.reason);
         showSystemMessage('Disconnected. Reconnecting in 3 seconds...');
         setTimeout(connect, 3000);
@@ -69,82 +100,66 @@ function connect() {
     };
 }
 
-function clearSystemMessage() {
+function removeSystemMessage() {
     const systemMessages = document.querySelectorAll('.system-message');
     systemMessages.forEach(msg => msg.remove());
 }
 
 function showSystemMessage(message) {
-    const chatHistory = document.getElementById('chatHistory');
+    const messagesContainer = document.getElementById('messages-container');
     const msgEl = document.createElement('div');
-    msgEl.className = 'system-message';
-    msgEl.textContent = message;
-    chatHistory.appendChild(msgEl);
-    chatHistory.scrollTop = chatHistory.scrollHeight;
+    msgEl.className = 'flex items-center justify-center mt-auto mb-6';
+    msgEl.innerHTML = `
+        <div class="bg-[#404249] text-[#949BA4] text-sm px-4 py-2 rounded-lg">
+            ${escapeHtml(message)}
+        </div>
+    `;
+    messagesContainer.appendChild(msgEl);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 function displayHistory(messages) {
-    const chatHistory = document.getElementById('chatHistory');
-    chatHistory.innerHTML = '';
+    const messagesContainer = document.getElementById('messages-container');
+    messagesContainer.innerHTML = '';
 
     const currentChannel = channels.find(c => c.id === currentChannelId);
-    const channelName = currentChannel ? `#${currentChannel.name}` : 'Chat';
+    const channelName = currentChannel ? `#${currentChannel.name}` : '#general';
 
-    document.title = `Chat App - ${channelName}`;
+    document.title = `Accord - ${channelName}`;
+    document.getElementById('header-channel-name').textContent = channelName.substring(1);
+    document.getElementById('message-input').placeholder = `Message ${channelName}`;
 
     if (messages.length === 0) {
-        showSystemMessage(`No messages yet in ${channelName}. Be the first to say hello!`);
+        messagesContainer.innerHTML = `
+            <div class="mt-auto mb-6">
+                <div class="h-16 w-16 bg-[#41434A] rounded-full flex items-center justify-center mb-4 mx-auto">
+                    <i data-lucide="hash" class="w-10 h-10 text-white"></i>
+                </div>
+                <h1 class="text-3xl font-bold mb-2 text-center">Welcome to ${channelName}!</h1>
+                <p class="text-[#B5BAC1] text-center">This is start of ${channelName} channel.</p>
+            </div>
+        `;
+        lucide.createIcons();
         return;
     }
 
     messages.forEach(msg => {
         if (msg.message || msg.file_name) {
-            displayMessage(msg);
+            displayMessage(msg, true);
         }
     });
+
+    lucide.createIcons();
 }
 
-function displayMessage(data) {
-    const chatHistory = document.getElementById('chatHistory');
+function displayMessage(data, isHistory = false) {
+    const messagesContainer = document.getElementById('messages-container');
     const time = new Date(data.timestamp).toLocaleTimeString();
-    const msgEl = document.createElement('div');
-    msgEl.className = 'message';
-    msgEl.id = `msg-${data.id || Date.now()}-${data.username}`;
+    const date = new Date(data.timestamp).toLocaleDateString();
     const isOwnMessage = data.username === username;
+    const prevMessage = messagesContainer.lastElementChild;
+    const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(data.username)}&background=random`;
 
-    msgEl.dataset.messageId = data.id || '';
-    msgEl.dataset.username = data.username;
-    msgEl.dataset.message = data.message || '';
-    msgEl.dataset.fileKey = data.file_key || '';
-    msgEl.dataset.fileName = data.file_name || '';
-    msgEl.dataset.fileType = data.file_type || '';
-    msgEl.dataset.fileSize = data.file_size || '';
-    msgEl.dataset.replyTo = data.reply_to || '';
-    msgEl.dataset.replyUsername = data.reply_username || '';
-    msgEl.dataset.replyMessage = data.reply_message || '';
-    msgEl.dataset.replyTimestamp = data.reply_timestamp || '';
-    msgEl.dataset.replyFileKey = data.reply_file_key || '';
-    msgEl.dataset.replyFileName = data.reply_file_name || '';
-    msgEl.dataset.replyFileType = data.reply_file_type || '';
-    msgEl.dataset.replyFileSize = data.reply_file_size || '';
-
-    // Message Content
-    if (data.message) {
-        msgEl.innerHTML += `
-            <span class="time">${time}</span>
-            <span class="username">${escapeHtml(data.username)}:</span>
-            <span class="content">${escapeHtml(data.message)}${data.is_edited ? ' <span class="edited">(edited)</span>' : ''}</span>
-        `;
-    } else if (data.file_key) {
-        msgEl.innerHTML += `
-            <span class="time">${time}</span>
-            <span class="username">${escapeHtml(data.username)}:</span>
-        `;
-    } else {
-        return;
-    }
-
-    // Link Metadata
     const linkMetadata = data.linkMetadata || {
         url: data.link_url,
         title: data.link_title,
@@ -152,21 +167,6 @@ function displayMessage(data) {
         image: data.link_image
     };
 
-    if (linkMetadata && linkMetadata.url) {
-        const hasImage = !!linkMetadata.image;
-        msgEl.innerHTML += `
-            <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="link-preview${!hasImage ? ' no-image' : ''}">
-                ${hasImage ? `<img src="${escapeHtml(linkMetadata.image)}" alt="Link preview" class="link-preview-image" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/default/0.jpg';">` : ''}
-                <div class="link-preview-content">
-                    <div class="link-preview-title">${escapeHtml(linkMetadata.title)}</div>
-                    ${linkMetadata.description ? `<div class="link-preview-description">${escapeHtml(linkMetadata.description)}</div>` : ''}
-                    <div class="link-preview-domain">${escapeHtml(linkMetadata.url)}</div>
-                </div>
-            </a>
-        `;
-    }
-
-    // File Attachments (Main Message)
     const fileAttachment = data.fileAttachment || {
         name: data.file_name,
         type: data.file_type,
@@ -174,115 +174,134 @@ function displayMessage(data) {
         key: data.file_key
     };
 
+    let shouldGroup = false;
+    if (prevMessage && !isHistory) {
+        const prevUsername = prevMessage.dataset.username;
+        const prevTimestamp = parseInt(prevMessage.dataset.timestamp);
+        const timeDiff = Date.now() - prevTimestamp;
+        shouldGroup = prevUsername === data.username && timeDiff < 60000;
+    }
+
+    const msgEl = document.createElement('div');
+    msgEl.className = `group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 ${shouldGroup ? 'mt-0' : 'mt-[17px]'} relative message-group`;
+    msgEl.dataset.messageId = data.id || '';
+    msgEl.dataset.username = data.username;
+    msgEl.dataset.timestamp = data.timestamp;
+
+    let messageHtml = '';
+
+    if (!shouldGroup) {
+        messageHtml += `
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="${avatarUrl}" alt="${escapeHtml(data.username)}" class="w-10 h-10 rounded-full">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        ${escapeHtml(data.username)}
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">${date} at ${time}</span>
+                </div>
+        `;
+    } else {
+        messageHtml += `
+            <div class="w-10 mr-4 text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100 flex items-center justify-end select-none">
+                ${time}
+            </div>
+            <div class="flex-1 min-w-0">
+        `;
+    }
+
+    if (data.message) {
+        messageHtml += `<p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">${escapeHtml(data.message)}${data.is_edited ? '<span class="edited-text">(edited)</span>' : ''}</p>`;
+    }
+
+    if (linkMetadata && linkMetadata.url) {
+        const hasImage = !!linkMetadata.image;
+        messageHtml += `
+            <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="block mt-2 ${!hasImage ? 'border-l-2 border-[#5865F2] pl-3' : ''}">
+                ${hasImage ? `<img src="${escapeHtml(linkMetadata.image)}" alt="Link preview" class="rounded-lg max-w-full mb-2">` : ''}
+                ${linkMetadata.title ? `<div class="text-[#00A8FC] hover:underline font-medium">${escapeHtml(linkMetadata.title)}</div>` : ''}
+                ${linkMetadata.description ? `<div class="text-sm text-[#949BA4] mt-1">${escapeHtml(linkMetadata.description)}</div>` : ''}
+            </a>
+        `;
+    }
+
     if (fileAttachment && fileAttachment.key) {
         const fileUrl = isLocalDev
             ? `http://localhost:8787/api/file/${fileAttachment.key}`
             : `/api/file/${fileAttachment.key}`;
 
         if (fileAttachment.type && fileAttachment.type.startsWith('image/')) {
-            msgEl.innerHTML += `
-                <div class="file-attachment">
-                    <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="file-image" onclick="openImageModal('${fileUrl}')" onerror="this.style.display='none'">
+            messageHtml += `
+                <div class="mt-2">
+                    <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="rounded-lg max-w-[300px] cursor-pointer hover:opacity-90" onclick="openImageModal('${fileUrl}')" onerror="this.style.display='none'">
                 </div>
             `;
         } else {
-            msgEl.innerHTML += `
-                <a href="${fileUrl}" target="_blank" class="file-attachment">
-                    <div class="file-icon">${getFileIcon(fileAttachment.type)}</div>
-                    <div class="file-info">
-                        <span class="file-name">${escapeHtml(fileAttachment.name)}</span>
-                        <span class="file-size">${formatFileSize(fileAttachment.size)}</span>
+            messageHtml += `
+                <a href="${fileUrl}" target="_blank" class="flex items-center mt-2 bg-[#2B2D31] hover:bg-[#36383E] p-3 rounded-lg transition-colors">
+                    <div class="text-2xl mr-3">${getFileIcon(fileAttachment.type)}</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-[#dbdee1] font-medium truncate">${escapeHtml(fileAttachment.name)}</div>
+                        <div class="text-xs text-[#949BA4]">${formatFileSize(fileAttachment.size)}</div>
                     </div>
                 </a>
             `;
         }
     }
 
-    // Reply Logic
     if (data.reply_to) {
         const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
-        const replyFile = data.reply_file_key ? {
-            name: data.reply_file_name,
-            type: data.reply_file_type,
-            size: data.reply_file_size,
-            key: data.reply_file_key
-        } : null;
-
-        let replyContent = '';
-
-        if (replyFile && replyFile.type && replyFile.type.startsWith('image/')) {
-            const replyFileUrl = isLocalDev
-                ? `http://localhost:8787/api/file/${replyFile.key}`
-                : `/api/file/${replyFile.key}`;
-            replyContent += `<div class="file-attachment reply-file"><img src="${replyFileUrl}" alt="${escapeHtml(replyFile.name)}" class="file-image" onclick="openImageModal('${replyFileUrl}')" onerror="this.style.display='none'"></div>`;
-        } else if (replyFile) {
-            const replyFileUrl = isLocalDev
-                ? `http://localhost:8787/api/file/${replyFile.key}`
-                : `/api/file/${replyFile.key}`;
-            replyContent += `<a href="${replyFileUrl}" target="_blank" class="file-attachment reply-file"><div class="file-icon">${getFileIcon(replyFile.type)}</div><div class="file-info"><span class="file-name">${escapeHtml(replyFile.name)}</span><span class="file-size">${formatFileSize(replyFile.size)}</span></div></a>`;
-        }
-
-        if (data.reply_message) {
-            replyContent += `<div class="reply-message">${escapeHtml(data.reply_message)}</div>`;
-        }
-
-        msgEl.innerHTML += `
-            <div class="reply-info">
-                <div class="reply-header">
-                    <span class="reply-username">${escapeHtml(data.reply_username)}</span>
-                    <span class="reply-time">${replyTime}</span>
+        messageHtml += `
+            <div class="mt-2 bg-[#2B2D31] p-2 rounded-lg border-l-2 border-[#5865F2]">
+                <div class="flex items-center text-xs text-[#949BA4] mb-1">
+                    <i data-lucide="corner-up-right" class="w-3 h-3 mr-1"></i>
+                    <span>${escapeHtml(data.reply_username)}</span>
+                    <span class="ml-1">${replyTime}</span>
                 </div>
-                ${replyContent}
+                ${data.reply_message ? `<p class="text-sm text-[#dbdee1]">${escapeHtml(data.reply_message)}</p>` : ''}
             </div>
         `;
     }
 
-    // Message Actions
-    msgEl.innerHTML += `
-        <div class="message-actions">
-            ${isOwnMessage ? `
-                <button type="button" class="action-btn" onclick="startReply(${data.id})">↩</button>
-                <button type="button" class="action-btn" onclick="openEditModal(${data.id})">✎</button>
-                <button type="button" class="action-btn" onclick="deleteMessage(this)">🗑</button>
-            ` : `
-                <button type="button" class="action-btn" onclick="startReply(${data.id})">↩</button>
-            `}
-        </div>
-    `;
+    messageHtml += `
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(${data.id})">
+                    <i data-lucide="reply" class="w-[18px] h-[18px]"></i>
+                </div>
+                ${isOwnMessage ? `
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="openEditModal(${data.id})">
+                        <i data-lucide="edit-2" class="w-[16px] h-[16px]"></i>
+                    </div>
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-red-400 hover:text-red-500" onclick="deleteMessage(${data.id})">
+                        <i data-lucide="trash-2" class="w-[16px] h-[16px]"></i>
+                    </div>
+                ` : ''}
+            </div>
+        `;
 
-    chatHistory.appendChild(msgEl);
-    chatHistory.scrollTop = chatHistory.scrollHeight;
+    msgEl.innerHTML = messageHtml;
+    messagesContainer.appendChild(msgEl);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 function startReply(messageId) {
-    const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
-    if (!msgEl) return;
-
-    const replyUsername = msgEl.dataset.username;
-    const replyMessage = msgEl.dataset.message;
-    const replyFileKey = msgEl.dataset.fileKey;
-    const replyFileName = msgEl.dataset.fileName;
-    const replyFileType = msgEl.dataset.fileType;
-    const replyFileSize = msgEl.dataset.fileSize;
-
-    replyingTo = {
-        messageId,
-        replyUsername,
-        replyMessage,
-        replyFileKey,
-        replyFileName,
-        replyFileType,
-        replyFileSize,
-        replyTimestamp: Date.now() // added missing timestamp
-    };
+    replyingTo = { messageId };
 
     const replyBanner = document.getElementById('replyBanner');
-    const replyToUsernameEl = document.getElementById('replyToUsername');
-    replyToUsernameEl.textContent = replyUsername;
-    replyBanner.classList.remove('hidden');
+    const replyToUsernameEl = document.getElementById('reply-to-username');
 
-    const messageInput = document.getElementById('message');
-    messageInput.focus();
+    const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (msgEl) {
+        replyToUsernameEl.textContent = msgEl.dataset.username;
+    } else {
+        replyToUsernameEl.textContent = 'Unknown';
+    }
+
+    replyBanner.classList.remove('hidden');
+    document.getElementById('message-input').focus();
 }
 
 function cancelReply() {
@@ -295,29 +314,19 @@ function openEditModal(messageId) {
     const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!msgEl) return;
 
-    const currentMessage = msgEl.dataset.message;
-
+    const currentMessage = msgEl.querySelector('p');
     editingMessageId = messageId;
 
     const editModal = document.getElementById('editModal');
     const editInput = document.getElementById('editMessageInput');
-    editInput.value = currentMessage;
-    // Store data on modal if needed, though usually not required if we have ID
-    editModal.dataset.replyFileKey = msgEl.dataset.replyFileKey;
-    editModal.dataset.replyFileName = msgEl.dataset.replyFileName;
-    editModal.dataset.replyFileType = msgEl.dataset.replyFileType;
-    editModal.dataset.replyFileSize = msgEl.dataset.replyFileSize;
-    
+
+    editInput.value = currentMessage ? currentMessage.textContent.replace('(edited)', '').trim() : '';
     editModal.classList.remove('hidden');
+    editInput.focus();
 }
 
-function closeEditModal(event) {
-    if (event && event.target !== event.currentTarget && event.target !== document.getElementById('editModal')) {
-        return;
-    }
-
+function closeEditModal() {
     editingMessageId = null;
-
     const editModal = document.getElementById('editModal');
     editModal.classList.add('hidden');
 }
@@ -341,20 +350,7 @@ function saveEdit() {
     }
 }
 
-function deleteMessage(buttonOrId) {
-    // Handle both button element or direct ID
-    let messageId;
-    if (typeof buttonOrId === 'object') {
-        const msgEl = buttonOrId.closest('.message');
-        messageId = msgEl?.dataset.messageId;
-    } else {
-        messageId = buttonOrId;
-    }
-
-    if (!messageId) {
-        return;
-    }
-
+function deleteMessage(messageId) {
     if (!confirm('Are you sure you want to delete this message?')) {
         return;
     }
@@ -362,155 +358,47 @@ function deleteMessage(buttonOrId) {
     if (isConnected) {
         ws.send(JSON.stringify({
             type: 'delete',
-            messageId: parseInt(messageId)
+            messageId
         }));
     }
 }
 
 function updateMessageEdit(messageId, newMessage) {
-    let msgEl = document.getElementById(`msg-${messageId}-${username}`);
-    if (!msgEl) {
-        msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
-    }
-
-    if (msgEl) {
-        msgEl.dataset.message = newMessage;
-
-        const contentEl = msgEl.querySelector('.content');
-        if (contentEl) {
-            contentEl.innerHTML = `${escapeHtml(newMessage)} <span class="edited">(edited)</span>`;
-        }
-    }
-}
-
-function updateMessageEditWithFile(messageId, newMessage, replyKey, replyName, replyType, replySize) {
-    let msgEl = document.getElementById(`msg-${messageId}-${username}`);
-    if (!msgEl) {
-        msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
-    }
-
+    const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!msgEl) return;
 
-    if (newMessage) {
-        msgEl.dataset.message = newMessage;
-        const contentEl = msgEl.querySelector('.content');
-        if (contentEl) {
-            contentEl.innerHTML = `${escapeHtml(newMessage)} <span class="edited">(edited)</span>`;
-        }
-    }
-
-    const replyFile = replyKey ? {
-        key: replyKey,
-        name: replyName,
-        type: replyType,
-        size: replySize
-    } : null;
-
-    const contentEl = msgEl.querySelector('.content');
-
-    // Only append file logic if content element exists or we are handling a specific file scenario
-    // (Note: This logic appends to the message. Ensure this doesn't duplicate if called multiple times)
-    if (replyFile) {
-        // Check if file attachment already exists to prevent duplication could be added here
-        
-        if (replyFile.type && replyFile.type.startsWith('image/')) {
-            const replyFileUrl = isLocalDev
-                ? `http://localhost:8787/api/file/${replyFile.key}`
-                : `/api/file/${replyFile.key}`;
-            msgEl.innerHTML += `
-                <div class="file-attachment reply-file">
-                    <img src="${replyFileUrl}" alt="${escapeHtml(replyFile.name)}" class="file-image" onclick="openImageModal('${replyFileUrl}')" onerror="this.style.display='none'">
-                </div>
-            `;
-        } else if (replyFile.type) {
-            const replyFileUrl = isLocalDev
-                ? `http://localhost:8787/api/file/${replyFile.key}`
-                : `/api/file/${replyFile.key}`;
-            msgEl.innerHTML += `
-                <a href="${replyFileUrl}" target="_blank" class="file-attachment reply-file">
-                    <div class="file-icon">${getFileIcon(replyFile.type)}</div>
-                    <div class="file-info">
-                        <span class="file-name">${escapeHtml(replyFile.name)}</span>
-                        <span class="file-size">${formatFileSize(replyFile.size)}</span>
-                    </div>
-                </a>
-            `;
-        }
+    const contentEl = msgEl.querySelector('p');
+    if (contentEl) {
+        contentEl.innerHTML = `${escapeHtml(newMessage)} <span class="edited-text">(edited)</span>`;
     }
 }
 
-
 function removeMessageElement(messageId) {
-    // Select by ID or Data Attribute to be safe
-    let msgEl = document.getElementById(`msg-${messageId}-${username}`);
-    if (!msgEl) {
-        msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
-    }
-    
+    const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
     if (msgEl) {
         msgEl.remove();
     }
 }
 
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 function updatePresence(data) {
-    const userCount = document.getElementById('userCount');
-    // const userList = document.getElementById('userList'); // Unused
-
-    if (data.userCount !== undefined && userCount) {
-        userCount.textContent = `${data.userCount} online`;
-    }
-
     if (data.event === 'user_joined') {
+        onlineUsers.add(data.username);
         showPresenceMessage(`${escapeHtml(data.username)} joined the chat`);
-        addUserToList(data.username);
     } else if (data.event === 'user_left') {
+        onlineUsers.delete(data.username);
         showPresenceMessage(`${escapeHtml(data.username)} left the chat`, true);
-        removeUserFromList(data.username);
     }
+
+    renderMembers();
 }
 
 function showPresenceMessage(message, isLeft = false) {
-    const chatHistory = document.getElementById('chatHistory');
+    const messagesContainer = document.getElementById('messages-container');
     const msgEl = document.createElement('div');
-    msgEl.className = `presence-message ${isLeft ? 'user-left' : ''}`;
-    msgEl.textContent = message;
-    chatHistory.appendChild(msgEl);
-    chatHistory.scrollTop = chatHistory.scrollHeight;
-}
-
-function addUserToList(username) {
-    const userList = document.getElementById('userList');
-    if (!userList) return;
-    
-    const existing = Array.from(userList.children).find(li =>
-        li.textContent === username
-    );
-
-    if (!existing) {
-        const li = document.createElement('li');
-        li.textContent = username;
-        userList.appendChild(li);
-    }
-}
-
-function removeUserFromList(username) {
-    const userList = document.getElementById('userList');
-    if (!userList) return;
-
-    const existing = Array.from(userList.children).find(li =>
-        li.textContent === username
-    );
-
-    if (existing) {
-        existing.remove();
-    }
+    msgEl.className = `text-center my-4 ${isLeft ? 'text-red-400' : ''}`;
+    msgEl.innerHTML = `<span class="text-sm text-[#949BA4]">${escapeHtml(message)}</span>`;
+    messagesContainer.appendChild(msgEl);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 function updateTypingIndicator(data) {
@@ -527,19 +415,22 @@ function updateTypingIndicator(data) {
 
 function showTypingIndicator() {
     const typingIndicator = document.getElementById('typingIndicator');
+    const typingText = document.getElementById('typing-text');
     const users = Array.from(typingUsers);
 
     if (users.length === 0) {
-        typingIndicator.innerHTML = '';
+        typingIndicator.classList.add('hidden');
         return;
     }
 
+    typingIndicator.classList.remove('hidden');
+
     if (users.length === 1) {
-        typingIndicator.innerHTML = `${escapeHtml(users[0])} is typing...`;
+        typingText.textContent = `${escapeHtml(users[0])} is typing...`;
     } else if (users.length === 2) {
-        typingIndicator.innerHTML = `${escapeHtml(users[0])} and ${escapeHtml(users[1])} are typing...`;
+        typingText.textContent = `${escapeHtml(users[0])} and ${escapeHtml(users[1])} are typing...`;
     } else {
-        typingIndicator.innerHTML = `${users.length} people are typing...`;
+        typingText.textContent = `${users.length} people are typing...`;
     }
 }
 
@@ -558,25 +449,21 @@ function handleTyping() {
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => {
         sendTypingStatus(false);
-    }, 30000); // Note: 30s is a long timeout for typing, usually 3-5s is better
+    }, 3000);
 }
 
 function handleFileSelect(event) {
     const files = Array.from(event.target.files);
 
-    if (files.length === 0) {
-        return;
-    }
+    if (files.length === 0) return;
 
-    const currentCount = selectedFiles.length;
-    const newCount = currentCount + files.length;
+    const newCount = selectedFiles.length + files.length;
 
     if (newCount > 10) {
-        alert(`You can only upload up to 10 files at a time. Currently selected: ${currentCount}, trying to add: ${files.length}`);
+        alert(`You can only upload up to 10 files at a time.`);
         return;
     }
 
-    const validFiles = [];
     let invalidFiles = false;
 
     files.forEach(file => {
@@ -585,16 +472,13 @@ function handleFileSelect(event) {
             invalidFiles = true;
             return;
         }
-        validFiles.push(file);
     });
 
-    if (invalidFiles) {
-        return;
-    }
+    if (invalidFiles) return;
 
     let processedCount = 0;
 
-    validFiles.forEach(file => {
+    files.forEach(file => {
         const reader = new FileReader();
         reader.onload = (e) => {
             selectedFiles.push({
@@ -604,7 +488,7 @@ function handleFileSelect(event) {
             });
             processedCount++;
 
-            if (processedCount === validFiles.length) {
+            if (processedCount === files.length) {
                 showFilePreview();
             }
         };
@@ -627,18 +511,16 @@ function showFilePreview() {
         if (file.type.startsWith('image/')) {
             const imageDataUrl = `data:${file.type};base64,${file.data}`;
             previewHtml += `
-                <div class="file-preview-item">
-                    <img src="${imageDataUrl}" alt="Preview">
-                    <span class="file-name">${escapeHtml(file.name)}</span>
-                    <button type="button" class="remove-file" onclick="removeFile(${index})">×</button>
+                <div class="relative group">
+                    <img src="${imageDataUrl}" alt="Preview" class="w-16 h-16 rounded-lg object-cover">
+                    <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" onclick="removeFile(${index})">✕</button>
                 </div>
             `;
         } else {
             previewHtml += `
-                <div class="file-preview-item">
-                    <div class="file-icon">📄</div>
-                    <span class="file-name">${escapeHtml(file.name)}</span>
-                    <button type="button" class="remove-file" onclick="removeFile(${index})">×</button>
+                <div class="relative group bg-[#2B2D31] p-2 rounded-lg">
+                    <div class="text-xl">${getFileIcon(file.type)}</div>
+                    <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" onclick="removeFile(${index})">✕</button>
                 </div>
             `;
         }
@@ -665,149 +547,6 @@ function removeFile(index) {
     }
 }
 
-// Make globally available for onclick handlers
-window.removeFile = removeFile;
-
-function formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-}
-
-function getFileIcon(type) {
-    if (!type) return '📄';
-
-    if (type.startsWith('image/')) return '🖼️';
-    if (type.startsWith('video/')) return '🎬';
-    if (type.startsWith('audio/')) return '🎵';
-    if (type.includes('pdf')) return '📕';
-    if (type.includes('word') || type.includes('document')) return '📘';
-    if (type.includes('excel') || type.includes('spreadsheet')) return '📗';
-    if (type.includes('powerpoint') || type.includes('presentation')) return '📙';
-    if (type.includes('zip') || type.includes('rar') || type.includes('compressed')) return '📦';
-    if (type.includes('text')) return '📝';
-
-    return '📄';
-}
-
-// Event Listeners
-const fileInputEl = document.getElementById('fileInput');
-if (fileInputEl) {
-    fileInputEl.addEventListener('change', handleFileSelect);
-}
-
-const chatFormEl = document.getElementById('chatForm');
-if (chatFormEl) {
-    chatFormEl.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const input = document.getElementById('message');
-        const message = input.value.trim();
-
-        if (!message && selectedFiles.length === 0) return;
-
-        if (isConnected) {
-            const filesToSend = [...selectedFiles];
-            const payload = {
-                type: 'chat',
-                message
-            };
-
-            if (replyingTo) {
-                payload.replyTo = replyingTo.messageId;
-                payload.replyUsername = replyingTo.replyUsername;
-                payload.replyMessage = replyingTo.replyMessage;
-                payload.replyTimestamp = Date.now();
-            }
-
-            if (message) {
-                ws.send(JSON.stringify(payload));
-                input.value = '';
-            }
-
-            for (const file of filesToSend) {
-                const filePayload = {
-                    type: 'chat',
-                    message: '',
-                    file
-                };
-
-                if (replyingTo) {
-                    filePayload.replyTo = replyingTo.messageId;
-                    filePayload.replyUsername = replyingTo.replyUsername;
-                    filePayload.replyMessage = replyingTo.replyMessage;
-                    filePayload.replyTimestamp = replyingTo.replyTimestamp;
-                }
-
-                ws.send(JSON.stringify(filePayload));
-            }
-
-            selectedFiles = [];
-            const fileInput = document.getElementById('fileInput');
-            fileInput.value = '';
-            hideFilePreview();
-            cancelReply();
-            sendTypingStatus(false);
-        }
-    });
-}
-
-const messageInputEl = document.getElementById('message');
-if (messageInputEl) {
-    messageInputEl.addEventListener('input', handleTyping);
-    messageInputEl.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            const form = document.getElementById('chatForm');
-            if (form) form.dispatchEvent(new Event('submit'));
-        }
-    });
-}
-
-const leaveBtnEl = document.getElementById('leaveBtn');
-if (leaveBtnEl) {
-    leaveBtnEl.addEventListener('click', () => {
-        if (ws) {
-            ws.close(1000, 'User left');
-        }
-        localStorage.removeItem('chatUsername');
-        window.location.href = 'index.html';
-    });
-}
-
-const createChannelBtnEl = document.getElementById('createChannelBtn');
-if (createChannelBtnEl) {
-    createChannelBtnEl.addEventListener('click', openCreateChannelModal);
-}
-
-const searchBtnEl = document.getElementById('searchBtn');
-if (searchBtnEl) {
-    searchBtnEl.addEventListener('click', openSearchModal);
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    console.log(`Connecting as: ${username} to channel ${currentChannelId}`);
-    fetchChannels();
-    connect();
-});
-
-function openImageModal(imageUrl) {
-    const modal = document.getElementById('imageModal');
-    const modalImg = document.getElementById('imageModalImg');
-    if (modal && modalImg) {
-        modalImg.src = imageUrl;
-        modal.classList.remove('hidden');
-    }
-}
-
-function closeImageModal() {
-    const modal = document.getElementById('imageModal');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
-}
-
 async function fetchChannels() {
     try {
         const apiUrl = isLocalDev
@@ -822,35 +561,36 @@ async function fetchChannels() {
 }
 
 function displayChannels() {
-    const channelList = document.getElementById('channelList');
-    if (!channelList) return;
+    const channelsContainer = document.getElementById('channels-container');
+    if (!channelsContainer) return;
 
-    channelList.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mt-2';
 
     channels.forEach(channel => {
+        const isActive = channel.id === currentChannelId;
         const channelEl = document.createElement('div');
-        channelEl.className = 'channel-item';
-        if (channel.id === currentChannelId) {
-            channelEl.classList.add('active');
-        }
+        channelEl.className = `flex items-center mx-2 px-2 py-[6px] rounded-[4px] cursor-pointer group mb-[2px] ${isActive ? 'bg-[#404249] text-white' : 'text-[#949BA4] hover:bg-[#35373C] hover:text-[#dbdee1]'}`;
+        channelEl.onclick = () => switchChannel(channel.id);
 
         channelEl.innerHTML = `
-            <span class="channel-name"># ${escapeHtml(channel.name)}</span>
+            <i data-lucide="hash" class="mr-1.5 w-5 h-5 text-[#80848E]"></i>
+            <span class="font-medium truncate flex-1">${escapeHtml(channel.name)}</span>
             ${channel.id !== 1 ? `
-                <div class="channel-actions">
-                    <button class="delete-channel-btn" onclick="deleteChannel(${channel.id})">🗑</button>
+                <div class="ml-auto hidden group-hover:flex">
+                    <button class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-white" onclick="event.stopPropagation(); deleteChannel(${channel.id})">
+                        <i data-lucide="trash-2" class="w-[14px] h-[14px]"></i>
+                    </button>
                 </div>
             ` : ''}
         `;
 
-        channelEl.addEventListener('click', (e) => {
-            if (!e.target.classList.contains('delete-channel-btn')) {
-                switchChannel(channel.id);
-            }
-        });
-
-        channelList.appendChild(channelEl);
+        wrapper.appendChild(channelEl);
     });
+
+    channelsContainer.innerHTML = '';
+    channelsContainer.appendChild(wrapper);
+    lucide.createIcons();
 }
 
 function switchChannel(channelId) {
@@ -941,11 +681,6 @@ async function deleteChannel(channelId) {
     }
 }
 
-window.openCreateChannelModal = openCreateChannelModal;
-window.closeCreateChannelModal = closeCreateChannelModal;
-window.createChannel = createChannel;
-window.deleteChannel = deleteChannel;
-
 function openSearchModal() {
     const modal = document.getElementById('searchModal');
     const channelIdSelect = document.getElementById('searchChannelId');
@@ -972,18 +707,18 @@ function closeSearchModal() {
 
 async function performSearch() {
     const query = document.getElementById('searchQuery').value.trim();
-    const username = document.getElementById('searchUsername').value.trim();
+    const usernameInput = document.getElementById('searchUsername').value.trim();
     const channelId = document.getElementById('searchChannelId').value;
     const startDate = document.getElementById('searchStartDate').value;
     const endDate = document.getElementById('searchEndDate').value;
 
-    if (!query && !username && channelId === 'all' && !startDate && !endDate) {
+    if (!query && !usernameInput && channelId === 'all' && !startDate && !endDate) {
         alert('Please enter at least one search criteria');
         return;
     }
 
     const searchResultsEl = document.getElementById('searchResults');
-    searchResultsEl.innerHTML = '<div class="no-results">Searching...</div>';
+    searchResultsEl.innerHTML = '<div class="p-4 text-[#949BA4]">Searching...</div>';
 
     try {
         const apiUrl = isLocalDev
@@ -997,7 +732,7 @@ async function performSearch() {
             },
             body: JSON.stringify({
                 query,
-                username,
+                username: usernameInput,
                 channelId,
                 startDate,
                 endDate,
@@ -1008,7 +743,7 @@ async function performSearch() {
         displaySearchResults(results);
     } catch (error) {
         console.error('Error searching messages:', error);
-        searchResultsEl.innerHTML = '<div class="no-results">Error searching messages</div>';
+        searchResultsEl.innerHTML = '<div class="p-4 text-red-400">Error searching messages</div>';
     }
 }
 
@@ -1016,7 +751,7 @@ function displaySearchResults(results) {
     const searchResultsEl = document.getElementById('searchResults');
 
     if (results.length === 0) {
-        searchResultsEl.innerHTML = '<div class="no-results">No results found</div>';
+        searchResultsEl.innerHTML = '<div class="p-4 text-[#949BA4]">No results found</div>';
         return;
     }
 
@@ -1025,33 +760,177 @@ function displaySearchResults(results) {
     results.forEach(result => {
         const time = new Date(result.timestamp).toLocaleString();
         const resultEl = document.createElement('div');
-        resultEl.className = 'search-result-item';
+        resultEl.className = 'px-4 py-3 hover:bg-[#2e3035] cursor-pointer transition-colors border-b border-[#26272D]';
         resultEl.innerHTML = `
-            <div class="search-result-header">
-                <span class="search-result-username">${escapeHtml(result.username)}</span>
-                <span class="search-result-channel">#${escapeHtml(result.channel_name)}</span>
-                <span class="search-result-time">${time}</span>
+            <div class="flex items-center mb-2">
+                <span class="font-medium text-[#dbdee1] mr-2">${escapeHtml(result.username)}</span>
+                <span class="text-xs text-[#949BA4] bg-[#2B2D31] px-2 py-0.5 rounded">#${escapeHtml(result.channel_name)}</span>
+                <span class="text-xs text-[#949BA4] ml-auto">${time}</span>
             </div>
-            <div class="search-result-message">${escapeHtml(result.message || '<i>File attachment</i>')}</div>
+            <div class="text-sm text-[#dbdee1]">${escapeHtml(result.message || '<i>File attachment</i>')}</div>
         `;
 
         resultEl.addEventListener('click', () => {
             if (result.channel_id !== currentChannelId) {
                 localStorage.setItem('currentChannelId', result.channel_id);
+                closeSearchModal();
                 window.location.reload();
+            } else {
+                closeSearchModal();
             }
-            closeSearchModal();
         });
 
         searchResultsEl.appendChild(resultEl);
     });
 }
 
-window.openSearchModal = openSearchModal;
-window.closeSearchModal = closeSearchModal;
-window.performSearch = performSearch;
+function renderMembers() {
+    const membersSidebar = document.getElementById('members-sidebar');
+    if (!membersSidebar) return;
 
-// Global scope binding for HTML inline events
+    const users = Array.from(onlineUsers);
+    const currentChannel = channels.find(c => c.id === currentChannelId);
+
+    membersSidebar.innerHTML = '';
+
+    if (users.length === 0) {
+        membersSidebar.innerHTML = '<div class="p-3 text-sm text-[#949BA4]">No users online</div>';
+        return;
+    }
+
+    const onlineGroup = document.createElement('div');
+    onlineGroup.className = 'mb-6';
+    onlineGroup.innerHTML = `<h3 class="text-[#949BA4] text-xs font-bold uppercase mb-2 px-2">Online — ${users.length}</h3>`;
+
+    users.forEach(user => {
+        const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(user)}&background=random`;
+        const userEl = document.createElement('div');
+        userEl.className = 'flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group opacity-90 hover:opacity-100';
+        userEl.innerHTML = `
+            <div class="relative mr-3">
+                <img src="${avatarUrl}" alt="${escapeHtml(user)}" class="w-8 h-8 rounded-full">
+                <div class="absolute bottom-0 right-0 w-3.5 h-3.5 border-[3px] border-[#2B2D31] rounded-full bg-green-500"></div>
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="text-[15px] font-medium leading-4 text-[#dbdee1] truncate">
+                    ${escapeHtml(user)}
+                </div>
+            </div>
+        `;
+        onlineGroup.appendChild(userEl);
+    });
+
+    membersSidebar.appendChild(onlineGroup);
+}
+
+function openUserSettings() {
+    if (confirm('Do you want to logout?')) {
+        localStorage.removeItem('chatUsername');
+        window.location.href = 'index.html';
+    }
+}
+
+function openImageModal(imageUrl) {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('imageModalImg');
+    if (modal && modalImg) {
+        modalImg.src = imageUrl;
+        modal.classList.remove('hidden');
+    }
+}
+
+function closeImageModal() {
+    const modal = document.getElementById('imageModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    console.log(`Connecting as: ${username} to channel ${currentChannelId}`);
+    document.getElementById('display-username').textContent = username;
+    document.getElementById('user-avatar-initial').textContent = username.charAt(0).toUpperCase();
+
+    fetchChannels();
+    connect();
+    renderMembers();
+
+    const fileInputEl = document.getElementById('fileInput');
+    if (fileInputEl) {
+        fileInputEl.addEventListener('change', handleFileSelect);
+    }
+
+    const messageFormEl = document.getElementById('message-form');
+    if (messageFormEl) {
+        messageFormEl.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+
+            if (!message && selectedFiles.length === 0) return;
+
+            if (isConnected) {
+                const filesToSend = [...selectedFiles];
+
+                if (message) {
+                    ws.send(JSON.stringify({
+                        type: 'chat',
+                        message,
+                        replyTo: replyingTo?.messageId,
+                    }));
+                    input.value = '';
+                }
+
+                for (const file of filesToSend) {
+                    ws.send(JSON.stringify({
+                        type: 'chat',
+                        message: '',
+                        file,
+                        replyTo: replyingTo?.messageId,
+                    }));
+                }
+
+                selectedFiles = [];
+                const fileInput = document.getElementById('fileInput');
+                fileInput.value = '';
+                hideFilePreview();
+                cancelReply();
+                sendTypingStatus(false);
+            }
+        });
+    }
+
+    const messageInputEl = document.getElementById('message-input');
+    if (messageInputEl) {
+        messageInputEl.addEventListener('input', handleTyping);
+        messageInputEl.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                const form = document.getElementById('message-form');
+                if (form) form.dispatchEvent(new Event('submit'));
+            }
+        });
+    }
+
+    const toggleMembersBtnEl = document.getElementById('toggle-members-btn');
+    if (toggleMembersBtnEl) {
+        toggleMembersBtnEl.addEventListener('click', () => {
+            const membersSidebar = document.getElementById('members-sidebar');
+            const isHidden = membersSidebar.classList.contains('hidden');
+            
+            if (isHidden) {
+                membersSidebar.classList.remove('hidden');
+                membersSidebar.classList.add('lg:flex');
+            } else {
+                membersSidebar.classList.add('hidden');
+                membersSidebar.classList.remove('lg:flex');
+            }
+            
+            toggleMembersBtnEl.classList.toggle('text-white');
+        });
+    }
+});
+
 window.openImageModal = openImageModal;
 window.closeImageModal = closeImageModal;
 window.startReply = startReply;
@@ -1060,3 +939,11 @@ window.openEditModal = openEditModal;
 window.closeEditModal = closeEditModal;
 window.saveEdit = saveEdit;
 window.deleteMessage = deleteMessage;
+window.openCreateChannelModal = openCreateChannelModal;
+window.closeCreateChannelModal = closeCreateChannelModal;
+window.createChannel = createChannel;
+window.deleteChannel = deleteChannel;
+window.openSearchModal = openSearchModal;
+window.closeSearchModal = closeSearchModal;
+window.performSearch = performSearch;
+window.openUserSettings = openUserSettings;
