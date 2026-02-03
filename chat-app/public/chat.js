@@ -876,8 +876,10 @@ async function deleteChannel(channelId) {
 }
 
 function openSearchModal() {
+    closeAllSidebars();
     const modal = document.getElementById('searchModal');
     const channelIdSelect = document.getElementById('searchChannelId');
+
 
     channelIdSelect.innerHTML = '<option value="all">All Channels</option>';
     channels.forEach(channel => {
@@ -981,6 +983,15 @@ function displaySearchResults(results) {
 function renderMembers() {
     const membersSidebar = document.getElementById('members-sidebar');
     if (!membersSidebar) return;
+
+    if (!allUsers || allUsers.length === 0) {
+        membersSidebar.innerHTML = `
+            <div class="p-4 text-center">
+                <p class="text-sm text-[#949BA4]">No registered users found</p>
+            </div>
+        `;
+        return;
+    }
 
     membersSidebar.innerHTML = '';
 
@@ -1089,6 +1100,7 @@ async function uploadEmoji() {
 }
 
 function openProfileModal() {
+    closeAllSidebars();
     const modal = document.getElementById('profileModal');
     const nameInput = document.getElementById('displayNameInput');
     const preview = document.getElementById('profilePreview');
@@ -1306,6 +1318,38 @@ function closeImageModal() {
     }
 }
 
+function closeAllSidebars() {
+    if (window.innerWidth >= 1024) return;
+
+    const channelSidebar = document.getElementById('channel-sidebar');
+    const membersSidebar = document.getElementById('members-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    
+    channelSidebar.classList.remove('active');
+    membersSidebar.classList.remove('active');
+    overlay.classList.add('hidden');
+}
+
+function toggleSidebar(id) {
+    if (window.innerWidth >= 1024) return;
+
+    const sidebar = document.getElementById(id);
+    const otherId = id === 'channel-sidebar' ? 'members-sidebar' : 'channel-sidebar';
+    const otherSidebar = document.getElementById(otherId);
+    const overlay = document.getElementById('sidebar-overlay');
+    
+    const isActive = sidebar.classList.contains('active');
+    
+    if (!isActive) {
+        otherSidebar.classList.remove('active');
+        sidebar.classList.add('active');
+        overlay.classList.remove('hidden');
+    } else {
+        sidebar.classList.remove('active');
+        overlay.classList.add('hidden');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log(`Connecting as: ${username} to channel ${currentChannelId}`);
     
@@ -1319,6 +1363,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     fetchCustomEmojis();
+    
+    // Initial placeholder
+    const membersSidebar = document.getElementById('members-sidebar');
+    if (membersSidebar) {
+        membersSidebar.innerHTML = '<div class="p-4 text-sm text-[#949BA4] text-center">Loading users...</div>';
+    }
+
     fetchRegisteredUsers();
     fetchChannels();
     connect();
@@ -1383,21 +1434,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const toggleChannelsBtnEl = document.getElementById('toggle-channels-btn');
+    if (toggleChannelsBtnEl) {
+        toggleChannelsBtnEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleSidebar('channel-sidebar');
+        });
+    }
+
     const toggleMembersBtnEl = document.getElementById('toggle-members-btn');
     if (toggleMembersBtnEl) {
-        toggleMembersBtnEl.addEventListener('click', () => {
-            const membersSidebar = document.getElementById('members-sidebar');
-            const isHidden = membersSidebar.classList.contains('hidden');
-            
-            if (isHidden) {
-                membersSidebar.classList.remove('hidden');
-                membersSidebar.classList.add('lg:flex');
-            } else {
-                membersSidebar.classList.add('hidden');
-                membersSidebar.classList.remove('lg:flex');
-            }
-            
-            toggleMembersBtnEl.classList.toggle('text-white');
+        toggleMembersBtnEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleSidebar('members-sidebar');
         });
     }
 });
@@ -1428,4 +1477,6 @@ window.openProfileModal = openProfileModal;
 window.closeProfileModal = closeProfileModal;
 window.previewAvatar = previewAvatar;
 window.updateProfile = updateProfile;
+window.closeAllSidebars = closeAllSidebars;
+
 
