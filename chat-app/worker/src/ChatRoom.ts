@@ -232,17 +232,16 @@ export class ChatRoom extends DurableObject<Env> {
       reply_file_size: replyData?.replyFileSize,
       reply_file_key: replyData?.replyFileKey,
       mentions: mentions || [],
+      channelId,
     });
 
 
 
     for (const ws of webSockets) {
-      const state = ws.deserializeAttachment<UserState>();
-      if (state.channelId === channelId) {
-        ws.send(payload);
-      }
+      ws.send(payload);
     }
   }
+
 
   private broadcastUserEvent(eventType: string, username: string, channelId?: number, displayName?: string, avatarKey?: string | null) {
     const webSockets = this.ctx.getWebSockets();

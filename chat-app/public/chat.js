@@ -27,6 +27,7 @@ let allUsers = [];
 let onlineUsernames = new Set();
 let selectedAutocompleteIndex = 0;
 let filteredUsers = [];
+let unreadChannels = new Set(JSON.parse(localStorage.getItem('unreadChannels') || '[]'));
 
 
 function escapeHtml(text) {
@@ -96,7 +97,11 @@ function connect() {
                 displayHistory(data.messages);
                 break;
             case 'chat':
-                displayMessage(data);
+                if (data.channelId === currentChannelId) {
+                    displayMessage(data);
+                } else {
+                    markChannelUnread(data.channelId);
+                }
                 break;
             case 'edit':
                 updateMessageEdit(data.messageId, data.newMessage);
@@ -734,6 +739,12 @@ async function fetchRegisteredUsers() {
     }
 }
 
+function markChannelUnread(channelId) {
+    unreadChannels.add(channelId);
+    localStorage.setItem('unreadChannels', JSON.stringify(Array.from(unreadChannels)));
+    displayChannels();
+}
+
 function displayChannels() {
 
     const channelsContainer = document.getElementById('channels-container');
@@ -744,13 +755,15 @@ function displayChannels() {
 
     channels.forEach(channel => {
         const isActive = channel.id === currentChannelId;
+        const isUnread = unreadChannels.has(channel.id) && !isActive;
         const channelEl = document.createElement('div');
         channelEl.className = `channel-item flex items-center px-2 py-[6px] rounded-[4px] cursor-pointer group mb-[2px] ${isActive ? 'bg-[#404249] text-white' : 'text-[#949BA4] hover:bg-[#35373C] hover:text-[#dbdee1]'}`;
         channelEl.onclick = () => switchChannel(channel.id);
 
         channelEl.innerHTML = `
             <i data-lucide="hash" class="mr-1.5 w-5 h-5 text-[#80848E] flex-shrink-0"></i>
-            <span class="font-medium truncate flex-1">${escapeHtml(channel.name)}</span>
+            <span class="font-medium truncate flex-1 ${isUnread ? 'text-white font-bold' : ''}">${escapeHtml(channel.name)}</span>
+            ${isUnread ? '<div class="w-2 h-2 bg-white rounded-full ml-1"></div>' : ''}
             ${channel.id !== 1 ? `
                 <button class="delete-btn ml-auto opacity-0 group-hover:opacity-100 hover:bg-red-500/20 hover:text-red-400 text-[#949BA4] p-1 rounded cursor-pointer" 
                         onclick="event.stopPropagation(); if(confirm('Are you sure you want to delete this channel? All messages in this channel will be deleted.')) deleteChannel(${channel.id})" 
@@ -771,6 +784,9 @@ function displayChannels() {
 function switchChannel(channelId) {
     if (channelId === currentChannelId) return;
 
+    unreadChannels.delete(channelId);
+    localStorage.setItem('unreadChannels', JSON.stringify(Array.from(unreadChannels)));
+    
     localStorage.setItem('currentChannelId', channelId);
     window.location.reload();
 }
@@ -1565,6 +1581,12 @@ function toggleSidebar(id) {
 document.addEventListener('DOMContentLoaded', () => {
     console.log(`Connecting as: ${username} to channel ${currentChannelId}`);
     
+    // Clear unread for current channel
+    if (unreadChannels.has(currentChannelId)) {
+        unreadChannels.delete(currentChannelId);
+        localStorage.setItem('unreadChannels', JSON.stringify(Array.from(unreadChannels)));
+    }
+
     document.getElementById('display-username').textContent = displayName;
     document.getElementById('user-avatar-initial').textContent = displayName.charAt(0).toUpperCase();
 
