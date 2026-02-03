@@ -398,6 +398,7 @@ function displayMessage(data, isHistory = false) {
     msgEl.innerHTML = messageHtml;
     messagesContainer.appendChild(msgEl);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    lucide.createIcons();
 }
 
 function startReply(messageId) {
@@ -607,16 +608,16 @@ function handleFileSelect(event) {
 
     const newCount = selectedFiles.length + files.length;
 
-    if (newCount > 10) {
-        alert(`You can only upload up to 10 files at a time.`);
+    if (newCount > 20) {
+        alert(`You can only upload up to 20 files at a time.`);
         return;
     }
 
     let invalidFiles = false;
 
     files.forEach(file => {
-        if (file.size > 10 * 1024 * 1024) {
-            alert(`File "${file.name}" is too large. Maximum size is 10MB per file.`);
+        if (file.size > 50 * 1024 * 1024) {
+            alert(`File "${file.name}" is too large. Maximum size is 50MB per file.`);
             invalidFiles = true;
             return;
         }
