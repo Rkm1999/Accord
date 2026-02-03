@@ -7,7 +7,15 @@ export interface Env {
   BUCKET: R2Bucket;
 }
 
+async function hashPassword(password: string): Promise<string> {
+  const msgUint8 = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 export default {
+
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
@@ -50,7 +58,11 @@ export default {
     if (url.pathname === "/api/history") {
       const channelId = url.searchParams.get("channelId") || "1";
       const { results: messages } = await env.DB.prepare(
-        "SELECT id, username, message, timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key, reply_to, reply_username, reply_message, reply_timestamp, is_edited, edited_at, channel_id FROM messages WHERE channel_id = ? ORDER BY timestamp DESC LIMIT 100"
+        `SELECT m.*, u.display_name, u.avatar_key as user_avatar 
+         FROM messages m 
+         LEFT JOIN users u ON m.username = u.username 
+         WHERE m.channel_id = ? 
+         ORDER BY m.timestamp DESC LIMIT 100`
       ).bind(channelId).all() as { results: any[] };
 
       if (messages.length > 0) {
@@ -68,6 +80,77 @@ export default {
       const headers = new Headers();
       headers.set("Access-Control-Allow-Origin", "*");
       return new Response(JSON.stringify(messages.reverse()), { headers });
+    }
+
+    if (url.pathname === "/api/auth/register" && request.method === "POST") {
+      const { username, password } = await request.json();
+      if (!username || !password) return new Response("Missing fields", { status: 400 });
+
+      const passwordHash = await hashPassword(password);
+      try {
+        await env.DB.prepare(
+          "INSERT INTO users (username, password_hash, display_name, created_at) VALUES (?, ?, ?, ?)"
+        ).bind(username, passwordHash, username, Date.now()).run();
+        
+        const headers = new Headers();
+        headers.set("Access-Control-Allow-Origin", "*");
+        return new Response(JSON.stringify({ success: true }), { headers });
+      } catch (e: any) {
+        return new Response("Username taken", { status: 409 });
+      }
+    }
+
+    if (url.pathname === "/api/auth/login" && request.method === "POST") {
+      const { username, password } = await request.json();
+      const user: any = await env.DB.prepare("SELECT * FROM users WHERE username = ?").bind(username).first();
+      
+      if (!user) return new Response("Invalid credentials", { status: 401 });
+      
+      const passwordHash = await hashPassword(password);
+      if (user.password_hash !== passwordHash) return new Response("Invalid credentials", { status: 401 });
+
+      const headers = new Headers();
+      headers.set("Access-Control-Allow-Origin", "*");
+      return new Response(JSON.stringify({ 
+        username: user.username, 
+        displayName: user.display_name,
+        avatarKey: user.avatar_key 
+      }), { headers });
+    }
+
+    if (url.pathname === "/api/user/profile" && request.method === "POST") {
+      const { username, displayName, avatarImage } = await request.json();
+      let avatarKey = null;
+
+      if (avatarImage) {
+        avatarKey = `avatar-${username}-${Date.now()}`;
+        const binaryData = Uint8Array.from(atob(avatarImage.split(',')[1] || avatarImage), c => c.charCodeAt(0));
+        await env.BUCKET.put(avatarKey, binaryData, {
+          httpMetadata: { contentType: "image/png" }
+        });
+      }
+
+      if (avatarKey) {
+        await env.DB.prepare("UPDATE users SET display_name = ?, avatar_key = ? WHERE username = ?")
+          .bind(displayName, avatarKey, username).run();
+      } else {
+        await env.DB.prepare("UPDATE users SET display_name = ? WHERE username = ?")
+          .bind(displayName, username).run();
+      }
+
+      const headers = new Headers();
+      headers.set("Access-Control-Allow-Origin", "*");
+      return new Response(JSON.stringify({ success: true, avatarKey }), { headers });
+    }
+
+    if (url.pathname === "/api/user/info" && request.method === "GET") {
+        const username = url.searchParams.get("username");
+        const user: any = await env.DB.prepare("SELECT username, display_name, avatar_key FROM users WHERE username = ?")
+            .bind(username).first();
+        
+        const headers = new Headers();
+        headers.set("Access-Control-Allow-Origin", "*");
+        return new Response(JSON.stringify(user), { headers });
     }
 
     if (url.pathname === "/api/emojis" && request.method === "GET") {
@@ -183,18 +266,16 @@ export default {
     }
 
     if (url.pathname === "/api/search" && request.method === "POST") {
-      const { query, username, channelId, startDate, endDate } = await request.json();
+      const { query, username: searchUser, channelId, startDate, endDate } = await request.json();
 
       let sql = `
-        SELECT m.id, m.username, m.message, m.timestamp, m.channel_id, c.name as channel_name,
-               m.link_url, m.link_title, m.link_description, m.link_image,
-               m.file_name, m.file_type, m.file_size, m.file_key,
-               m.reply_to, m.reply_username, m.reply_message, m.reply_timestamp,
-               m.is_edited, m.edited_at
+        SELECT m.*, c.name as channel_name, u.display_name, u.avatar_key as user_avatar
         FROM messages m
         LEFT JOIN channels c ON m.channel_id = c.id
+        LEFT JOIN users u ON m.username = u.username
         WHERE 1=1
       `;
+
       const params = [];
 
       if (query && query.trim()) {

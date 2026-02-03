@@ -7,9 +7,12 @@ export interface Env {
 
 interface UserState {
   username: string;
+  displayName: string;
+  avatarKey: string | null;
   joinedAt: number;
   channelId: number;
 }
+
 
 interface LinkMetadata {
   url: string;
@@ -42,6 +45,12 @@ export class ChatRoom extends DurableObject<Env> {
     const username = url.searchParams.get("username") || "Anonymous";
     const channelId = parseInt(url.searchParams.get("channelId") || "1");
 
+    const user: any = await this.env.DB.prepare("SELECT display_name, avatar_key FROM users WHERE username = ?")
+      .bind(username).first();
+    
+    const displayName = user?.display_name || username;
+    const avatarKey = user?.avatar_key || null;
+
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
@@ -49,11 +58,13 @@ export class ChatRoom extends DurableObject<Env> {
 
     server.serializeAttachment({
       username,
+      displayName,
+      avatarKey,
       joinedAt: Date.now(),
       channelId,
     } as UserState);
 
-    this.broadcastUserEvent("user_joined", username, channelId);
+    this.broadcastUserEvent("user_joined", username, channelId, displayName, avatarKey);
 
     await this.sendChatHistory(server, channelId);
 
@@ -63,11 +74,13 @@ export class ChatRoom extends DurableObject<Env> {
     });
   }
 
+
   async webSocketMessage(ws: WebSocket, message: string) {
     const state = ws.deserializeAttachment() as UserState;
-    const { username, channelId } = state;
+    const { username, channelId, displayName, avatarKey } = state;
 
     const data = JSON.parse(message);
+
 
     if (data.type === "switch_channel") {
       const newChannelId = data.channelId;
@@ -159,8 +172,9 @@ export class ChatRoom extends DurableObject<Env> {
     const result = await this.env.DB.prepare(query).bind(...values).run();
     const messageId = result.meta.last_row_id;
 
-    this.broadcastMessage(username, data.message, linkMetadata, fileAttachment, replyData, messageId, channelId);
+    this.broadcastMessage(username, data.message, linkMetadata, fileAttachment, replyData, messageId, channelId, displayName, avatarKey);
   }
+
 
   async webSocketClose(ws: WebSocket) {
     const state = ws.deserializeAttachment() as UserState;
@@ -176,12 +190,14 @@ export class ChatRoom extends DurableObject<Env> {
     replyFileType?: string | null;
     replyFileSize?: number | null;
     replyFileKey?: string | null;
-  }, messageId?: number, channelId?: number) {
+  }, messageId?: number, channelId?: number, displayName?: string, avatarKey?: string | null) {
     const webSockets = this.ctx.getWebSockets();
     const payload = JSON.stringify({
       type: "chat",
       id: messageId,
       username,
+      displayName,
+      avatarKey,
       message,
       timestamp: Date.now(),
       linkMetadata,
@@ -196,6 +212,7 @@ export class ChatRoom extends DurableObject<Env> {
       reply_file_key: replyData?.replyFileKey,
     });
 
+
     for (const ws of webSockets) {
       const state = ws.deserializeAttachment<UserState>();
       if (state.channelId === channelId) {
@@ -204,16 +221,19 @@ export class ChatRoom extends DurableObject<Env> {
     }
   }
 
-  private broadcastUserEvent(eventType: string, username: string, channelId?: number) {
+  private broadcastUserEvent(eventType: string, username: string, channelId?: number, displayName?: string, avatarKey?: string | null) {
     const webSockets = this.ctx.getWebSockets();
     const userCount = webSockets.length;
     const payload = JSON.stringify({
       type: "presence",
       event: eventType,
       username,
+      displayName,
+      avatarKey,
       userCount,
       channelId,
     });
+
 
     for (const ws of webSockets) {
       const state = ws.deserializeAttachment<UserState>();
@@ -241,7 +261,11 @@ export class ChatRoom extends DurableObject<Env> {
 
   private async sendChatHistory(ws: WebSocket, channelId: number) {
     const { results: messages } = await this.env.DB.prepare(
-      "SELECT id, username, message, timestamp, link_url, link_title, link_description, link_image, file_name, file_type, file_size, file_key, reply_to, reply_username, reply_message, reply_timestamp, is_edited, edited_at, channel_id FROM messages WHERE channel_id = ? ORDER BY timestamp DESC LIMIT 50"
+      `SELECT m.*, u.display_name as displayName, u.avatar_key as avatarKey 
+       FROM messages m 
+       LEFT JOIN users u ON m.username = u.username 
+       WHERE m.channel_id = ? 
+       ORDER BY m.timestamp DESC LIMIT 50`
     ).bind(channelId).all() as { results: any[] };
 
     if (messages.length > 0) {

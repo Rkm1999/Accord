@@ -1,5 +1,13 @@
-const username = localStorage.getItem('chatUsername') || 'Anonymous';
+const username = localStorage.getItem('chatUsername');
+if (!username) {
+    window.location.href = 'index.html';
+}
+
+let displayName = localStorage.getItem('displayName') || username;
+let avatarKey = localStorage.getItem('avatarKey') || '';
+
 const currentChannelId = parseInt(localStorage.getItem('currentChannelId') || '1');
+
 const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const wsUrl = isLocalDev
     ? `ws://localhost:8787/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}`
@@ -175,9 +183,16 @@ function displayMessage(data, isHistory = false) {
     const date = new Date(data.timestamp).toLocaleDateString();
     const isOwnMessage = data.username === username;
     const prevMessage = messagesContainer.lastElementChild;
-    const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(data.username)}&background=random`;
+    
+    const display_name = data.displayName || data.display_name || data.username;
+    const avatar_key = data.avatarKey || data.avatar_key || data.user_avatar;
+    
+    const avatarUrl = avatar_key 
+        ? (isLocalDev ? `http://localhost:8787/api/file/${avatar_key}` : `/api/file/${avatar_key}`)
+        : `https://ui-avatars.com/api/?name=${encodeURIComponent(display_name)}&background=random`;
 
     const linkMetadata = data.linkMetadata || {
+
         url: data.link_url,
         title: data.link_title,
         description: data.link_description,
@@ -210,16 +225,17 @@ function displayMessage(data, isHistory = false) {
     if (!shouldGroup) {
         messageHtml += `
             <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
-                <img src="${avatarUrl}" alt="${escapeHtml(data.username)}" class="w-10 h-10 rounded-full">
+                <img src="${avatarUrl}" alt="${escapeHtml(display_name)}" class="w-10 h-10 rounded-full object-cover">
             </div>
             <div class="flex-1 min-w-0">
                 <div class="flex items-center">
                     <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
-                        ${escapeHtml(data.username)}
+                        ${escapeHtml(display_name)}
                     </span>
                     <span class="text-xs text-[#949BA4] ml-1">${date} at ${time}</span>
                 </div>
         `;
+
     } else {
         messageHtml += `
             <div class="w-10 mr-4 text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100 flex items-center justify-end select-none">
@@ -435,16 +451,29 @@ function removeMessageElement(messageId) {
 }
 
 function updatePresence(data) {
+    const userDisplayName = data.displayName || data.username;
     if (data.event === 'user_joined') {
-        onlineUsers.add(data.username);
-        showPresenceMessage(`${escapeHtml(data.username)} joined the chat`);
+        onlineUsers.add(JSON.stringify({
+            username: data.username,
+            displayName: userDisplayName,
+            avatarKey: data.avatarKey
+        }));
+        showPresenceMessage(`${escapeHtml(userDisplayName)} joined the chat`);
     } else if (data.event === 'user_left') {
-        onlineUsers.delete(data.username);
-        showPresenceMessage(`${escapeHtml(data.username)} left the chat`, true);
+        // Find and remove user
+        for (let userStr of onlineUsers) {
+            const user = JSON.parse(userStr);
+            if (user.username === data.username) {
+                onlineUsers.delete(userStr);
+                break;
+            }
+        }
+        showPresenceMessage(`${escapeHtml(userDisplayName)} left the chat`, true);
     }
 
     renderMembers();
 }
+
 
 function showPresenceMessage(message, isLeft = false) {
     const messagesContainer = document.getElementById('messages-container');
@@ -942,7 +971,7 @@ function renderMembers() {
     const membersSidebar = document.getElementById('members-sidebar');
     if (!membersSidebar) return;
 
-    const users = Array.from(onlineUsers);
+    const users = Array.from(onlineUsers).map(u => JSON.parse(u));
     const currentChannel = channels.find(c => c.id === currentChannelId);
 
     membersSidebar.innerHTML = '';
@@ -957,17 +986,20 @@ function renderMembers() {
     onlineGroup.innerHTML = `<h3 class="text-[#949BA4] text-xs font-bold uppercase mb-2 px-2">Online — ${users.length}</h3>`;
 
     users.forEach(user => {
-        const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(user)}&background=random`;
+        const avatarUrl = user.avatarKey
+            ? (isLocalDev ? `http://localhost:8787/api/file/${user.avatarKey}` : `/api/file/${user.avatarKey}`)
+            : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName)}&background=random`;
+        
         const userEl = document.createElement('div');
         userEl.className = 'flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group opacity-90 hover:opacity-100';
         userEl.innerHTML = `
             <div class="relative mr-3">
-                <img src="${avatarUrl}" alt="${escapeHtml(user)}" class="w-8 h-8 rounded-full">
+                <img src="${avatarUrl}" alt="${escapeHtml(user.displayName)}" class="w-8 h-8 rounded-full object-cover">
                 <div class="absolute bottom-0 right-0 w-3.5 h-3.5 border-[3px] border-[#2B2D31] rounded-full bg-green-500"></div>
             </div>
             <div class="flex-1 min-w-0">
                 <div class="text-[15px] font-medium leading-4 text-[#dbdee1] truncate">
-                    ${escapeHtml(user)}
+                    ${escapeHtml(user.displayName)}
                 </div>
             </div>
         `;
@@ -977,9 +1009,12 @@ function renderMembers() {
     membersSidebar.appendChild(onlineGroup);
 }
 
+
 function openUserSettings() {
     if (confirm('Do you want to logout?')) {
         localStorage.removeItem('chatUsername');
+        localStorage.removeItem('displayName');
+        localStorage.removeItem('avatarKey');
         window.location.href = 'index.html';
     }
 }
@@ -1031,6 +1066,90 @@ async function uploadEmoji() {
         }
     };
     reader.readAsDataURL(file);
+}
+
+function openProfileModal() {
+    const modal = document.getElementById('profileModal');
+    const nameInput = document.getElementById('displayNameInput');
+    const preview = document.getElementById('profilePreview');
+
+    nameInput.value = displayName;
+    preview.src = avatarKey 
+        ? (isLocalDev ? `http://localhost:8787/api/file/${avatarKey}` : `/api/file/${avatarKey}`)
+        : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
+
+    modal.classList.remove('hidden');
+}
+
+function closeProfileModal() {
+    document.getElementById('profileModal').classList.add('hidden');
+}
+
+function previewAvatar(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('profilePreview').src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+async function updateProfile() {
+    const nameInput = document.getElementById('displayNameInput');
+    const avatarInput = document.getElementById('avatarInput');
+    const newDisplayName = nameInput.value.trim();
+    const avatarFile = avatarInput.files[0];
+
+    if (!newDisplayName) {
+        alert('Display name cannot be empty');
+        return;
+    }
+
+    let avatarImage = null;
+    if (avatarFile) {
+        avatarImage = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.readAsDataURL(avatarFile);
+        });
+    }
+
+    try {
+        const apiUrl = isLocalDev ? 'http://localhost:8787/api/user/profile' : '/api/user/profile';
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                username, 
+                displayName: newDisplayName, 
+                avatarImage 
+            })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            displayName = newDisplayName;
+            localStorage.setItem('displayName', displayName);
+            if (result.avatarKey) {
+                avatarKey = result.avatarKey;
+                localStorage.setItem('avatarKey', avatarKey);
+            }
+            
+            // Update local UI
+            document.getElementById('display-username').textContent = displayName;
+            document.getElementById('user-avatar-initial').textContent = displayName.charAt(0).toUpperCase();
+            
+            alert('Profile updated! Refresh to see changes in old messages.');
+            closeProfileModal();
+            window.location.reload(); // Reload to update WebSocket connection with new info
+        } else {
+            alert('Failed to update profile');
+        }
+    } catch (error) {
+        console.error('Update profile error:', error);
+    }
 }
 
 function toggleReactionPicker(event, messageId) {
@@ -1169,13 +1288,21 @@ function closeImageModal() {
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log(`Connecting as: ${username} to channel ${currentChannelId}`);
-    document.getElementById('display-username').textContent = username;
-    document.getElementById('user-avatar-initial').textContent = username.charAt(0).toUpperCase();
+    
+    document.getElementById('display-username').textContent = displayName;
+    document.getElementById('user-avatar-initial').textContent = displayName.charAt(0).toUpperCase();
+
+    const avatarDisplay = document.querySelector('#user-avatar-initial').parentElement;
+    if (avatarKey) {
+        const url = isLocalDev ? `http://localhost:8787/api/file/${avatarKey}` : `/api/file/${avatarKey}`;
+        avatarDisplay.innerHTML = `<img src="${url}" class="w-8 h-8 rounded-full object-cover">`;
+    }
 
     fetchCustomEmojis();
     fetchChannels();
     connect();
     renderMembers();
+
 
 
     const fileInputEl = document.getElementById('fileInput');
@@ -1276,4 +1403,8 @@ window.sendReaction = sendReaction;
 window.openEmojiModal = openEmojiModal;
 window.closeEmojiModal = closeEmojiModal;
 window.uploadEmoji = uploadEmoji;
+window.openProfileModal = openProfileModal;
+window.closeProfileModal = closeProfileModal;
+window.previewAvatar = previewAvatar;
+window.updateProfile = updateProfile;
 
