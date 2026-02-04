@@ -1092,6 +1092,13 @@ function startReply(messageId) {
 
     lucide.createIcons();
     document.getElementById('message-input').focus();
+
+    // Scroll message into view if it might be covered
+    if (msgEl) {
+        setTimeout(() => {
+            msgEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+    }
 }
 
 function cancelReply() {
@@ -2536,6 +2543,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (form) form.dispatchEvent(new Event('submit'));
             }
         });
+
+        // Fix for mobile keyboard covering input
+        messageInputEl.addEventListener('focus', () => {
+            if (window.innerWidth < 1024) {
+                setTimeout(() => {
+                    messageInputEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                }, 300);
+            }
+        });
+    }
+
+    // Handle Visual Viewport for mobile keyboard
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => {
+            const app = document.getElementById('app');
+            if (!app) return;
+            
+            const height = window.visualViewport.height;
+            app.style.height = `${height}px`;
+            
+            // If focused on input, make sure it's in view
+            if (document.activeElement && document.activeElement.id === 'message-input') {
+                document.activeElement.scrollIntoView({ behavior: 'auto', block: 'end' });
+            }
+        });
+        
+        window.visualViewport.addEventListener('scroll', () => {
+            // Prevent the viewport from scrolling away from the app
+            window.scrollTo(0, 0);
+        });
     }
 
 
@@ -2740,6 +2777,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let msgTouchStartY = 0;
         let msgCurrentX = 0;
         let msgTouchStartTime = 0;
+        let isHorizontalSwipe = false;
+        let isVerticalScroll = false;
+        let hasDeterminedDirection = false;
 
         // Check if mobile view
         if (window.innerWidth >= 1024) return;
@@ -2749,15 +2789,35 @@ document.addEventListener('DOMContentLoaded', () => {
             msgTouchStartY = e.touches[0].clientY;
             msgCurrentX = msgTouchStartX;
             msgTouchStartTime = Date.now();
+            isHorizontalSwipe = false;
+            isVerticalScroll = false;
+            hasDeterminedDirection = false;
         }, { passive: true });
 
         messageEl.addEventListener('touchmove', (e) => {
-            const deltaX = e.touches[0].clientX - msgTouchStartX;
-            const deltaY = Math.abs(e.touches[0].clientY - msgTouchStartY);
+            const currentX = e.touches[0].clientX;
+            const currentY = e.touches[0].clientY;
+            const deltaX = currentX - msgTouchStartX;
+            const deltaY = currentY - msgTouchStartY;
+            const absX = Math.abs(deltaX);
+            const absY = Math.abs(deltaY);
 
-            // Only allow horizontal swipes within message
-            if (deltaY < 50 && deltaX < 0) {
-                msgCurrentX = e.touches[0].clientX;
+            // 1. Determine direction once
+            if (!hasDeterminedDirection) {
+                if (absX > 10 || absY > 10) {
+                    hasDeterminedDirection = true;
+                    if (absX > absY * 1.5 && deltaX < 0) {
+                        isHorizontalSwipe = true;
+                    } else {
+                        isVerticalScroll = true;
+                    }
+                }
+                return;
+            }
+
+            // 2. Only proceed if we're sure it's a horizontal swipe to the left
+            if (isHorizontalSwipe) {
+                msgCurrentX = currentX;
                 const swipeDistance = msgTouchStartX - msgCurrentX;
 
                 // Apply visual feedback
@@ -2777,7 +2837,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }, { passive: true });
 
         messageEl.addEventListener('touchend', (e) => {
-            const deltaX = e.changedTouches[0].clientX - msgTouchStartX;
+            const currentX = e.changedTouches[0].clientX;
+            const deltaX = currentX - msgTouchStartX;
             const deltaTime = Date.now() - msgTouchStartTime;
             const velocity = Math.abs(deltaX) / deltaTime;
 
@@ -2791,14 +2852,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 indicator.style.transform = 'translateY(-50%) translateX(100%)';
             }
 
-            // Trigger reply if swipe is complete
-            if (deltaX < -messageSwipeThreshold || velocity > messageSwipeVelocity) {
-                const messageId = messageEl.dataset.messageId;
-                if (messageId) {
-                    messageSwiped = true;
-                    startReply(parseInt(messageId));
+            // Trigger reply if swipe is complete AND it was recognized as horizontal
+            if (isHorizontalSwipe) {
+                const swipeDistance = Math.abs(deltaX);
+                // Trigger if dragged far enough OR fast swipe (with minimum distance)
+                if (swipeDistance > messageSwipeThreshold || (velocity > messageSwipeVelocity && swipeDistance > 30)) {
+                    const messageId = messageEl.dataset.messageId;
+                    if (messageId) {
+                        messageSwiped = true;
+                        startReply(parseInt(messageId));
+                    }
                 }
             }
+            
+            isHorizontalSwipe = false;
+            isVerticalScroll = false;
+            hasDeterminedDirection = false;
         }, { passive: true });
 
         messageEl.addEventListener('touchcancel', () => {
