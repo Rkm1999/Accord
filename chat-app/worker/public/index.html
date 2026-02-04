@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome - Accord</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%235865F2'><path d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -37,7 +38,7 @@
                         autocomplete="current-password">
                 </div>
                 <button type="submit" id="submitBtn"
-                    class="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-semibold py-2.5 rounded transition-colors flex items-center justify-center gap-2 mt-6">
+                    class="btn-ripple w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-semibold py-2.5 rounded transition-colors flex items-center justify-center gap-2 mt-6">
                     <i data-lucide="log-in" class="w-4 h-4"></i>
                     <span id="btnText">Login</span>
                 </button>
@@ -96,7 +97,7 @@
                 </div>
                 <div class="flex space-x-3 pt-2">
                     <button type="button" onclick="closeResetModal()" class="flex-1 bg-transparent hover:underline text-[#949BA4]">Cancel</button>
-                    <button type="submit" class="flex-1 bg-[#5865F2] hover:bg-[#4752C4] text-white font-semibold py-2 rounded transition-colors">Reset</button>
+                    <button type="submit" class="btn-ripple flex-1 bg-[#5865F2] hover:bg-[#4752C4] text-white font-semibold py-2 rounded transition-colors">Reset</button>
                 </div>
             </form>
         </div>

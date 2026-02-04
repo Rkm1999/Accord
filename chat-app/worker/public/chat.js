@@ -419,8 +419,10 @@ document.getElementById('messages-container').addEventListener('scroll', () => {
     if (scrollBottomBtn) {
         if (!isNearBottom) {
             scrollBottomBtn.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-2');
+            scrollBottomBtn.classList.add('visible');
         } else {
             scrollBottomBtn.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
+            scrollBottomBtn.classList.remove('visible');
         }
     }
 
@@ -625,6 +627,13 @@ function createMessageElement(data, isHistory = false) {
     }
 
     msgEl.innerHTML = messageHtml;
+
+    // Add swipe-to-reply indicator for mobile
+    const swipeIndicator = document.createElement('div');
+    swipeIndicator.className = 'reply-swipe-indicator';
+    swipeIndicator.innerHTML = '<i data-lucide="reply" class="w-5 h-5"></i>';
+    msgEl.appendChild(swipeIndicator);
+
     return msgEl;
 }
 
@@ -913,6 +922,17 @@ function displayMessage(data, isHistory = false) {
         const oldScrollTop = messagesContainer.scrollTop;
 
         msgEl.innerHTML = messageHtml;
+
+        // Add swipe-to-reply indicator for mobile
+        const swipeIndicator = document.createElement('div');
+        swipeIndicator.className = 'reply-swipe-indicator';
+        swipeIndicator.innerHTML = '<i data-lucide="reply" class="w-5 h-5"></i>';
+        msgEl.appendChild(swipeIndicator);
+
+        // Add animation class for new messages
+        msgEl.classList.add('new-message');
+        setTimeout(() => msgEl.classList.remove('new-message'), 300);
+
         messagesContainer.appendChild(msgEl);
 
         lucide.createIcons();
@@ -929,6 +949,13 @@ function displayMessage(data, isHistory = false) {
         }
     } else {
         msgEl.innerHTML = messageHtml;
+
+        // Add swipe-to-reply indicator for mobile
+        const swipeIndicator = document.createElement('div');
+        swipeIndicator.className = 'reply-swipe-indicator';
+        swipeIndicator.innerHTML = '<i data-lucide="reply" class="w-5 h-5"></i>';
+        msgEl.appendChild(swipeIndicator);
+
         messagesContainer.appendChild(msgEl);
         lucide.createIcons();
     }
@@ -970,6 +997,12 @@ function startReply(messageId) {
     }
 
     replyBanner.classList.remove('hidden');
+
+    // Add animation
+    replyBanner.classList.remove('active');
+    void replyBanner.offsetWidth; // Trigger reflow
+    replyBanner.classList.add('active');
+
     lucide.createIcons();
     document.getElementById('message-input').focus();
 }
@@ -995,6 +1028,8 @@ function openEditModal(messageId) {
 
     editInput.value = currentMessage ? currentMessage.textContent.replace('(edited)', '').trim() : '';
     editModal.classList.remove('hidden');
+    editModal.classList.add('visible');
+    setTimeout(() => editModal.classList.remove('visible'), 300);
     editInput.focus();
 }
 
@@ -1103,6 +1138,7 @@ function showTypingIndicator() {
     }
 
     typingIndicator.classList.remove('hidden');
+    typingIndicator.classList.add('active');
 
     if (users.length === 1) {
         typingText.textContent = `${escapeHtml(users[0])} is typing...`;
@@ -1288,15 +1324,26 @@ function displayChannels() {
         channelEl.innerHTML = `
             <i data-lucide="hash" class="mr-1.5 w-5 h-5 text-[#80848E] flex-shrink-0"></i>
             <span class="font-medium truncate flex-1 ${isUnread ? 'text-white font-bold' : ''}">${escapeHtml(channel.name)}</span>
-            ${isUnread ? '<div class="w-2 h-2 bg-white rounded-full ml-1"></div>' : ''}
+            ${isUnread ? '<div class="unread-badge w-2 h-2 bg-white rounded-full ml-1"></div>' : ''}
             ${channel.id !== 1 ? `
-                <button class="delete-btn ml-auto opacity-0 group-hover:opacity-100 hover:bg-red-500/20 hover:text-red-400 text-[#949BA4] p-1 rounded cursor-pointer" 
-                        onclick="event.stopPropagation(); if(confirm('Are you sure you want to delete this channel? All messages in this channel will be deleted.')) deleteChannel(${channel.id})" 
+                <button class="delete-btn ml-auto opacity-0 group-hover:opacity-100 hover:bg-red-500/20 hover:text-red-400 text-[#949BA4] p-1 rounded cursor-pointer"
+                        onclick="event.stopPropagation(); if(confirm('Are you sure you want to delete this channel? All messages in this channel will be deleted.')) deleteChannel(${channel.id})"
                         title="Delete channel">
                     <i data-lucide="trash-2" class="w-[14px] h-[14px]"></i>
                 </button>
             ` : ''}
         `;
+
+        // Add animation to unread badge
+        if (isUnread) {
+            const badge = channelEl.querySelector('.unread-badge');
+            if (badge) {
+                setTimeout(() => {
+                    badge.classList.add('updated');
+                    setTimeout(() => badge.classList.remove('updated'), 500);
+                }, 10);
+            }
+        }
 
         wrapper.appendChild(channelEl);
     });
@@ -1323,6 +1370,8 @@ function openCreateChannelModal() {
     const input = document.getElementById('newChannelName');
     input.value = '';
     modal.classList.remove('hidden');
+    modal.classList.add('visible');
+    setTimeout(() => modal.classList.remove('visible'), 300);
     
     // Remove any error states
     input.classList.remove('ring-2', 'ring-red-500');
@@ -1502,6 +1551,8 @@ function openSearchModal() {
     document.getElementById('searchResults').innerHTML = '';
 
     modal.classList.remove('hidden');
+    modal.classList.add('visible');
+    setTimeout(() => modal.classList.remove('visible'), 300);
     document.getElementById('searchQuery').focus();
 }
 
@@ -1819,6 +1870,8 @@ function openUserSettings() {
 function openEmojiModal() {
     const modal = document.getElementById('emojiUploadModal');
     modal.classList.remove('hidden');
+    modal.classList.add('visible');
+    setTimeout(() => modal.classList.remove('visible'), 400);
     document.getElementById('emojiNameInput').focus();
 }
 
@@ -1877,6 +1930,8 @@ function openProfileModal() {
         : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
 
     modal.classList.remove('hidden');
+    modal.classList.add('visible');
+    setTimeout(() => modal.classList.remove('visible'), 300);
 }
 
 function closeProfileModal() {
@@ -2105,9 +2160,11 @@ function toggleReactionPicker(event, messageId) {
     }
 
     reactionPickerMessageId = messageId;
-    
+
     // Show picker first to get dimensions
     picker.classList.remove('hidden');
+    picker.classList.add('visible');
+    setTimeout(() => picker.classList.remove('visible'), 400);
 
     // Add custom emojis to picker
     const customSection = document.getElementById('customEmojisInPicker');
@@ -2201,6 +2258,15 @@ function updateMessageReactions(messageId, reactions) {
         `;
     });
     container.innerHTML = html;
+
+    // Add animation to all reaction badges
+    setTimeout(() => {
+        const badges = container.querySelectorAll('.reaction-badge');
+        badges.forEach(badge => {
+            badge.classList.add('updated');
+            setTimeout(() => badge.classList.remove('updated'), 300);
+        });
+    }, 10);
 }
 
 // Close picker when clicking outside
@@ -2234,10 +2300,10 @@ function closeAllSidebars() {
     const channelSidebar = document.getElementById('channel-sidebar');
     const membersSidebar = document.getElementById('members-sidebar');
     const overlay = document.getElementById('sidebar-overlay');
-    
+
     channelSidebar.classList.remove('active');
     membersSidebar.classList.remove('active');
-    overlay.classList.add('hidden');
+    overlay.classList.remove('visible');
 }
 
 function toggleSidebar(id) {
@@ -2247,16 +2313,22 @@ function toggleSidebar(id) {
     const otherId = id === 'channel-sidebar' ? 'members-sidebar' : 'channel-sidebar';
     const otherSidebar = document.getElementById(otherId);
     const overlay = document.getElementById('sidebar-overlay');
-    
+
+    // Clear any inline styles from drag
+    sidebar.style.transform = '';
+    sidebar.style.opacity = '';
+    overlay.style.opacity = '';
+    overlay.style.display = '';
+
     const isActive = sidebar.classList.contains('active');
-    
+
     if (!isActive) {
         otherSidebar.classList.remove('active');
         sidebar.classList.add('active');
-        overlay.classList.remove('hidden');
+        overlay.classList.add('visible');
     } else {
         sidebar.classList.remove('active');
-        overlay.classList.add('hidden');
+        overlay.classList.remove('visible');
     }
 }
 
@@ -2376,6 +2448,270 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleSidebar('members-sidebar');
         });
     }
+
+    // Swipe gesture detection for mobile sidebars
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchEndX = 0;
+    let touchEndY = 0;
+    let messageSwiped = false;
+    const edgeThreshold = 40;
+    const swipeThreshold = 60;
+    let sidebarDragStartX = 0;
+    let isDraggingSidebar = false;
+    let activeDraggingSidebar = null;
+
+    const app = document.getElementById('app');
+    if (app) {
+        app.addEventListener('touchstart', (e) => {
+            if (window.innerWidth >= 1024) return;
+            
+            messageSwiped = false;
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+
+            const channelSidebar = document.getElementById('channel-sidebar');
+            const membersSidebar = document.getElementById('members-sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            
+            const isChannelOpen = channelSidebar.classList.contains('active');
+            const isMembersOpen = membersSidebar.classList.contains('active');
+
+            // 1. Check if starting from edge to OPEN
+            const isLeftEdge = !isChannelOpen && !isMembersOpen && touchStartX < edgeThreshold;
+            const isRightEdge = !isChannelOpen && !isMembersOpen && touchStartX > window.innerWidth - edgeThreshold;
+
+            // 2. Check if starting on an OPEN sidebar to CLOSE
+            const isOnOpenChannel = isChannelOpen && touchStartX < 240;
+            const isOnOpenMembers = isMembersOpen && touchStartX > window.innerWidth - 240;
+
+            if (isLeftEdge || isOnOpenChannel) {
+                activeDraggingSidebar = channelSidebar;
+                isDraggingSidebar = true;
+                sidebarDragStartX = touchStartX;
+                channelSidebar.classList.add('dragging');
+                overlay.classList.add('dragging');
+            } else if (isRightEdge || isOnOpenMembers) {
+                activeDraggingSidebar = membersSidebar;
+                isDraggingSidebar = true;
+                sidebarDragStartX = touchStartX;
+                membersSidebar.classList.add('dragging');
+                overlay.classList.add('dragging');
+            }
+        }, { passive: true });
+
+        app.addEventListener('touchmove', (e) => {
+            if (!isDraggingSidebar || !activeDraggingSidebar) return;
+
+            const currentX = e.touches[0].clientX;
+            const currentY = e.touches[0].clientY;
+            
+            // Prevent dragging if user is scrolling vertically
+            if (Math.abs(currentY - touchStartY) > 50 && Math.abs(currentX - touchStartX) < 20) {
+                isDraggingSidebar = false;
+                return;
+            }
+
+            const isChannel = activeDraggingSidebar.id === 'channel-sidebar';
+            const sidebarWidth = 240;
+            const overlay = document.getElementById('sidebar-overlay');
+
+            if (isChannel) {
+                // Channel Sidebar (From Left)
+                const isAlreadyOpen = activeDraggingSidebar.classList.contains('active');
+                // If opening: currentX is the edge of the sidebar
+                // If closing: sidebar starts at 240, currentX - touchStartX is the movement
+                let offset = isAlreadyOpen ? (240 + (currentX - touchStartX)) : currentX;
+                offset = Math.min(Math.max(offset, 0), sidebarWidth); 
+                
+                const percent = offset / sidebarWidth;
+                activeDraggingSidebar.style.transform = `translateX(${offset - sidebarWidth}px)`;
+                activeDraggingSidebar.style.opacity = '1'; // Keep sidebar opaque
+                if (overlay) {
+                    overlay.style.display = 'block';
+                    overlay.style.opacity = percent;
+                }
+            } else {
+                // Members Sidebar (From Right)
+                const isAlreadyOpen = activeDraggingSidebar.classList.contains('active');
+                const screenWidth = window.innerWidth;
+                let offset = isAlreadyOpen ? (240 + (touchStartX - currentX)) : (screenWidth - currentX);
+                offset = Math.min(Math.max(offset, 0), sidebarWidth);
+
+                const percent = offset / sidebarWidth;
+                activeDraggingSidebar.style.transform = `translateX(${sidebarWidth - offset}px)`;
+                activeDraggingSidebar.style.opacity = '1'; // Keep sidebar opaque
+                if (overlay) {
+                    overlay.style.display = 'block';
+                    overlay.style.opacity = percent;
+                }
+            }
+        }, { passive: true });
+
+        app.addEventListener('touchend', (e) => {
+            if (!isDraggingSidebar || !activeDraggingSidebar) {
+                isDraggingSidebar = false;
+                activeDraggingSidebar = null;
+                return;
+            }
+
+            const currentX = e.changedTouches[0].clientX;
+            const diffX = currentX - touchStartX;
+            const isChannel = activeDraggingSidebar.id === 'channel-sidebar';
+            const isAlreadyOpen = activeDraggingSidebar.classList.contains('active');
+            const overlay = document.getElementById('sidebar-overlay');
+
+            // Threshold logic: Open if dragged > 30% or fast swipe
+            let shouldBeOpen = false;
+            const dragDistance = isChannel ? 
+                (isAlreadyOpen ? 240 + diffX : diffX) : 
+                (isAlreadyOpen ? 240 - diffX : -diffX);
+
+            if (dragDistance > 80) {
+                shouldBeOpen = true;
+            }
+
+            // Apply state
+            activeDraggingSidebar.classList.remove('dragging');
+            overlay.classList.remove('dragging');
+            
+            // Important: Clear inline styles so CSS transitions can take over
+            activeDraggingSidebar.style.transform = '';
+            activeDraggingSidebar.style.opacity = '';
+            overlay.style.opacity = '';
+            overlay.style.display = '';
+
+            if (shouldBeOpen) {
+                activeDraggingSidebar.classList.add('active');
+                overlay.classList.add('visible');
+            } else {
+                activeDraggingSidebar.classList.remove('active');
+                overlay.classList.remove('visible');
+            }
+
+            isDraggingSidebar = false;
+            activeDraggingSidebar = null;
+        }, { passive: true });
+    }
+
+    // Swipe-to-reply functionality for messages
+    const messageSwipeThreshold = 100;
+    const messageSwipeVelocity = 0.3;
+
+    function setupMessageSwipeHandlers() {
+        const messagesContainer = document.getElementById('messages-container');
+        if (!messagesContainer) return;
+
+        // Use MutationObserver to attach handlers to new messages
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === 1 && node.classList && node.classList.contains('message-group')) {
+                        attachSwipeHandler(node);
+                    }
+                });
+            });
+        });
+
+        observer.observe(messagesContainer, { childList: true });
+
+        // Also attach to existing messages
+        messagesContainer.querySelectorAll('.message-group').forEach((msg) => {
+            attachSwipeHandler(msg);
+        });
+    }
+
+    function attachSwipeHandler(messageEl) {
+        let msgTouchStartX = 0;
+        let msgTouchStartY = 0;
+        let msgCurrentX = 0;
+        let msgTouchStartTime = 0;
+
+        // Check if mobile view
+        if (window.innerWidth >= 1024) return;
+
+        messageEl.addEventListener('touchstart', (e) => {
+            msgTouchStartX = e.touches[0].clientX;
+            msgTouchStartY = e.touches[0].clientY;
+            msgCurrentX = msgTouchStartX;
+            msgTouchStartTime = Date.now();
+        }, { passive: true });
+
+        messageEl.addEventListener('touchmove', (e) => {
+            const deltaX = e.touches[0].clientX - msgTouchStartX;
+            const deltaY = Math.abs(e.touches[0].clientY - msgTouchStartY);
+
+            // Only allow horizontal swipes within message
+            if (deltaY < 50 && deltaX < 0) {
+                msgCurrentX = e.touches[0].clientX;
+                const swipeDistance = msgTouchStartX - msgCurrentX;
+
+                // Apply visual feedback
+                const clampedSwipe = Math.min(swipeDistance, messageSwipeThreshold);
+                messageEl.style.transform = `translateX(-${clampedSwipe}px)`;
+                messageEl.classList.add('swiping');
+
+                // Show/hide reply indicator
+                const indicator = messageEl.querySelector('.reply-swipe-indicator');
+                if (indicator) {
+                    const opacity = Math.min(clampedSwipe / 50, 1);
+                    const translate = Math.max(0, messageSwipeThreshold - clampedSwipe);
+                    indicator.style.opacity = opacity;
+                    indicator.style.transform = `translateY(-50%) translateX(${translate}px)`;
+                }
+            }
+        }, { passive: true });
+
+        messageEl.addEventListener('touchend', (e) => {
+            const deltaX = e.changedTouches[0].clientX - msgTouchStartX;
+            const deltaTime = Date.now() - msgTouchStartTime;
+            const velocity = Math.abs(deltaX) / deltaTime;
+
+            messageEl.style.transform = '';
+            messageEl.classList.remove('swiping');
+
+            // Reset indicator
+            const indicator = messageEl.querySelector('.reply-swipe-indicator');
+            if (indicator) {
+                indicator.style.opacity = '0';
+                indicator.style.transform = 'translateY(-50%) translateX(100%)';
+            }
+
+            // Trigger reply if swipe is complete
+            if (deltaX < -messageSwipeThreshold || velocity > messageSwipeVelocity) {
+                const messageId = messageEl.dataset.messageId;
+                if (messageId) {
+                    messageSwiped = true;
+                    startReply(parseInt(messageId));
+                }
+            }
+        }, { passive: true });
+
+        messageEl.addEventListener('touchcancel', () => {
+            messageEl.style.transform = '';
+            messageEl.classList.remove('swiping');
+
+            const indicator = messageEl.querySelector('.reply-swipe-indicator');
+            if (indicator) {
+                indicator.style.opacity = '0';
+                indicator.style.transform = 'translateY(-50%) translateX(100%)';
+            }
+        }, { passive: true });
+
+        messageEl.addEventListener('touchcancel', () => {
+            messageEl.style.transform = '';
+            messageEl.classList.remove('swiping');
+
+            const indicator = messageEl.querySelector('.reply-swipe-indicator');
+            if (indicator) {
+                indicator.style.opacity = '0';
+                indicator.style.transform = 'translateY(-50%) translateX(100%)';
+            }
+        }, { passive: true });
+    }
+
+    // Initialize message swipe handlers
+    setupMessageSwipeHandlers();
 
     // Add scroll listener to search results for auto-loading
     const searchResultsContainer = document.getElementById('searchResults');

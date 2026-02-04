@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Accord</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%235865F2'><path d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -76,22 +77,268 @@
                 transform: translateY(0);
             }
         }
+
+        @keyframes messagePop {
+            0% {
+                opacity: 0;
+                transform: scale(0.95) translateY(20px);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .message-group.new-message {
+            animation: messagePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes mentionGlow {
+            0%, 100% {
+                box-shadow: 0 0 0 rgba(250, 166, 26, 0.1);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(250, 166, 26, 0.3);
+            }
+        }
+
+        .mention-highlight {
+            animation: mentionGlow 2s ease-in-out;
+        }
+
+        @keyframes reactionPop {
+            0% {
+                transform: scale(0);
+            }
+            50% {
+                transform: scale(1.2);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .reaction-badge.updated {
+            animation: reactionPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #replyBanner.active {
+            animation: slideDown 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes channelSwitch {
+            0% {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            50% {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(20px);
+            }
+        }
+
+        .messages-container.switching {
+            animation: channelSwitch 0.4s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+            }
+        }
+
+        .online-status-dot {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes ripple {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        .btn-ripple {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-ripple::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            background-image: radial-gradient(circle, rgba(255, 255, 255, 0.3) 10%, transparent 10.01%);
+            background-repeat: no-repeat;
+            background-position: 50%;
+            transform: scale(10);
+            opacity: 0;
+            transition: transform 0.4s, opacity 0.8s;
+        }
+
+        .btn-ripple:active::after {
+            transform: scale(0);
+            opacity: 0.3;
+            transition: 0s;
+        }
+
+        @keyframes badgeShake {
+            0%, 100% {
+                transform: rotate(0deg);
+            }
+            25% {
+                transform: rotate(-5deg);
+            }
+            75% {
+                transform: rotate(5deg);
+            }
+        }
+
+        .unread-badge.updated {
+            animation: badgeShake 0.5s ease-in-out;
+        }
+
+        @keyframes bounceIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.3) translateY(20px);
+            }
+            50% {
+                transform: scale(1.05) translateY(-5px);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        #reactionPicker.visible {
+            animation: bounceIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        #emojiUploadModal.visible,
+        #createChannelModal.visible,
+        #searchModal.visible,
+        #editModal.visible,
+        #profileModal.visible {
+            animation: bounceIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes scrollBounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-5px);
+            }
+        }
+
+        #scroll-bottom-btn.visible {
+            animation: scrollBounce 1s ease-in-out infinite;
+        }
+
+        @keyframes typingPulse {
+            0%, 100% {
+                opacity: 0.6;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
+
+        #typingIndicator.active {
+            animation: typingPulse 1.5s ease-in-out infinite;
+        }
+
         .modal-content {
             animation: slideIn 0.2s ease-out;
         }
+
         #channel-sidebar, #members-sidebar {
             transition: transform 0.3s ease;
         }
+
         @media (max-width: 1023px) {
             #channel-sidebar, #members-sidebar {
-                display: none !important;
+                display: flex !important;
                 position: fixed;
                 top: 0;
                 bottom: 0;
                 z-index: 70;
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease-out;
+                will-change: transform, opacity;
+                visibility: hidden;
+                pointer-events: none;
+            }
+            #channel-sidebar {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            #members-sidebar {
+                transform: translateX(100%);
+                opacity: 0;
             }
             #channel-sidebar.active, #members-sidebar.active {
+                visibility: visible;
+                pointer-events: auto;
+                opacity: 1;
+                transform: translateX(0);
+            }
+
+            #sidebar-overlay {
+                transition: opacity 0.3s ease;
+                opacity: 0;
+                pointer-events: none;
+                display: block !important; /* Always block, just invisible */
+                visibility: hidden;
+            }
+
+            #sidebar-overlay.visible {
+                opacity: 1;
+                pointer-events: auto;
+                visibility: visible;
+            }
+
+            #channel-sidebar.dragging,
+            #members-sidebar.dragging,
+            #sidebar-overlay.dragging {
+                transition: none !important;
+                visibility: visible !important;
+                pointer-events: auto !important;
+            }
+        }
+            #channel-sidebar.active, #members-sidebar.active {
                 display: flex !important;
+            }
+            #channel-sidebar.active {
+                transform: translateX(0);
+            }
+            #members-sidebar.active {
+                transform: translateX(0);
             }
         }
         @media (min-width: 1024px) {
@@ -179,6 +426,82 @@
             background: #5865f2;
             color: white;
         }
+
+        /* Swipe-to-reply styles */
+        .message-group.swiping {
+            transition: transform 0.1s ease-out;
+            position: relative;
+            z-index: 5;
+        }
+
+        .message-group {
+            overflow-x: visible;
+            width: 100%;
+        }
+
+        .message-group.swiping {
+            overflow-x: hidden;
+        }
+
+        .messages-container-wrapper {
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Ensure all message content wraps */
+        .message-group p,
+        .message-group div {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            max-width: 100%;
+        }
+
+        /* Prevent horizontal scroll on body for mobile */
+        body {
+            overflow-x: hidden;
+            max-width: 100vw;
+        }
+
+        /* Ensure app container doesn't overflow */
+        #app {
+            max-width: 100vw;
+            overflow-x: hidden;
+        }
+
+        .reply-swipe-indicator {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%) translateX(100%);
+            background: #5865F2;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            opacity: 0;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .message-group.swiping .reply-swipe-indicator {
+            opacity: 1;
+        }
+
+        @media (max-width: 1023px) {
+            .reply-swipe-indicator {
+                display: flex;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .reply-swipe-indicator {
+                display: none;
+            }
+        }
     </style>
 </head>
 
@@ -223,7 +546,7 @@
                         <div class="w-8 h-8 rounded-full bg-[#5865F2] flex items-center justify-center text-sm font-bold">
                             <span id="user-avatar-initial">U</span>
                         </div>
-                        <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#232428] rounded-full"></div>
+                        <div class="online-status-dot absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#232428] rounded-full"></div>
                     </div>
                     <div class="text-sm overflow-hidden">
                         <div class="font-semibold text-white text-[13px] leading-tight truncate" id="display-username">User</div>
@@ -281,9 +604,11 @@
 
 
             <!-- Message List -->
-            <main id="messages-container" class="flex-1 overflow-y-auto custom-scrollbar flex flex-col px-4 pt-4">
-                <!-- Messages injected by JS -->
-            </main>
+            <div class="flex-1 overflow-hidden relative">
+                <main id="messages-container" class="h-full overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col px-4 pt-4">
+                    <!-- Messages injected by JS -->
+                </main>
+            </div>
 
             <!-- Input Area -->
             <div class="px-4 pb-6 bg-[#313338] pt-2 flex-shrink-0">
@@ -375,7 +700,7 @@
                     <button type="button" class="flex-1 bg-transparent hover:bg-[#404249] text-[#949BA4] hover:text-[#dbdee1] py-2.5 rounded transition-colors font-medium" onclick="closeCreateChannelModal()">
                         Cancel
                     </button>
-                    <button type="button" id="createChannelBtn" class="flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors flex items-center justify-center" onclick="createChannel()">
+                    <button type="button" id="createChannelBtn" class="btn-ripple flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors flex items-center justify-center" onclick="createChannel()">
                         <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
                         Create Channel
                     </button>
@@ -411,7 +736,7 @@
                         <input type="date" id="searchEndDate" class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all">
                     </div>
                 </div>
-                <button type="button" class="w-full bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors" onclick="performSearch()">
+                <button type="button" class="btn-ripple w-full bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors" onclick="performSearch()">
                     Search
                 </button>
             </div>
@@ -437,7 +762,7 @@
                     <button type="button" class="flex-1 bg-transparent hover:underline text-[#949BA4] py-2 rounded" onclick="closeEditModal()">
                         Cancel
                     </button>
-                    <button type="button" class="flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2 rounded transition-colors" onclick="saveEdit()">
+                    <button type="button" class="btn-ripple flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2 rounded transition-colors" onclick="saveEdit()">
                         Save
                     </button>
                 </div>
@@ -550,7 +875,7 @@
                                 Logout
                             </button>
                         </div>
-                        <button type="button" class="w-full bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors" onclick="updateProfile()">
+                        <button type="button" class="btn-ripple w-full bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors" onclick="updateProfile()">
                             Save Changes
                         </button>
                     </div>
