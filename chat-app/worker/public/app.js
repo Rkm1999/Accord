@@ -1,5 +1,15 @@
 let isLogin = true;
 
+// Show auth container if not redirecting
+window.addEventListener('load', () => {
+    if (!localStorage.getItem('chatUsername')) {
+        const loading = document.getElementById('loading-overlay');
+        const container = document.getElementById('auth-container');
+        if (loading) loading.style.display = 'none';
+        if (container) container.classList.add('opacity-100');
+    }
+});
+
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -20,21 +30,46 @@ function initPwaInstallation() {
     if (!pwaPrompt) return;
     
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || localStorage.getItem('debug_pwa') === 'true';
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || document.referrer.includes('android-app://');
     
-    if (isStandalone) return;
+    console.log('PWA Init:', { isMobile, isStandalone, debug: localStorage.getItem('debug_pwa') });
+
+    // Don't show if already installed
+    if (isStandalone) {
+        pwaPrompt.style.display = 'none';
+        return;
+    }
+
+    // Detection logic
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
     window.addEventListener('beforeinstallprompt', (e) => {
+        console.log('beforeinstallprompt event fired');
         e.preventDefault();
         deferredPrompt = e;
+        
         if (isMobile) {
             pwaPrompt.style.display = 'flex';
             if (installBtn) installBtn.classList.remove('hidden');
         }
     });
 
-    if (localStorage.getItem('debug_pwa') === 'true') {
+    // Special handling for iOS (no beforeinstallprompt)
+    if (isIOS && isMobile) {
         setTimeout(() => {
+            // Re-check standalone in case it changed
+            if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return;
+            
+            pwaPrompt.style.display = 'flex';
+            if (iosInstruction) iosInstruction.classList.remove('hidden');
+            if (window.lucide) window.lucide.createIcons();
+        }, 3000);
+    }
+
+    if (localStorage.getItem('debug_pwa') === 'true') {
+        console.log('PWA Debug Mode Active');
+        setTimeout(() => {
+            if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return;
             pwaPrompt.style.display = 'flex';
             if (installBtn) installBtn.classList.remove('hidden');
             if (window.lucide) window.lucide.createIcons();

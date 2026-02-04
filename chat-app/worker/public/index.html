@@ -9,61 +9,32 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%235865F2'><path d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg>">
+    <script>
+        // Instant redirect if already logged in
+        if (localStorage.getItem('chatUsername')) {
+            window.location.replace('/chat');
+        }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         html, body {
             overscroll-behavior-x: none;
+            overscroll-behavior-y: none;
+            height: 100%;
+            overflow: hidden;
         }
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
-
-        /* PWA Install Prompt */
-        #pwaInstallPrompt {
-            position: fixed;
-            bottom: 24px;
-            left: 16px;
-            right: 16px;
-            background: #2B2D31;
-            border: 1px solid #404249;
-            border-radius: 16px;
-            padding: 16px;
-            z-index: 200;
-            box-shadow: 0 12px 32px rgba(0,0,0,0.5);
-            display: none;
-            flex-direction: column;
-            gap: 12px;
-            animation: slideUpPwa 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-
-        @keyframes slideUpPwa {
-            from { transform: translateY(120%); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-
-        .pwa-icon-container {
-            width: 48px;
-            height: 48px;
-            background: #5865F2;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
-        }
-
-        @media (min-width: 1024px) {
-            #pwaInstallPrompt {
-                max-width: 360px;
-                left: auto;
-                right: 24px;
-            }
-        }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
-    <div class="bg-[#313338] text-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden">
+    <div id="loading-overlay" class="fixed inset-0 bg-[#313338] flex items-center justify-center z-[1000]">
+        <div class="animate-spin rounded-full h-12 w-12 border-4 border-[#5865F2] border-t-transparent"></div>
+    </div>
+
+    <div id="auth-container" class="bg-[#313338] text-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden opacity-0 transition-opacity duration-300">
         <div class="p-8">
             <div class="flex items-center justify-center mb-6">
                 <div class="w-20 h-20 bg-[#5865F2] rounded-full flex items-center justify-center">

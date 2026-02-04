@@ -1,7 +1,4 @@
 const username = localStorage.getItem('chatUsername');
-if (!username) {
-    window.location.href = '/';
-}
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
@@ -26,12 +23,15 @@ function initPwaInstallation() {
     }
     
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || localStorage.getItem('debug_pwa') === 'true';
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || document.referrer.includes('android-app://');
     
     console.log('PWA Init:', { isMobile, isStandalone, debug: localStorage.getItem('debug_pwa') });
 
     // Don't show if already installed
-    if (isStandalone) return;
+    if (isStandalone) {
+        pwaPrompt.style.display = 'none';
+        return;
+    }
 
     // Detection logic
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -49,6 +49,7 @@ function initPwaInstallation() {
 
     if (isIOS && isMobile) {
         setTimeout(() => {
+            if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return;
             pwaPrompt.style.display = 'flex';
             if (iosInstruction) iosInstruction.classList.remove('hidden');
             if (window.lucide) window.lucide.createIcons();
@@ -58,6 +59,7 @@ function initPwaInstallation() {
     if (localStorage.getItem('debug_pwa') === 'true') {
         console.log('PWA Debug Mode Active');
         setTimeout(() => {
+            if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return;
             pwaPrompt.style.display = 'flex';
             if (installBtn) installBtn.classList.remove('hidden');
             if (window.lucide) window.lucide.createIcons();
@@ -1948,7 +1950,7 @@ function openUserSettings() {
         localStorage.removeItem('chatUsername');
         localStorage.removeItem('displayName');
         localStorage.removeItem('avatarKey');
-        window.location.href = '/';
+        window.location.replace('/');
     }
 }
 

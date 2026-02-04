@@ -1,4 +1,4 @@
-const CACHE_NAME = 'accord-v1';
+const CACHE_NAME = 'accord-v3';
 const ASSETS = [
   '/',
   '/chat',
