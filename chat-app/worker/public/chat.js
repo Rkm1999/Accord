@@ -3,6 +3,91 @@ if (!username) {
     window.location.href = '/';
 }
 
+// Register Service Worker for PWA
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('Service Worker registered'))
+            .catch(err => console.log('Service Worker registration failed', err));
+    });
+}
+
+// PWA Installation Logic
+let deferredPrompt;
+
+function initPwaInstallation() {
+    const pwaPrompt = document.getElementById('pwaInstallPrompt');
+    const installBtn = document.getElementById('pwaInstallBtn');
+    const iosInstruction = document.getElementById('iosInstruction');
+
+    if (!pwaPrompt) {
+        console.warn('PWA prompt element not found');
+        return;
+    }
+    
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || localStorage.getItem('debug_pwa') === 'true';
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    
+    console.log('PWA Init:', { isMobile, isStandalone, debug: localStorage.getItem('debug_pwa') });
+
+    // Don't show if already installed
+    if (isStandalone) return;
+
+    // Detection logic
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        console.log('beforeinstallprompt event fired');
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        if (isMobile) {
+            pwaPrompt.style.display = 'flex';
+            if (installBtn) installBtn.classList.remove('hidden');
+        }
+    });
+
+    if (isIOS && isMobile) {
+        setTimeout(() => {
+            pwaPrompt.style.display = 'flex';
+            if (iosInstruction) iosInstruction.classList.remove('hidden');
+            if (window.lucide) window.lucide.createIcons();
+        }, 3000);
+    }
+
+    if (localStorage.getItem('debug_pwa') === 'true') {
+        console.log('PWA Debug Mode Active');
+        setTimeout(() => {
+            pwaPrompt.style.display = 'flex';
+            if (installBtn) installBtn.classList.remove('hidden');
+            if (window.lucide) window.lucide.createIcons();
+        }, 1000);
+    }
+}
+
+function closePwaPrompt() {
+    const pwaPrompt = document.getElementById('pwaInstallPrompt');
+    if (pwaPrompt) pwaPrompt.style.display = 'none';
+}
+
+// Global click handler for install button
+document.addEventListener('click', async (e) => {
+    if (e.target.id === 'pwaInstallBtn' || e.target.closest('#pwaInstallBtn')) {
+        if (!deferredPrompt) {
+            alert('Please use your browser menu to install this app (look for "Install" or "Add to Home Screen").');
+            return;
+        }
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to install: ${outcome}`);
+        deferredPrompt = null;
+        closePwaPrompt();
+    }
+});
+
+window.closePwaPrompt = closePwaPrompt;
+initPwaInstallation();
+
 let displayName = localStorage.getItem('displayName') || username;
 let avatarKey = localStorage.getItem('avatarKey') || '';
 
@@ -2583,15 +2668,15 @@ document.addEventListener('DOMContentLoaded', () => {
             overlay.style.opacity = '';
             overlay.style.display = '';
 
+            const sidebarToClose = activeDraggingSidebar;
             if (shouldBeOpen) {
-                activeDraggingSidebar.classList.add('active');
+                sidebarToClose.classList.add('active');
                 overlay.classList.add('visible');
-                overlay.classList.remove('hidden');
             } else {
-                activeDraggingSidebar.classList.remove('active');
+                sidebarToClose.classList.remove('active');
                 overlay.classList.remove('visible');
                 setTimeout(() => {
-                    if (!activeDraggingSidebar.classList.contains('active')) {
+                    if (!sidebarToClose.classList.contains('active')) {
                         overlay.classList.add('hidden');
                     }
                 }, 300);

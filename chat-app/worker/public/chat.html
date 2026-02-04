@@ -470,38 +470,45 @@
             touch-action: pan-y;
         }
 
-        .reply-swipe-indicator {
-            position: absolute;
-            right: 0;
-            top: 50%;
-            transform: translateY(-50%) translateX(100%);
+        /* PWA Install Prompt */
+        #pwaInstallPrompt {
+            position: fixed;
+            bottom: 24px;
+            left: 16px;
+            right: 16px;
+            background: #2B2D31;
+            border: 1px solid #404249;
+            border-radius: 16px;
+            padding: 16px;
+            z-index: 200;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            animation: slideUpPwa 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes slideUpPwa {
+            from { transform: translateY(120%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .pwa-icon-container {
+            width: 48px;
+            height: 48px;
             background: #5865F2;
-            border-radius: 50%;
-            width: 44px;
-            height: 44px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
-            opacity: 0;
-            transition: opacity 0.15s ease, transform 0.15s ease;
-            pointer-events: none;
-            z-index: 50;
-        }
-
-        .message-group.swiping .reply-swipe-indicator {
-            opacity: 1;
-        }
-
-        @media (max-width: 1023px) {
-            .reply-swipe-indicator {
-                display: flex;
-            }
+            box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
         }
 
         @media (min-width: 1024px) {
-            .reply-swipe-indicator {
-                display: none;
+            #pwaInstallPrompt {
+                max-width: 360px;
+                left: auto;
+                right: 24px;
             }
         }
     </style>
@@ -883,6 +890,28 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- PWA Install Prompt -->
+    <div id="pwaInstallPrompt">
+        <div class="flex items-center gap-4">
+            <div class="pwa-icon-container flex-shrink-0">
+                <i data-lucide="message-square" class="text-white w-6 h-6"></i>
+            </div>
+            <div class="flex-1">
+                <h4 class="font-bold text-white text-[15px]">Accord Chat</h4>
+                <p class="text-[#949BA4] text-xs leading-tight">Install our app for real-time notifications and a faster experience.</p>
+            </div>
+            <button onclick="closePwaPrompt()" class="text-[#949BA4] hover:text-[#dbdee1] p-1 transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <button id="pwaInstallBtn" class="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold py-2.5 rounded-lg text-sm transition-all shadow-lg active:scale-[0.98] hidden">
+            Install App
+        </button>
+        <div id="iosInstruction" class="hidden text-[13px] text-[#dbdee1] border-t border-[#404249] pt-3 flex items-center justify-center gap-1.5">
+            Tap the <i data-lucide="share" class="w-4 h-4 text-[#00A8FC]"></i> icon and "Add to Home Screen"
         </div>
     </div>
 

@@ -9,6 +9,60 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+// PWA Installation Logic
+let deferredPrompt;
+
+function initPwaInstallation() {
+    const pwaPrompt = document.getElementById('pwaInstallPrompt');
+    const installBtn = document.getElementById('pwaInstallBtn');
+    const iosInstruction = document.getElementById('iosInstruction');
+
+    if (!pwaPrompt) return;
+    
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || localStorage.getItem('debug_pwa') === 'true';
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    
+    if (isStandalone) return;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (isMobile) {
+            pwaPrompt.style.display = 'flex';
+            if (installBtn) installBtn.classList.remove('hidden');
+        }
+    });
+
+    if (localStorage.getItem('debug_pwa') === 'true') {
+        setTimeout(() => {
+            pwaPrompt.style.display = 'flex';
+            if (installBtn) installBtn.classList.remove('hidden');
+            if (window.lucide) window.lucide.createIcons();
+        }, 1000);
+    }
+}
+
+function closePwaPrompt() {
+    const pwaPrompt = document.getElementById('pwaInstallPrompt');
+    if (pwaPrompt) pwaPrompt.style.display = 'none';
+}
+
+document.addEventListener('click', async (e) => {
+    if (e.target.id === 'pwaInstallBtn' || e.target.closest('#pwaInstallBtn')) {
+        if (!deferredPrompt) {
+            alert('Please use your browser menu to install this app.');
+            return;
+        }
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        closePwaPrompt();
+    }
+});
+
+window.closePwaPrompt = closePwaPrompt;
+initPwaInstallation();
+
 const authForm = document.getElementById('authForm');
 const toggleAuth = document.getElementById('toggleAuth');
 const title = document.getElementById('title');
