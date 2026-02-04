@@ -1,5 +1,14 @@
 let isLogin = true;
 
+// Register Service Worker for PWA
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('Service Worker registered'))
+            .catch(err => console.log('Service Worker registration failed', err));
+    });
+}
+
 const authForm = document.getElementById('authForm');
 const toggleAuth = document.getElementById('toggleAuth');
 const title = document.getElementById('title');
@@ -51,7 +60,7 @@ authForm.addEventListener('submit', async (e) => {
                 localStorage.setItem('chatUsername', data.username);
                 localStorage.setItem('displayName', data.displayName);
                 localStorage.setItem('avatarKey', data.avatarKey || '');
-                window.location.href = 'chat.html';
+                window.location.href = '/chat';
             } else {
                 if (data.recoveryKey) {
                     showRecoveryKey(data.recoveryKey);

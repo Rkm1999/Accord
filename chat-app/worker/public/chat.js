@@ -1,6 +1,6 @@
 const username = localStorage.getItem('chatUsername');
 if (!username) {
-    window.location.href = 'index.html';
+    window.location.href = '/';
 }
 
 let displayName = localStorage.getItem('displayName') || username;
@@ -1017,7 +1017,6 @@ function cancelReply() {
 
 
 function openEditModal(messageId) {
-    closeAllSidebars();
     const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!msgEl) return;
 
@@ -1367,7 +1366,6 @@ function switchChannel(channelId) {
 let escapeHandler = null;
 
 function openCreateChannelModal() {
-    closeAllSidebars();
     const modal = document.getElementById('createChannelModal');
     const input = document.getElementById('newChannelName');
     input.value = '';
@@ -1865,12 +1863,11 @@ function openUserSettings() {
         localStorage.removeItem('chatUsername');
         localStorage.removeItem('displayName');
         localStorage.removeItem('avatarKey');
-        window.location.href = 'index.html';
+        window.location.href = '/';
     }
 }
 
 function openEmojiModal() {
-    closeAllSidebars();
     const modal = document.getElementById('emojiUploadModal');
     modal.classList.remove('hidden');
     modal.classList.add('visible');
@@ -2281,7 +2278,7 @@ document.addEventListener('click', (e) => {
 });
 
 function openImageModal(imageUrl) {
-    closeAllSidebars();
+
     const modal = document.getElementById('imageModal');
     const modalImg = document.getElementById('imageModalImg');
     if (modal && modalImg) {
@@ -2493,12 +2490,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 isDraggingSidebar = true;
                 sidebarDragStartX = touchStartX;
                 channelSidebar.classList.add('dragging');
+                overlay.classList.remove('hidden');
                 overlay.classList.add('dragging');
             } else if (isRightEdge || isOnOpenMembers) {
                 activeDraggingSidebar = membersSidebar;
                 isDraggingSidebar = true;
                 sidebarDragStartX = touchStartX;
                 membersSidebar.classList.add('dragging');
+                overlay.classList.remove('hidden');
                 overlay.classList.add('dragging');
             }
         }, { passive: true });
@@ -2587,9 +2586,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (shouldBeOpen) {
                 activeDraggingSidebar.classList.add('active');
                 overlay.classList.add('visible');
+                overlay.classList.remove('hidden');
             } else {
                 activeDraggingSidebar.classList.remove('active');
                 overlay.classList.remove('visible');
+                setTimeout(() => {
+                    if (!activeDraggingSidebar.classList.contains('active')) {
+                        overlay.classList.add('hidden');
+                    }
+                }, 300);
             }
 
             isDraggingSidebar = false;

@@ -332,8 +332,18 @@ export default {
       }, 200, corsHeaders);
     }
 
+    if (url.pathname === "/chat") {
+      const chatUrl = new URL("/chat.html", url.origin);
+      return await env.ASSETS.fetch(new Request(chatUrl.toString(), request));
+    }
+
     try {
-      return await env.ASSETS.fetch(request);
+      const response = await env.ASSETS.fetch(request);
+      if (response.status === 404 && !url.pathname.startsWith("/api/")) {
+        const indexUrl = new URL("/index.html", url.origin);
+        return await env.ASSETS.fetch(new Request(indexUrl.toString(), request));
+      }
+      return response;
     } catch {
       return corsResponse("Not Found", 404, corsHeaders);
     }
