@@ -1041,9 +1041,11 @@ function displayMessage(data, isHistory = false) {
 
         lucide.createIcons();
 
-        // Only auto-scroll to bottom if user was already near bottom
-        // This prevents losing scroll position when reading older messages
-        if (wasNearBottom) {
+        // Always scroll to own message, otherwise preserve scroll position
+        if (isOwnMessage) {
+            msgEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            lastScrollTop = messagesContainer.scrollTop;
+        } else if (wasNearBottom) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
             lastScrollTop = messagesContainer.scrollHeight;
         } else {
@@ -2645,6 +2647,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Hide send button on mobile after sending
                 const sendBtn = document.getElementById('send-message-btn');
                 if (sendBtn) sendBtn.classList.remove('visible');
+
+                // Keep input focused on mobile to keep keyboard open
+                if (window.innerWidth < 1024) {
+                    setTimeout(() => input.focus(), 100);
+                }
             }
         });
     }
