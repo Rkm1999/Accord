@@ -633,52 +633,27 @@ function createMessageElement(data, isHistory = false) {
 
         if (fileAttachment.type && fileAttachment.type.startsWith('image/')) {
             messageHtml += `
-                <div class="mt-2">
+                <div class="mt-2 group/image relative">
                     <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="rounded-lg max-w-[300px] cursor-pointer hover:opacity-90" onclick="openImageModal('${fileUrl}')" onerror="this.style.display='none'">
+                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute bottom-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-2 rounded-full shadow-lg opacity-0 group-hover/image:opacity-100 transition-opacity" title="Download">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                    </a>
                 </div>
             `;
         } else {
             messageHtml += `
-                <a href="${fileUrl}" target="_blank" class="flex items-center mt-2 bg-[#2B2D31] hover:bg-[#36383E] p-3 rounded-lg transition-colors">
+                <div class="flex items-center mt-2 bg-[#2B2D31] hover:bg-[#36383E] p-3 rounded-lg transition-colors">
                     <div class="text-2xl mr-3">${getFileIcon(fileAttachment.type)}</div>
                     <div class="flex-1 min-w-0">
                         <div class="text-[#dbdee1] font-medium truncate">${escapeHtml(fileAttachment.name)}</div>
                         <div class="text-xs text-[#949BA4]">${formatFileSize(fileAttachment.size)}</div>
                     </div>
-                </a>
+                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="ml-2 p-2 hover:bg-[#404249] rounded transition-colors" title="Download">
+                        <i data-lucide="download" class="w-5 h-5 text-[#949BA4] hover:text-[#dbdee1]"></i>
+                    </a>
+                </div>
             `;
         }
-    }
-
-    if (data.reply_to) {
-        const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
-        const replyFileUrl = data.reply_file_key
-            ? (isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
-            : null;
-
-        messageHtml += `
-            <div class="mt-2 bg-[#2B2D31] p-2 rounded-lg border-l-2 border-[#5865F2] opacity-90">
-                <div class="flex items-center text-xs text-[#949BA4] mb-1">
-                    <i data-lucide="corner-up-right" class="w-3 h-3 mr-1"></i>
-                    <span class="font-semibold">${escapeHtml(data.reply_username)}</span>
-                    <span class="ml-1">${replyTime}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    ${replyFileUrl && data.reply_file_type?.startsWith('image/') ? `
-                        <img src="${replyFileUrl}" class="w-12 h-12 rounded object-cover flex-shrink-0">
-                    ` : ''}
-                    <div class="flex-1 min-w-0">
-                        ${data.reply_message ? `<p class="text-sm text-[#B5BAC1] truncate">${escapeHtml(data.reply_message)}</p>` : ''}
-                        ${data.reply_file_name && !data.reply_file_type?.startsWith('image/') ? `
-                            <div class="flex items-center text-xs text-[#949BA4] mt-0.5">
-                                <i data-lucide="file" class="w-3 h-3 mr-1"></i>
-                                <span class="truncate">${escapeHtml(data.reply_file_name)}</span>
-                            </div>
-                        ` : ''}
-                    </div>
-                </div>
-            </div>
-        `;
     }
 
     let reactionsHtml = `<div class="reactions-container flex flex-wrap mt-1" id="reactions-${data.id}">`;
@@ -934,19 +909,25 @@ function displayMessage(data, isHistory = false) {
 
         if (fileAttachment.type && fileAttachment.type.startsWith('image/')) {
             messageHtml += `
-                <div class="mt-2">
+                <div class="mt-2 group/image relative">
                     <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="rounded-lg max-w-[300px] cursor-pointer hover:opacity-90" onclick="openImageModal('${fileUrl}')" onerror="this.style.display='none'">
+                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute bottom-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-2 rounded-full shadow-lg opacity-0 group-hover/image:opacity-100 transition-opacity" title="Download">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                    </a>
                 </div>
             `;
         } else {
             messageHtml += `
-                <a href="${fileUrl}" target="_blank" class="flex items-center mt-2 bg-[#2B2D31] hover:bg-[#36383E] p-3 rounded-lg transition-colors">
+                <div class="flex items-center mt-2 bg-[#2B2D31] hover:bg-[#36383E] p-3 rounded-lg transition-colors">
                     <div class="text-2xl mr-3">${getFileIcon(fileAttachment.type)}</div>
                     <div class="flex-1 min-w-0">
                         <div class="text-[#dbdee1] font-medium truncate">${escapeHtml(fileAttachment.name)}</div>
                         <div class="text-xs text-[#949BA4]">${formatFileSize(fileAttachment.size)}</div>
                     </div>
-                </a>
+                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="ml-2 p-2 hover:bg-[#404249] rounded transition-colors" title="Download">
+                        <i data-lucide="download" class="w-5 h-5 text-[#949BA4] hover:text-[#dbdee1]"></i>
+                    </a>
+                </div>
             `;
         }
     }
@@ -1349,6 +1330,73 @@ function handleFileSelect(event) {
         };
         reader.readAsDataURL(file);
     });
+}
+
+function processFile(file) {
+    if (file.size > 50 * 1024 * 1024) {
+        alert(`File "${file.name}" is too large. Maximum size is 50MB per file.`);
+        return;
+    }
+
+    if (selectedFiles.length >= 20) {
+        alert(`You can only upload up to 20 files at a time.`);
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        selectedFiles.push({
+            name: file.name,
+            type: file.type,
+            data: e.target.result.split(',')[1]
+        });
+        showFilePreview();
+        updateSendButtonVisibility();
+    };
+    reader.readAsDataURL(file);
+}
+
+function handlePaste(event) {
+    const items = Array.from(event.clipboardData?.items || []);
+    const files = Array.from(event.clipboardData?.files || []);
+
+    for (const item of items) {
+        if (item.type.startsWith('image/') || item.type.startsWith('video/')) {
+            const file = item.getAsFile();
+            if (file && !files.find(f => f.name === file.name)) {
+                files.push(file);
+            }
+        }
+    }
+
+    if (files.length > 0) {
+        event.preventDefault();
+        files.forEach(file => processFile(file));
+    }
+}
+
+function handleDragOver(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    const inputArea = document.getElementById('message-input-area');
+    if (inputArea) inputArea.classList.add('border-2', 'border-dashed', 'border-[#5865F2]');
+}
+
+function handleDragLeave(event) {
+    event.preventDefault();
+    const inputArea = document.getElementById('message-input-area');
+    if (inputArea) inputArea.classList.remove('border-2', 'border-dashed', 'border-[#5865F2]');
+}
+
+function handleDrop(event) {
+    event.preventDefault();
+    const inputArea = document.getElementById('message-input-area');
+    if (inputArea) inputArea.classList.remove('border-2', 'border-dashed', 'border-[#5865F2]');
+
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length > 0) {
+        files.forEach(file => processFile(file));
+    }
 }
 
 function showFilePreview() {
@@ -2509,6 +2557,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileInputEl = document.getElementById('fileInput');
     if (fileInputEl) {
         fileInputEl.addEventListener('change', handleFileSelect);
+    }
+
+    const messageInputEl = document.getElementById('message-input');
+    if (messageInputEl) {
+        messageInputEl.addEventListener('paste', handlePaste);
+    }
+
+    const inputArea = document.getElementById('message-input-area');
+    if (inputArea) {
+        inputArea.addEventListener('dragover', handleDragOver);
+        inputArea.addEventListener('dragleave', handleDragLeave);
+        inputArea.addEventListener('drop', handleDrop);
     }
 
     const messageFormEl = document.getElementById('message-form');
