@@ -331,21 +331,17 @@
                 pointer-events: auto !important;
             }
         }
-            #channel-sidebar.active, #members-sidebar.active {
-                display: flex !important;
-            }
-            #channel-sidebar.active {
-                transform: translateX(0);
-            }
-            #members-sidebar.active {
-                transform: translateX(0);
-            }
-        }
         @media (min-width: 1024px) {
             #channel-sidebar, #members-sidebar {
                 display: flex !important;
+                flex-direction: column !important;
                 position: static !important;
                 flex-shrink: 0;
+                visibility: visible !important;
+                opacity: 1 !important;
+                transform: none !important;
+                pointer-events: auto !important;
+                height: 100% !important;
             }
             #channel-sidebar {
                 border-right: 1px solid #26272D;
@@ -512,7 +508,7 @@
         <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-[60] hidden lg:hidden" onclick="closeAllSidebars()"></div>
 
         <!-- 1. Channel Sidebar -->
-        <div id="channel-sidebar" class="w-60 bg-[#2B2D31] flex-col min-w-[240px] left-0 shadow-2xl lg:shadow-none">
+        <div id="channel-sidebar" class="w-60 bg-[#2B2D31] flex flex-col min-w-[240px] left-0 shadow-2xl lg:shadow-none">
 
             <!-- Server Header -->
             <div class="h-12 px-4 flex items-center justify-between shadow-sm hover:bg-[#35373C] cursor-pointer transition-colors border-b border-[#1f2023]" onclick="closeAllSidebars()">
@@ -665,7 +661,7 @@
         </div>
 
         <!-- 3. Members Sidebar -->
-        <aside id="members-sidebar" class="w-[240px] bg-[#2B2D31] flex-col overflow-y-auto custom-scrollbar p-3 min-w-[240px] right-0 shadow-2xl lg:shadow-none">
+        <aside id="members-sidebar" class="w-[240px] bg-[#2B2D31] flex flex-col overflow-y-auto custom-scrollbar p-3 min-w-[240px] right-0 shadow-2xl lg:shadow-none">
             <!-- Members injected by JS -->
         </aside>
 

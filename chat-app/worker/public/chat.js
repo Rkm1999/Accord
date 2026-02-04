@@ -1017,6 +1017,7 @@ function cancelReply() {
 
 
 function openEditModal(messageId) {
+    closeAllSidebars();
     const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!msgEl) return;
 
@@ -1366,6 +1367,7 @@ function switchChannel(channelId) {
 let escapeHandler = null;
 
 function openCreateChannelModal() {
+    closeAllSidebars();
     const modal = document.getElementById('createChannelModal');
     const input = document.getElementById('newChannelName');
     input.value = '';
@@ -1868,6 +1870,7 @@ function openUserSettings() {
 }
 
 function openEmojiModal() {
+    closeAllSidebars();
     const modal = document.getElementById('emojiUploadModal');
     modal.classList.remove('hidden');
     modal.classList.add('visible');
@@ -2278,7 +2281,7 @@ document.addEventListener('click', (e) => {
 });
 
 function openImageModal(imageUrl) {
-
+    closeAllSidebars();
     const modal = document.getElementById('imageModal');
     const modalImg = document.getElementById('imageModalImg');
     if (modal && modalImg) {
