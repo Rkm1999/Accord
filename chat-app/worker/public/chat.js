@@ -520,14 +520,23 @@ document.getElementById('messages-container').addEventListener('scroll', () => {
     const container = document.getElementById('messages-container');
     const banner = document.getElementById('unread-banner');
     const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
-    
+    const messageInput = document.getElementById('message-input');
+
+    // Close keyboard on mobile when scrolling messages
+    if (window.innerWidth < 1024 && messageInput && document.activeElement === messageInput) {
+        const scrollDistance = Math.abs(container.scrollTop - lastScrollTop);
+        if (scrollDistance > 5) {
+            messageInput.blur();
+        }
+    }
+
     // Unread banner logic
     if (banner && !banner.classList.contains('hidden')) {
         const divider = document.getElementById('unread-divider');
         if (divider) {
             const rect = divider.getBoundingClientRect();
             const containerRect = container.getBoundingClientRect();
-            
+
             // If divider is within view
             if (rect.top >= containerRect.top && rect.bottom <= containerRect.bottom) {
                 hideUnreadBanner();
@@ -2650,7 +2659,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Keep input focused on mobile to keep keyboard open
                 if (window.innerWidth < 1024) {
-                    setTimeout(() => input.focus(), 100);
+                    input.blur();
+                    setTimeout(() => input.focus(), 150);
                 }
             }
         });
