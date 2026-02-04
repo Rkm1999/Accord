@@ -1,12 +1,45 @@
 const username = localStorage.getItem('chatUsername');
 
-// Register Service Worker for PWA
+// Register Service Worker for PWA & Handle Updates
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('Service Worker registered'))
-            .catch(err => console.log('Service Worker registration failed', err));
+        navigator.serviceWorker.register('/sw.js').then(reg => {
+            console.log('Service Worker registered');
+
+            // Check for updates on load
+            if (reg.waiting) {
+                showUpdatePrompt(reg.waiting);
+            }
+
+            reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        showUpdatePrompt(newWorker);
+                    }
+                });
+            });
+        }).catch(err => console.log('Service Worker registration failed', err));
+
+        // Reload page when new SW takes control
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            window.location.reload();
+        });
     });
+}
+
+function showUpdatePrompt(worker) {
+    const prompt = document.getElementById('pwaUpdatePrompt');
+    const btn = document.getElementById('pwaUpdateBtn');
+    
+    if (prompt && btn) {
+        prompt.style.display = 'flex';
+        btn.onclick = () => {
+            worker.postMessage({ type: 'SKIP_WAITING' });
+            btn.disabled = true;
+            btn.textContent = 'Updating...';
+        };
+    }
 }
 
 // PWA Installation Logic

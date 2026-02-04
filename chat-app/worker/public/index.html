@@ -28,6 +28,38 @@
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
+
+        /* PWA Update Prompt */
+        #pwaUpdatePrompt {
+            position: fixed;
+            bottom: 24px;
+            left: 16px;
+            right: 16px;
+            background: #5865F2;
+            border-radius: 16px;
+            padding: 12px 16px;
+            z-index: 300;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            animation: slideUpPwa 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes slideUpPwa {
+            from { transform: translateY(120%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .animate-spin-slow {
+            animation: spin 3s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
@@ -144,6 +176,31 @@
         <div id="iosInstruction" class="hidden text-[13px] text-[#dbdee1] border-t border-[#404249] pt-3 flex items-center justify-center gap-1.5">
             Tap the <i data-lucide="share" class="w-4 h-4 text-[#00A8FC]"></i> icon and "Add to Home Screen"
         </div>
+    </div>
+
+    <!-- PWA Update Prompt -->
+    <div id="pwaUpdatePrompt">
+        <div class="flex items-center gap-3">
+            <i data-lucide="refresh-cw" class="text-white w-5 h-5 animate-spin-slow"></i>
+            <span class="text-white text-sm font-semibold">New version available!</span>
+        </div>
+        <button id="pwaUpdateBtn" class="bg-white text-[#5865F2] px-4 py-1.5 rounded-lg text-sm font-bold shadow hover:bg-[#f0f0f0] transition-colors">
+            Update
+        </button>
+    </div>
+
+    <!-- PWA Update Notification -->
+    <div id="pwaUpdatePrompt" class="fixed top-4 left-1/2 -translate-x-1/2 bg-[#5865F2] text-white px-4 py-3 rounded-lg shadow-2xl z-[200] hidden flex-col items-center gap-2 min-w-[300px] animate-bounce-in">
+        <div class="flex items-center gap-3 w-full">
+            <i data-lucide="refresh-cw" class="w-5 h-5 animate-spin"></i>
+            <div class="flex-1">
+                <h4 class="font-bold text-sm">Update Available</h4>
+                <p class="text-xs text-white/90">A new version of Accord is available.</p>
+            </div>
+        </div>
+        <button id="pwaUpdateBtn" class="w-full bg-white text-[#5865F2] font-bold py-1.5 rounded text-sm hover:bg-gray-100 transition-colors mt-1">
+            Update Now
+        </button>
     </div>
 
     <script src="app.js"></script>
