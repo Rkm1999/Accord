@@ -464,47 +464,62 @@ function scrollToBottom() {
 
 function scrollToMessage(messageId) {
     console.log('scrollToMessage called with ID:', messageId, 'Type:', typeof messageId);
-    
+
     // Try different selector variations
     const selector1 = `[data-message-id="${messageId}"]`;
     const selector2 = `[data-message-id="'${messageId}'"]`;
     const selector3 = `[data-message-id='${messageId}']`;
-    
-    console.log('Trying selector 1:', selector1);
+
     const msgEl1 = document.querySelector(selector1);
-    console.log('Element 1 found:', !!msgEl1);
-    
-    if (!msgEl1) {
-        console.log('Trying selector 2:', selector2);
-        const msgEl2 = document.querySelector(selector2);
-        console.log('Element 2 found:', !!msgEl2);
-        
-        if (!msgEl2) {
-            console.log('Trying selector 3:', selector3);
-            const msgEl3 = document.querySelector(selector3);
-            console.log('Element 3 found:', !!msgEl3);
-            
-            // List all message elements for debugging
-            const allMessages = document.querySelectorAll('[data-message-id]');
-            console.log('Total messages in DOM:', allMessages.length);
-            console.log('First 5 message IDs:', Array.from(allMessages).slice(0, 5).map(el => el.getAttribute('data-message-id')));
-        }
-    }
-                  
-    const msgEl = msgEl1 || document.querySelector(selector2) || document.querySelector(selector3);
+    const msgEl2 = document.querySelector(selector2);
+    const msgEl3 = document.querySelector(selector3);
+
+    const msgEl = msgEl1 || msgEl2 || msgEl3;
+
     if (!msgEl) {
         console.log('Message element not found for ID:', messageId);
+
+        // Show user-friendly message
+        showSystemMessage('Message not found. Loading older messages...');
+
+        // Try loading older messages if there are more
+        if (hasMoreMessages && !isLoadingMore) {
+            loadMoreMessages();
+
+            // Retry after loading completes
+            let retryCount = 0;
+            const maxRetries = 3;
+
+            const tryFindAgain = () => {
+                const element = document.querySelector(selector1) || document.querySelector(selector2) || document.querySelector(selector3);
+                if (element) {
+                    scrollToMessage(messageId);
+                } else if (retryCount < maxRetries) {
+                    retryCount++;
+                    if (hasMoreMessages && !isLoadingMore) {
+                        loadMoreMessages();
+                        setTimeout(tryFindAgain, 500);
+                    }
+                } else {
+                    showSystemMessage('Message could not be loaded. It may have been deleted.');
+                }
+            };
+
+            setTimeout(tryFindAgain, 500);
+        } else {
+            showSystemMessage('Message not found. It may have been deleted.');
+        }
         return;
     }
 
     console.log('Found message element, scrolling to it...');
     console.log('Element before highlight:', msgEl);
-    
+
     // Apply inline styles for immediate visibility (using same color as mention highlight)
     msgEl.style.backgroundColor = 'rgba(250, 168, 26, 0.15)';
     msgEl.style.transition = 'background-color 0.3s ease';
     console.log('Applied inline styles');
-    
+
     // Scroll to message
     msgEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
@@ -513,6 +528,11 @@ function scrollToMessage(messageId) {
         msgEl.style.backgroundColor = '';
         console.log('Removed inline styles');
     }, 3000);
+}
+
+function jumpToReply(messageId) {
+    console.log('Jumping to reply:', messageId);
+    scrollToMessage(messageId);
 }
 
 // Add scroll listener to auto-hide banner if we scroll up to the divider
@@ -666,6 +686,37 @@ function createMessageElement(data, isHistory = false) {
                 </div>
             `;
         }
+    }
+
+    if (data.reply_to) {
+        const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
+        const replyFileUrl = data.reply_file_key
+            ? (isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
+            : null;
+
+        messageHtml += `
+            <div class="mt-2 bg-[#2B2D31] p-2 rounded-lg border-l-2 border-[#5865F2] opacity-90 hover:bg-[#36383E] cursor-pointer transition-colors" onclick="event.stopPropagation(); jumpToReply(${data.reply_to})">
+                <div class="flex items-center text-xs text-[#949BA4] mb-1">
+                    <i data-lucide="corner-up-right" class="w-3 h-3 mr-1"></i>
+                    <span class="font-semibold">${escapeHtml(data.reply_username)}</span>
+                    <span class="ml-1">${replyTime}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    ${replyFileUrl && data.reply_file_type?.startsWith('image/') ? `
+                        <img src="${replyFileUrl}" class="w-12 h-12 rounded object-cover flex-shrink-0">
+                    ` : ''}
+                    <div class="flex-1 min-w-0">
+                        ${data.reply_message ? `<p class="text-sm text-[#B5BAC1] truncate">${escapeHtml(data.reply_message)}</p>` : ''}
+                        ${data.reply_file_name && !data.reply_file_type?.startsWith('image/') ? `
+                            <div class="flex items-center text-xs text-[#949BA4] mt-0.5">
+                                <i data-lucide="file" class="w-3 h-3 mr-1"></i>
+                                <span class="truncate">${escapeHtml(data.reply_file_name)}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     let reactionsHtml = `<div class="reactions-container flex flex-wrap mt-1" id="reactions-${data.id}">`;
@@ -951,7 +1002,7 @@ function displayMessage(data, isHistory = false) {
             : null;
 
         messageHtml += `
-            <div class="mt-2 bg-[#2B2D31] p-2 rounded-lg border-l-2 border-[#5865F2] opacity-90">
+            <div class="mt-2 bg-[#2B2D31] p-2 rounded-lg border-l-2 border-[#5865F2] opacity-90 hover:bg-[#36383E] cursor-pointer transition-colors" onclick="event.stopPropagation(); jumpToReply(${data.reply_to})">
                 <div class="flex items-center text-xs text-[#949BA4] mb-1">
                     <i data-lucide="corner-up-right" class="w-3 h-3 mr-1"></i>
                     <span class="font-semibold">${escapeHtml(data.reply_username)}</span>
