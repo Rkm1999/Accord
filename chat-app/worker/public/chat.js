@@ -1254,6 +1254,18 @@ function handleTyping() {
     }, 3000);
 }
 
+function updateSendButtonVisibility() {
+    const sendBtn = document.getElementById('send-message-btn');
+    const input = document.getElementById('message-input');
+    if (!sendBtn || !input) return;
+
+    if (input.value.trim().length > 0 || selectedFiles.length > 0) {
+        sendBtn.classList.add('visible');
+    } else {
+        sendBtn.classList.remove('visible');
+    }
+}
+
 function handleFileSelect(event) {
     const files = Array.from(event.target.files);
 
@@ -1292,6 +1304,7 @@ function handleFileSelect(event) {
 
             if (processedCount === files.length) {
                 showFilePreview();
+                updateSendButtonVisibility();
             }
         };
         reader.readAsDataURL(file);
@@ -1347,6 +1360,7 @@ function removeFile(index) {
     } else {
         showFilePreview();
     }
+    updateSendButtonVisibility();
 }
 
 async function fetchChannels() {
@@ -2493,6 +2507,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 hideFilePreview();
                 cancelReply();
                 sendTypingStatus(false);
+
+                // Hide send button on mobile after sending
+                const sendBtn = document.getElementById('send-message-btn');
+                if (sendBtn) sendBtn.classList.remove('visible');
             }
         });
     }
@@ -2502,6 +2520,7 @@ document.addEventListener('DOMContentLoaded', () => {
         messageInputEl.addEventListener('input', (e) => {
             handleTyping();
             handleMentionAutocomplete(e);
+            updateSendButtonVisibility();
         });
         messageInputEl.addEventListener('keydown', handleAutocompleteKeydown);
         messageInputEl.addEventListener('keypress', (e) => {

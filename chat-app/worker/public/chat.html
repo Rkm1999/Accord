@@ -6,6 +6,7 @@
     <title>Accord</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#313338">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%235865F2'><path d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg>">
@@ -521,6 +522,22 @@
                 right: 24px;
             }
         }
+
+        /* Send Button Mobile */
+        #send-message-btn {
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform: scale(0);
+            width: 0;
+            opacity: 0;
+            overflow: hidden;
+        }
+
+        #send-message-btn.visible {
+            transform: scale(1);
+            width: 32px;
+            opacity: 1;
+            margin-left: 8px;
+        }
     </style>
 </head>
 
@@ -657,9 +674,13 @@
                     <input type="file" id="fileInput" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar" multiple class="hidden">
                     <form id="message-form" class="flex-1 flex items-center">
                         <input type="text" id="message-input" placeholder="Message #general" class="bg-transparent text-[#dbdee1] w-full focus:outline-none placeholder-[#949BA4]" autocomplete="off">
-                        <div class="flex items-center space-x-2 text-[#B5BAC1]">
+                        <div class="flex items-center text-[#B5BAC1]">
                             <button type="button" class="p-1.5 hover:bg-[#404249] rounded transition-colors" onclick="document.getElementById('fileInput').click()">
                                 <i data-lucide="paperclip" class="w-5 h-5"></i>
+                            </button>
+                            <!-- Send Button (Mobile) -->
+                            <button type="submit" id="send-message-btn" class="p-1.5 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-full transition-all flex items-center justify-center">
+                                <i data-lucide="send" class="w-4 h-4 ml-0.5"></i>
                             </button>
                         </div>
                     </form>
