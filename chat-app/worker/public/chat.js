@@ -1377,8 +1377,8 @@ async function fetchCustomEmojis() {
 async function fetchRegisteredUsers() {
     try {
         const apiUrl = isLocalDev
-            ? `${apiBaseUrl}/api/users/list`
-            : '/api/users/list';
+            ? `${apiBaseUrl}/api/users/list?t=${Date.now()}`
+            : `/api/users/list?t=${Date.now()}`;
         const response = await fetch(apiUrl);
         allUsers = await response.json();
         renderMembers();
