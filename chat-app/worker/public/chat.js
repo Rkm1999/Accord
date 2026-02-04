@@ -1375,25 +1375,48 @@ function handlePaste(event) {
     }
 }
 
+function handleDragEnter(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+    console.log('Drag enter on:', event.target);
+
+    const overlay = document.getElementById('drag-drop-overlay');
+    if (overlay) {
+        overlay.classList.remove('hidden');
+        lucide.createIcons();
+    }
+}
+
 function handleDragOver(event) {
     event.preventDefault();
+    event.stopPropagation();
     event.dataTransfer.dropEffect = 'copy';
-    const inputArea = document.getElementById('message-input-area');
-    if (inputArea) inputArea.classList.add('border-2', 'border-dashed', 'border-[#5865F2]');
 }
 
 function handleDragLeave(event) {
     event.preventDefault();
-    const inputArea = document.getElementById('message-input-area');
-    if (inputArea) inputArea.classList.remove('border-2', 'border-dashed', 'border-[#5865F2]');
+    event.stopPropagation();
+
+    const overlay = document.getElementById('drag-drop-overlay');
+    const relatedTarget = event.relatedTarget;
+
+    if (overlay && (!relatedTarget || !overlay.contains(relatedTarget) && event.target.id === 'app')) {
+        console.log('Drag leave');
+        overlay.classList.add('hidden');
+    }
 }
 
 function handleDrop(event) {
     event.preventDefault();
-    const inputArea = document.getElementById('message-input-area');
-    if (inputArea) inputArea.classList.remove('border-2', 'border-dashed', 'border-[#5865F2]');
+    event.stopPropagation();
+    console.log('Drop on:', event.target);
+
+    const overlay = document.getElementById('drag-drop-overlay');
+    if (overlay) overlay.classList.add('hidden');
 
     const files = Array.from(event.dataTransfer.files);
+    console.log('Files dropped:', files.length, files.map(f => f.name));
     if (files.length > 0) {
         files.forEach(file => processFile(file));
     }
@@ -2559,17 +2582,21 @@ document.addEventListener('DOMContentLoaded', () => {
         fileInputEl.addEventListener('change', handleFileSelect);
     }
 
-    const messageInputEl = document.getElementById('message-input');
-    if (messageInputEl) {
-        messageInputEl.addEventListener('paste', handlePaste);
+    // Set up drag and drop on entire app
+    const appEl = document.getElementById('app');
+    if (appEl) {
+        appEl.addEventListener('dragenter', handleDragEnter);
+        appEl.addEventListener('dragover', handleDragOver);
+        appEl.addEventListener('dragleave', handleDragLeave);
+        appEl.addEventListener('drop', handleDrop);
     }
 
-    const inputArea = document.getElementById('message-input-area');
-    if (inputArea) {
-        inputArea.addEventListener('dragover', handleDragOver);
-        inputArea.addEventListener('dragleave', handleDragLeave);
-        inputArea.addEventListener('drop', handleDrop);
-    }
+    // Prevent browser default drag/drop behavior on entire document
+    document.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    });
+    document.addEventListener('drop', (e) => e.preventDefault());
 
     const messageFormEl = document.getElementById('message-form');
     if (messageFormEl) {
@@ -2617,6 +2644,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const messageInputEl = document.getElementById('message-input');
     if (messageInputEl) {
+        messageInputEl.addEventListener('paste', handlePaste);
         messageInputEl.addEventListener('input', (e) => {
             handleTyping();
             handleMentionAutocomplete(e);
