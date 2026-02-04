@@ -146,6 +146,7 @@ let channels = [];
 let customEmojis = [];
 let allUsers = [];
 let onlineUsernames = new Set();
+let joinedUsers = new Set();
 let selectedAutocompleteIndex = 0;
 let filteredUsers = [];
 let unreadChannels = new Set(JSON.parse(localStorage.getItem('unreadChannels') || '[]'));
@@ -253,6 +254,8 @@ function connect() {
                 break;
             case 'online_list':
                 onlineUsernames = new Set(data.usernames);
+                // Pre-populate joinedUsers so we don't show join messages for users already online
+                data.usernames.forEach(u => joinedUsers.add(u));
                 renderMembers();
                 break;
             case 'edit':
@@ -1204,7 +1207,11 @@ function updatePresence(data) {
         if (!allUsers.find(u => u.username === data.username)) {
             fetchRegisteredUsers();
         }
-        showPresenceMessage(`${escapeHtml(userDisplayName)} joined the chat`);
+        // Only show join message if this is first time seeing this user
+        if (!joinedUsers.has(data.username)) {
+            joinedUsers.add(data.username);
+            showPresenceMessage(`${escapeHtml(userDisplayName)} joined the chat`);
+        }
     } else if (data.event === 'user_left') {
         onlineUsernames.delete(data.username);
         showPresenceMessage(`${escapeHtml(userDisplayName)} left the chat`, true);
