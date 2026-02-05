@@ -145,6 +145,7 @@ let replyingTo = null;
 let editingMessageId = null;
 let reactionPickerMessageId = null;
 let channels = [];
+let dms = [];
 let customEmojis = [];
 let allUsers = [];
 let onlineUsernames = new Set();
@@ -374,21 +375,50 @@ function displayHistory(messages, lastReadMessageId = 0, offset = 0, hasMore = f
     isLoadingMore = false;
     isAutoLoading = false;
 
-    const currentChannel = channels.find(c => c.id === currentChannelId);
-    const channelName = currentChannel ? `#${currentChannel.name}` : '#general';
+    const publicChannel = channels.find(c => c.id === currentChannelId);
+    const dmChannel = dms.find(d => d.id === currentChannelId);
+    
+    let channelName = 'general';
+    let isDm = false;
 
-    document.title = `Accord - ${channelName}`;
-    document.getElementById('header-channel-name').textContent = channelName.substring(1);
-    document.getElementById('message-input').placeholder = `Message ${channelName}`;
+    if (publicChannel) {
+        channelName = publicChannel.name;
+    } else if (dmChannel) {
+        channelName = dmChannel.other_display_name || dmChannel.other_username;
+        isDm = true;
+    }
+
+    const displayTitle = isDm ? channelName : `#${channelName}`;
+
+    document.title = `Accord - ${displayTitle}`;
+    document.getElementById('header-channel-name').textContent = channelName;
+    
+    // Update header icon
+    const headerIcon = document.querySelector('#header-channel-name').previousElementSibling;
+    if (headerIcon) {
+        if (isDm) {
+            headerIcon.setAttribute('data-lucide', 'at-sign');
+        } else {
+            headerIcon.setAttribute('data-lucide', 'hash');
+        }
+    }
+
+    document.getElementById('message-input').placeholder = `Message ${displayTitle}`;
+    
+    // Update footer badge
+    const footerBadge = document.getElementById('current-channel-badge');
+    if (footerBadge) {
+        footerBadge.textContent = displayTitle;
+    }
 
     if (messages.length === 0) {
         messagesContainer.innerHTML = `
             <div class="mt-auto mb-6">
                 <div class="h-16 w-16 bg-[#41434A] rounded-full flex items-center justify-center mb-4 mx-auto">
-                    <i data-lucide="hash" class="w-10 h-10 text-white"></i>
+                    <i data-lucide="${isDm ? 'at-sign' : 'hash'}" class="w-10 h-10 text-white"></i>
                 </div>
-                <h1 class="text-3xl font-bold mb-2 text-center">Welcome to ${channelName}!</h1>
-                <p class="text-[#B5BAC1] text-center">This is start of ${channelName} channel.</p>
+                <h1 class="text-3xl font-bold mb-2 text-center">Welcome to ${isDm ? 'your DM with ' : ''}${displayTitle}!</h1>
+                <p class="text-[#B5BAC1] text-center">This is the start of ${isDm ? 'your conversation' : `the ${displayTitle} channel`}.</p>
             </div>
         `;
         lucide.createIcons();
@@ -1976,9 +2006,10 @@ async function createChannel() {
 
 async function deleteChannel(channelId) {
     const channel = channels.find(c => c.id === channelId);
-    const channelName = channel ? channel.name : 'this channel';
+    const dm = dms.find(d => d.id === channelId);
+    const channelName = channel ? channel.name : (dm ? 'this DM' : 'this channel');
     
-    if (!confirm(`Are you sure you want to delete #${channelName}? All messages in this channel will be permanently deleted.`)) {
+    if (!confirm(`Are you sure you want to delete ${channel ? '#' + channelName : channelName}? All messages will be permanently deleted.`)) {
         return;
     }
 
@@ -2003,7 +2034,8 @@ async function deleteChannel(channelId) {
                 localStorage.setItem('currentChannelId', '1');
                 window.location.reload();
             } else {
-                await fetchChannels();
+                if (channel) await fetchChannels();
+                if (dm) await fetchDMs();
             }
         } else {
             // Restore the channel element if deletion failed
@@ -2313,14 +2345,21 @@ function renderMembers() {
             : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
         
         return `
-            <div class="flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group ${isOnline ? 'opacity-100' : 'opacity-40 hover:opacity-100'}">
+            <div class="flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group ${isOnline ? 'opacity-100' : 'opacity-40 hover:opacity-100'}" onclick="startDM('${escapeHtml(user.username)}', true)">
                 <div class="relative mr-3">
                     <img src="${avatarUrl}" alt="${escapeHtml(displayName)}" class="w-8 h-8 rounded-full object-cover">
                     <div class="absolute bottom-0 right-0 w-3.5 h-3.5 border-[3px] border-[#2B2D31] rounded-full ${isOnline ? 'bg-green-500' : 'bg-[#949BA4]'}"></div>
                 </div>
                 <div class="flex-1 min-w-0">
-                    <div class="text-[15px] font-medium leading-4 text-[#dbdee1] truncate">
-                        ${escapeHtml(displayName)}
+                    <div class="flex items-center justify-between">
+                        <div class="text-[15px] font-medium leading-4 text-[#dbdee1] truncate">
+                            ${escapeHtml(displayName)}
+                        </div>
+                        ${user.username !== username ? `
+                        <button class="opacity-0 group-hover:opacity-100 text-[#B5BAC1] hover:text-[#dbdee1] p-1 rounded transition-opacity" title="Message">
+                            <i data-lucide="message-square" class="w-4 h-4"></i>
+                        </button>
+                        ` : ''}
                     </div>
                 </div>
             </div>
@@ -2828,7 +2867,7 @@ function toggleSidebar(id) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log(`Connecting as: ${username} to channel ${currentChannelId}`);
     
     // Clear unread for current channel
@@ -2854,10 +2893,13 @@ document.addEventListener('DOMContentLoaded', () => {
         membersSidebar.innerHTML = '<div class="p-4 text-sm text-[#949BA4] text-center">Loading users...</div>';
     }
 
-    fetchRegisteredUsers();
-    fetchChannels();
-    connect();
+    await Promise.all([
+        fetchRegisteredUsers(),
+        fetchChannels(),
+        fetchDMs()
+    ]);
     renderMembers();
+    connect();
 
 
 
@@ -3380,6 +3422,140 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+async function fetchDMs() {
+    try {
+        const apiUrl = isLocalDev
+            ? `${apiBaseUrl}/api/dms?username=${encodeURIComponent(username)}`
+            : `/api/dms?username=${encodeURIComponent(username)}`;
+        const response = await fetch(apiUrl);
+        dms = await response.json();
+        displayDMs();
+    } catch (error) {
+        console.error('Error fetching DMs:', error);
+    }
+}
+
+function displayDMs() {
+    const dmsContainer = document.getElementById('dms-container');
+    if (!dmsContainer) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mt-1';
+
+    dms.forEach(dm => {
+        const isActive = dm.id === currentChannelId;
+        const isUnread = unreadChannels.has(dm.id) && !isActive;
+        const dmEl = document.createElement('div');
+        dmEl.className = `channel-item flex items-center px-2 py-[6px] rounded-[4px] cursor-pointer group mb-[2px] ${isActive ? 'bg-[#404249] text-white' : 'text-[#949BA4] hover:bg-[#35373C] hover:text-[#dbdee1]'}`;
+        dmEl.onclick = () => switchChannel(dm.id);
+
+        const otherAvatarKey = dm.other_avatar_key;
+        const otherDisplayName = dm.other_display_name || dm.other_username;
+        const avatarUrl = otherAvatarKey
+            ? (isLocalDev ? `${apiBaseUrl}/api/file/${otherAvatarKey}` : `/api/file/${otherAvatarKey}`)
+            : `https://ui-avatars.com/api/?name=${encodeURIComponent(otherDisplayName)}&background=random`;
+
+        dmEl.innerHTML = `
+            <img src="${avatarUrl}" class="w-6 h-6 rounded-full mr-2 object-cover">
+            <span class="font-medium truncate flex-1 ${isUnread ? 'text-white font-bold' : ''}">${escapeHtml(otherDisplayName)}</span>
+            ${isUnread ? '<div class="unread-badge w-2 h-2 bg-white rounded-full ml-1"></div>' : ''}
+            <button class="delete-btn ml-auto opacity-0 group-hover:opacity-100 hover:bg-red-500/20 hover:text-red-400 text-[#949BA4] p-1 rounded cursor-pointer"
+                    onclick="event.stopPropagation(); if(confirm('Close this DM?')) deleteChannel(${dm.id})"
+                    title="Close DM">
+                <i data-lucide="x" class="w-[14px] h-[14px]"></i>
+            </button>
+        `;
+
+        wrapper.appendChild(dmEl);
+    });
+
+    dmsContainer.innerHTML = '';
+    dmsContainer.appendChild(wrapper);
+    lucide.createIcons();
+}
+
+function openStartDMModal() {
+    closeAllSidebars();
+    dismissKeyboard();
+    const modal = document.getElementById('startDMModal');
+    const input = document.getElementById('dmSearchInput');
+    const list = document.getElementById('dmUserList');
+    
+    input.value = '';
+    
+    // Render user list excluding self
+    const users = allUsers.filter(u => u.username !== username);
+    
+    const renderList = (filter = '') => {
+        const filtered = users.filter(u => 
+            u.username.toLowerCase().includes(filter.toLowerCase()) || 
+            (u.display_name && u.display_name.toLowerCase().includes(filter.toLowerCase()))
+        );
+        
+        if (filtered.length === 0) {
+            list.innerHTML = '<div class="p-4 text-center text-[#949BA4]">No friends found</div>';
+            return;
+        }
+
+        list.innerHTML = filtered.map(u => {
+            const displayName = u.display_name || u.username;
+            const avatarUrl = u.avatar_key
+                ? (isLocalDev ? `${apiBaseUrl}/api/file/${u.avatar_key}` : `/api/file/${u.avatar_key}`)
+                : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
+            
+            return `
+                <div class="flex items-center p-2 hover:bg-[#35373C] rounded cursor-pointer transition-colors" onclick="startDM('${escapeHtml(u.username)}', true)">
+                    <img src="${avatarUrl}" class="w-8 h-8 rounded-full mr-3 object-cover">
+                    <div>
+                        <div class="font-medium text-[#dbdee1]">${escapeHtml(displayName)}</div>
+                        <div class="text-xs text-[#949BA4]">@${escapeHtml(u.username)}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    };
+    
+    renderList();
+    
+    input.oninput = (e) => renderList(e.target.value);
+
+    modal.classList.remove('hidden');
+    modal.classList.add('visible');
+    setTimeout(() => modal.classList.remove('visible'), 300);
+    input.focus();
+}
+
+function closeStartDMModal() {
+    document.getElementById('startDMModal').classList.add('hidden');
+}
+
+async function startDM(targetUsername, closeModals = false) {
+    if (targetUsername === username) return;
+    if (closeModals) {
+        closeStartDMModal();
+        closeAllSidebars();
+    }
+
+    try {
+        const apiUrl = isLocalDev ? `${apiBaseUrl}/api/dm` : '/api/dm';
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, targetUsername })
+        });
+
+        if (response.ok) {
+            const { id } = await response.json();
+            await fetchDMs();
+            switchChannel(id);
+        } else {
+            alert('Failed to start DM');
+        }
+    } catch (error) {
+        console.error('Error starting DM:', error);
+    }
+}
+
 window.openImageModal = openImageModal;
 window.closeImageModal = closeImageModal;
 window.startReply = startReply;
@@ -3410,5 +3586,8 @@ window.closeAllSidebars = closeAllSidebars;
 window.selectMention = selectMention;
 window.regenerateRecoveryKey = regenerateRecoveryKey;
 window.copyNewRecoveryKey = copyNewRecoveryKey;
+window.openStartDMModal = openStartDMModal;
+window.closeStartDMModal = closeStartDMModal;
+window.startDM = startDM;
 
 

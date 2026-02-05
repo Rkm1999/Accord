@@ -56,6 +56,18 @@ export class ChatRoom extends DurableObject {
     const username = url.searchParams.get("username") || "Anonymous";
     const channelId = parseInt(url.searchParams.get("channelId") || "1");
 
+    // Security check: If it's a DM, ensure user is a member
+    const channel = await this.env.DB.prepare("SELECT type FROM channels WHERE id = ?").bind(channelId).first();
+    if (channel?.type === 'dm') {
+        const isMember = await this.env.DB.prepare(
+            "SELECT 1 FROM channel_members WHERE channel_id = ? AND username = ?"
+        ).bind(channelId, username).first();
+        
+        if (!isMember) {
+            return new Response("Unauthorized: You are not a member of this DM", { status: 403 });
+        }
+    }
+
     const user: any = await this.env.DB.prepare("SELECT display_name, avatar_key FROM users WHERE username = ?")
       .bind(username).first();
     

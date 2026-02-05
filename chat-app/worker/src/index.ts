@@ -199,8 +199,78 @@ export default {
     }
 
     if (url.pathname === "/api/channels" && request.method === "GET") {
-      const { results } = await env.DB.prepare("SELECT id, name, created_by, created_at FROM channels ORDER BY id ASC").all();
+      const { results } = await env.DB.prepare("SELECT id, name, created_by, created_at FROM channels WHERE type = 'public' ORDER BY id ASC").all();
       return corsResponse(results, 200, corsHeaders);
+    }
+
+    if (url.pathname === "/api/dms" && request.method === "GET") {
+      const username = url.searchParams.get("username");
+      if (!username) return corsResponse("Username required", 400, corsHeaders);
+
+      const { results } = await env.DB.prepare(
+        `SELECT c.id, c.created_at, u.username as other_username, u.display_name as other_display_name, u.avatar_key as other_avatar_key
+         FROM channels c
+         JOIN channel_members cm_me ON c.id = cm_me.channel_id
+         JOIN channel_members cm_other ON c.id = cm_other.channel_id
+         JOIN users u ON cm_other.username = u.username
+         WHERE c.type = 'dm' 
+           AND cm_me.username = ?
+           AND cm_other.username != ?
+         ORDER BY c.created_at DESC`
+      ).bind(username, username).all();
+      
+      return corsResponse(results, 200, corsHeaders);
+    }
+
+    if (url.pathname === "/api/dm" && request.method === "POST") {
+      const { username, targetUsername } = await request.json() as any;
+      if (!username || !targetUsername) return corsResponse("Missing users", 400, corsHeaders);
+
+      // Check if DM already exists
+      // We assume strict 1:1 DMs for now
+      const existing = await env.DB.prepare(
+        `SELECT c.id 
+         FROM channels c
+         JOIN channel_members cm1 ON c.id = cm1.channel_id
+         JOIN channel_members cm2 ON c.id = cm2.channel_id
+         WHERE c.type = 'dm' 
+           AND cm1.username = ? 
+           AND cm2.username = ?`
+      ).bind(username, targetUsername).first();
+
+      if (existing) {
+        return corsResponse({ id: existing.id }, 200, corsHeaders);
+      }
+
+      // Create new DM
+      const sortedUsers = [username, targetUsername].sort();
+      const dmName = `dm_${sortedUsers[0]}_${sortedUsers[1]}`;
+      const timestamp = Date.now();
+
+      try {
+        // Create channel
+        const result = await env.DB.prepare(
+          "INSERT INTO channels (name, created_by, created_at, type) VALUES (?, ?, ?, 'dm')"
+        ).bind(dmName, username, timestamp).run();
+        
+        const channelId = result.meta.last_row_id;
+
+        // Add members
+        await env.DB.batch([
+          env.DB.prepare("INSERT INTO channel_members (channel_id, username, joined_at) VALUES (?, ?, ?)").bind(channelId, username, timestamp),
+          env.DB.prepare("INSERT INTO channel_members (channel_id, username, joined_at) VALUES (?, ?, ?)").bind(channelId, targetUsername, timestamp)
+        ]);
+
+        return corsResponse({ id: channelId }, 201, corsHeaders);
+      } catch (e: any) {
+        console.error("DM creation error:", e);
+        if (e.message?.includes("UNIQUE")) {
+             // Fallback if race condition created it
+             const retry = await env.DB.prepare("SELECT id FROM channels WHERE name = ?").bind(dmName).first();
+             if (retry) return corsResponse({ id: retry.id }, 200, corsHeaders);
+        }
+        return corsResponse("Failed to create DM", 500, corsHeaders);
+      }
     }
 
     if (url.pathname === "/api/channels" && request.method === "POST") {
