@@ -64,7 +64,7 @@ export default {
     }
 
     if (url.pathname.startsWith("/api/file/")) {
-      const key = url.pathname.replace("/api/file/", "");
+      const key = decodeURIComponent(url.pathname.replace("/api/file/", ""));
       if (!key) return corsResponse("File key required", 400, corsHeaders);
 
       const object = await env.BUCKET.get(key);
