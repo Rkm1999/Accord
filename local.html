@@ -1,0 +1,1747 @@
+<html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accord - #general</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#313338">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%235865F2'&gt;&lt;path d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/&gt;&lt;/svg&gt;">
+    <script>
+        // Instant redirect if not logged in
+        if (!localStorage.getItem('chatUsername')) {
+            window.location.replace('/');
+        }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        #messages-container {
+            overflow-anchor: auto;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+            background-color: #2B2D31;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #1A1B1E;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background-color: #2B2D31;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .edited-text {
+            color: #949BA4;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+        .message-actions {
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .message-group:hover .message-actions {
+            opacity: 1;
+        }
+        .typing-dot {
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        .typing-dot:nth-child(1) { animation-delay: 0s; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-4px); }
+        }
+        .members-sidebar-hidden {
+            display: none !important;
+        }
+        .channel-item {
+            transition: all 0.15s ease;
+        }
+        .channel-item:hover {
+            transform: translateX(2px);
+        }
+        .delete-btn {
+            transition: all 0.15s ease;
+        }
+        .delete-btn:hover {
+            transform: scale(1.1);
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes messagePop {
+            0% {
+                opacity: 0;
+                transform: scale(0.95) translateY(20px);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .message-group.new-message {
+            animation: messagePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes mentionGlow {
+            0%, 100% {
+                box-shadow: 0 0 0 rgba(250, 166, 26, 0.1);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(250, 166, 26, 0.3);
+            }
+        }
+
+        .mention-highlight {
+            animation: mentionGlow 2s ease-in-out;
+        }
+
+        @keyframes reactionPop {
+            0% {
+                transform: scale(0);
+            }
+            50% {
+                transform: scale(1.2);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .reaction-badge.updated {
+            animation: reactionPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #replyBanner.active {
+            animation: slideDown 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes channelSwitch {
+            0% {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            50% {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(20px);
+            }
+        }
+
+        .messages-container.switching {
+            animation: channelSwitch 0.4s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+            }
+        }
+
+        .online-status-dot {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes ripple {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        .btn-ripple {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-ripple::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            background-image: radial-gradient(circle, rgba(255, 255, 255, 0.3) 10%, transparent 10.01%);
+            background-repeat: no-repeat;
+            background-position: 50%;
+            transform: scale(10);
+            opacity: 0;
+            transition: transform 0.4s, opacity 0.8s;
+        }
+
+        .btn-ripple:active::after {
+            transform: scale(0);
+            opacity: 0.3;
+            transition: 0s;
+        }
+
+        @keyframes badgeShake {
+            0%, 100% {
+                transform: rotate(0deg);
+            }
+            25% {
+                transform: rotate(-5deg);
+            }
+            75% {
+                transform: rotate(5deg);
+            }
+        }
+
+        .unread-badge.updated {
+            animation: badgeShake 0.5s ease-in-out;
+        }
+
+        @keyframes bounceIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.3) translateY(20px);
+            }
+            50% {
+                transform: scale(1.05) translateY(-5px);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        #reactionPicker.visible {
+            animation: bounceIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        #emojiUploadModal.visible,
+        #createChannelModal.visible,
+        #searchModal.visible,
+        #editModal.visible,
+        #profileModal.visible {
+            animation: bounceIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes scrollBounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-5px);
+            }
+        }
+
+        #scroll-bottom-btn.visible {
+            animation: scrollBounce 1s ease-in-out infinite;
+        }
+
+        @keyframes typingPulse {
+            0%, 100% {
+                opacity: 0.6;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
+
+        #typingIndicator.active {
+            animation: typingPulse 1.5s ease-in-out infinite;
+        }
+
+        .modal-content {
+            animation: slideIn 0.2s ease-out;
+        }
+
+        #channel-sidebar, #members-sidebar {
+            transition: transform 0.3s ease;
+        }
+
+        @media (max-width: 1023px) {
+            #channel-sidebar, #members-sidebar {
+                display: flex !important;
+                position: fixed;
+                top: 0;
+                bottom: 0;
+                z-index: 70;
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease-out;
+                will-change: transform, opacity;
+                visibility: hidden;
+                pointer-events: none;
+            }
+            #channel-sidebar {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            #members-sidebar {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            #channel-sidebar.active, #members-sidebar.active {
+                visibility: visible;
+                pointer-events: auto;
+                opacity: 1;
+                transform: translateX(0);
+            }
+
+            #sidebar-overlay {
+                transition: opacity 0.3s ease;
+                opacity: 0;
+                pointer-events: none;
+                display: block !important; /* Always block, just invisible */
+                visibility: hidden;
+            }
+
+            #sidebar-overlay.visible {
+                opacity: 1;
+                pointer-events: auto;
+                visibility: visible;
+            }
+
+            #channel-sidebar.dragging,
+            #members-sidebar.dragging,
+            #sidebar-overlay.dragging {
+                transition: none !important;
+                visibility: visible !important;
+                pointer-events: auto !important;
+            }
+        }
+        @media (min-width: 1024px) {
+            #channel-sidebar, #members-sidebar {
+                display: flex !important;
+                flex-direction: column !important;
+                position: static !important;
+                flex-shrink: 0;
+                visibility: visible !important;
+                opacity: 1 !important;
+                transform: none !important;
+                pointer-events: auto !important;
+                height: 100% !important;
+            }
+            #channel-sidebar {
+                border-right: 1px solid #26272D;
+            }
+            #members-sidebar {
+                border-left: 1px solid #26272D;
+            }
+        }
+        .reaction-badge {
+            display: inline-flex;
+            align-items: center;
+            background: #2b2d31;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            padding: 2px 6px;
+            margin-right: 4px;
+            margin-top: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.1s;
+        }
+        .reaction-badge:hover {
+            border-color: #5865f2;
+            background: #35373c;
+        }
+        .reaction-badge.active {
+            background: rgba(88, 101, 242, 0.15);
+            border-color: #5865f2;
+        }
+        .reaction-count {
+            font-size: 12px;
+            margin-left: 4px;
+            color: #b5bac1;
+        }
+        .reaction-badge.active .reaction-count {
+            color: #5865f2;
+        }
+        .mention-highlight {
+            background: rgba(250, 166, 26, 0.1) !important;
+            border-left: 2px solid #faa61a !important;
+        }
+        .mention-highlight:hover {
+            background: rgba(250, 166, 26, 0.12) !important;
+        }
+        #mentionAutocomplete {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: 0;
+            background: #232428;
+            border: 1px solid #26272D;
+            border-radius: 8px 8px 0 0;
+            margin-bottom: 2px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        .autocomplete-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .autocomplete-item:hover, .autocomplete-item.selected {
+            background: #35373C;
+        }
+        .user-mention {
+            background: rgba(88, 101, 242, 0.3);
+            color: #dee0fc;
+            padding: 0 2px;
+            border-radius: 3px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .user-mention:hover {
+            background: #5865f2;
+            color: white;
+        }
+
+        /* Swipe-to-reply styles */
+        .message-group.swiping {
+            transition: transform 0.1s ease-out;
+            position: relative;
+            z-index: 100;
+        }
+
+        .reply-swipe-indicator {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%) translateX(100%);
+            background: #5865F2;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            opacity: 0;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .message-group.swiping .reply-swipe-indicator {
+            opacity: 1;
+        }
+
+        @media (max-width: 1023px) {
+            .reply-swipe-indicator {
+                display: flex;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .reply-swipe-indicator {
+                display: none;
+            }
+        }
+
+        .message-group {
+            overflow-x: visible;
+            width: 100%;
+        }
+
+        .messages-container-wrapper {
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Ensure all message content wraps */
+        .message-group p,
+        .message-group div {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            max-width: 100%;
+        }
+
+        /* Prevent horizontal scroll on body for mobile and block native swipe navigation */
+        html, body {
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            overscroll-behavior: none;
+        }
+
+        /* Ensure app container doesn't overflow and handle horizontal gestures via JS */
+        #app {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            touch-action: pan-y;
+            overscroll-behavior: none;
+        }
+
+        /* PWA Update Prompt */
+        #pwaUpdatePrompt {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            right: 16px;
+            background: #5865F2;
+            border-radius: 16px;
+            padding: 12px 16px;
+            z-index: 300;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            animation: slideDownPwa 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* PWA Install Prompt */
+        #pwaInstallPrompt {
+            position: fixed;
+            bottom: 24px;
+            left: 16px;
+            right: 16px;
+            background: #2B2D31;
+            border: 1px solid #404249;
+            border-radius: 16px;
+            padding: 16px;
+            z-index: 200;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            animation: slideUpPwa 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes slideDownPwa {
+            from { transform: translateY(-120%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes slideUpPwa {
+            from { transform: translateY(120%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .animate-spin-slow {
+            animation: spin 3s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .pwa-icon-container {
+            width: 48px;
+            height: 48px;
+            background: #5865F2;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
+        }
+
+        @media (min-width: 1024px) {
+            #pwaInstallPrompt {
+                max-width: 360px;
+                left: auto;
+                right: 24px;
+            }
+        }
+
+        /* Send Button Mobile */
+        #send-message-btn {
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform: scale(0);
+            width: 0;
+            opacity: 0;
+            overflow: hidden;
+        }
+
+        #send-message-btn.visible {
+            transform: scale(1);
+            width: 32px;
+            opacity: 1;
+            margin-left: 8px;
+        }
+    </style>
+<style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.visible{visibility:visible}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.inset-0{inset:0px}.bottom-0{bottom:0px}.bottom-24{bottom:6rem}.left-0{left:0px}.left-4{left:1rem}.right-0{right:0px}.right-4{right:1rem}.right-6{right:1.5rem}.top-14{top:3.5rem}.top-4{top:1rem}.-right-1{right:-0.25rem}.-top-1{top:-0.25rem}.bottom-2{bottom:0.5rem}.right-2{right:0.5rem}.z-40{z-index:40}.z-50{z-index:50}.z-\[100\]{z-index:100}.z-\[60\]{z-index:60}.z-\[70\]{z-index:70}.z-10{z-index:10}.mx-2{margin-left:0.5rem;margin-right:0.5rem}.mx-4{margin-left:1rem;margin-right:1rem}.mx-auto{margin-left:auto;margin-right:auto}.my-4{margin-top:1rem;margin-bottom:1rem}.-mx-4{margin-left:-1rem;margin-right:-1rem}.mb-1{margin-bottom:0.25rem}.mb-2{margin-bottom:0.5rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.ml-0\.5{margin-left:0.125rem}.ml-2{margin-left:0.5rem}.mr-1{margin-right:0.25rem}.mr-2{margin-right:0.5rem}.mr-3{margin-right:0.75rem}.mr-4{margin-right:1rem}.mr-auto{margin-right:auto}.mt-2{margin-top:0.5rem}.-mt-2{margin-top:-0.5rem}.ml-1{margin-left:0.25rem}.mt-0\.5{margin-top:0.125rem}.mt-1{margin-top:0.25rem}.mt-\[17px\]{margin-top:17px}.mb-\[2px\]{margin-bottom:2px}.ml-auto{margin-left:auto}.mr-1\.5{margin-right:0.375rem}.mt-auto{margin-top:auto}.block{display:block}.flex{display:flex}.hidden{display:none}.h-1\.5{height:0.375rem}.h-12{height:3rem}.h-16{height:4rem}.h-2\.5{height:0.625rem}.h-24{height:6rem}.h-3{height:0.75rem}.h-4{height:1rem}.h-5{height:1.25rem}.h-6{height:1.5rem}.h-8{height:2rem}.h-\[19px\]{height:19px}.h-full{height:100%}.h-screen{height:100vh}.h-10{height:2.5rem}.h-\[16px\]{height:16px}.h-\[18px\]{height:18px}.h-3\.5{height:0.875rem}.h-\[14px\]{height:14px}.h-\[1px\]{height:1px}.max-h-\[100px\]{max-height:100px}.max-h-\[80vh\]{max-height:80vh}.max-h-\[90vh\]{max-height:90vh}.w-1\.5{width:0.375rem}.w-12{width:3rem}.w-16{width:4rem}.w-2\.5{width:0.625rem}.w-24{width:6rem}.w-3{width:0.75rem}.w-4{width:1rem}.w-5{width:1.25rem}.w-6{width:1.5rem}.w-60{width:15rem}.w-8{width:2rem}.w-\[19px\]{width:19px}.w-\[220px\]{width:220px}.w-\[240px\]{width:240px}.w-full{width:100%}.w-10{width:2.5rem}.w-\[16px\]{width:16px}.w-\[18px\]{width:18px}.w-3\.5{width:0.875rem}.w-\[14px\]{width:14px}.min-w-0{min-width:0px}.min-w-\[240px\]{min-width:240px}.max-w-\[90vw\]{max-width:90vw}.max-w-lg{max-width:32rem}.max-w-md{max-width:28rem}.max-w-sm{max-width:24rem}.max-w-\[300px\]{max-width:300px}.max-w-full{max-width:100%}.flex-1{flex:1 1 0%}.flex-shrink-0{flex-shrink:0}.flex-grow{flex-grow:1}.-translate-y-full{--tw-translate-y:-100%;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.translate-y-2{--tw-translate-y:0.5rem;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.transform{transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}@keyframes bounce{0%, 100%{transform:translateY(-25%);animation-timing-function:cubic-bezier(0.8,0,1,1)}50%{transform:none;animation-timing-function:cubic-bezier(0,0,0.2,1)}}.animate-bounce{animation:bounce 1s infinite}.cursor-pointer{cursor:pointer}.select-none{-webkit-user-select:none;user-select:none}.resize-none{resize:none}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1{gap:0.25rem}.gap-1\.5{gap:0.375rem}.gap-2{gap:0.5rem}.gap-3{gap:0.75rem}.gap-4{gap:1rem}.space-x-1 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(0.25rem * var(--tw-space-x-reverse));margin-left:calc(0.25rem * calc(1 - var(--tw-space-x-reverse)))}.space-x-2 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(0.5rem * var(--tw-space-x-reverse));margin-left:calc(0.5rem * calc(1 - var(--tw-space-x-reverse)))}.space-x-3 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(0.75rem * var(--tw-space-x-reverse));margin-left:calc(0.75rem * calc(1 - var(--tw-space-x-reverse)))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.space-y-6 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.5rem * var(--tw-space-y-reverse))}.overflow-hidden{overflow:hidden}.overflow-y-auto{overflow-y:auto}.overflow-x-hidden{overflow-x:hidden}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.whitespace-nowrap{white-space:nowrap}.whitespace-pre-wrap{white-space:pre-wrap}.rounded{border-radius:0.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-sm{border-radius:0.125rem}.rounded-\[4px\]{border-radius:4px}.rounded-b-md{border-bottom-right-radius:0.375rem;border-bottom-left-radius:0.375rem}.rounded-t-none{border-top-left-radius:0px;border-top-right-radius:0px}.border{border-width:1px}.border-2{border-width:2px}.border-4{border-width:4px}.border-\[3px\]{border-width:3px}.border-b{border-bottom-width:1px}.border-l{border-left-width:1px}.border-t{border-top-width:1px}.border-dashed{border-style:dashed}.border-\[\#1E1F22\]{--tw-border-opacity:1;border-color:rgb(30 31 34 / var(--tw-border-opacity, 1))}.border-\[\#1f2023\]{--tw-border-opacity:1;border-color:rgb(31 32 35 / var(--tw-border-opacity, 1))}.border-\[\#232428\]{--tw-border-opacity:1;border-color:rgb(35 36 40 / var(--tw-border-opacity, 1))}.border-\[\#26272D\]{--tw-border-opacity:1;border-color:rgb(38 39 45 / var(--tw-border-opacity, 1))}.border-\[\#3F4147\]{--tw-border-opacity:1;border-color:rgb(63 65 71 / var(--tw-border-opacity, 1))}.border-\[\#404249\]{--tw-border-opacity:1;border-color:rgb(64 66 73 / var(--tw-border-opacity, 1))}.border-\[\#5865F2\]{--tw-border-opacity:1;border-color:rgb(88 101 242 / var(--tw-border-opacity, 1))}.border-transparent{border-color:transparent}.border-\[\#2B2D31\]{--tw-border-opacity:1;border-color:rgb(43 45 49 / var(--tw-border-opacity, 1))}.bg-\[\#1E1F22\]{--tw-bg-opacity:1;background-color:rgb(30 31 34 / var(--tw-bg-opacity, 1))}.bg-\[\#232428\]{--tw-bg-opacity:1;background-color:rgb(35 36 40 / var(--tw-bg-opacity, 1))}.bg-\[\#2B2D31\]{--tw-bg-opacity:1;background-color:rgb(43 45 49 / var(--tw-bg-opacity, 1))}.bg-\[\#313338\]{--tw-bg-opacity:1;background-color:rgb(49 51 56 / var(--tw-bg-opacity, 1))}.bg-\[\#383A40\]{--tw-bg-opacity:1;background-color:rgb(56 58 64 / var(--tw-bg-opacity, 1))}.bg-\[\#5865F2\]{--tw-bg-opacity:1;background-color:rgb(88 101 242 / var(--tw-bg-opacity, 1))}.bg-\[\#5865F2\]\/20{background-color:rgb(88 101 242 / 0.2)}.bg-\[\#5865F2\]\/90{background-color:rgb(88 101 242 / 0.9)}.bg-\[\#B5BAC1\]{--tw-bg-opacity:1;background-color:rgb(181 186 193 / var(--tw-bg-opacity, 1))}.bg-\[\#dbdee1\]{--tw-bg-opacity:1;background-color:rgb(219 222 225 / var(--tw-bg-opacity, 1))}.bg-black\/40{background-color:rgb(0 0 0 / 0.4)}.bg-black\/50{background-color:rgb(0 0 0 / 0.5)}.bg-black\/70{background-color:rgb(0 0 0 / 0.7)}.bg-black\/90{background-color:rgb(0 0 0 / 0.9)}.bg-blue-500\/10{background-color:rgb(59 130 246 / 0.1)}.bg-green-500{--tw-bg-opacity:1;background-color:rgb(34 197 94 / var(--tw-bg-opacity, 1))}.bg-red-500\/10{background-color:rgb(239 68 68 / 0.1)}.bg-transparent{background-color:transparent}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-white\/20{background-color:rgb(255 255 255 / 0.2)}.bg-\[\#949BA4\]{--tw-bg-opacity:1;background-color:rgb(148 155 164 / var(--tw-bg-opacity, 1))}.bg-\[\#404249\]{--tw-bg-opacity:1;background-color:rgb(64 66 73 / var(--tw-bg-opacity, 1))}.bg-red-500{--tw-bg-opacity:1;background-color:rgb(239 68 68 / var(--tw-bg-opacity, 1))}.object-contain{object-fit:contain}.object-cover{object-fit:cover}.p-0\.5{padding:0.125rem}.p-1{padding:0.25rem}.p-1\.5{padding:0.375rem}.p-2{padding:0.5rem}.p-2\.5{padding:0.625rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.p-6{padding:1.5rem}.p-8{padding:2rem}.px-1{padding-left:0.25rem;padding-right:0.25rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-4{padding-left:1rem;padding-right:1rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1\.5{padding-top:0.375rem;padding-bottom:0.375rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-2\.5{padding-top:0.625rem;padding-bottom:0.625rem}.py-4{padding-top:1rem;padding-bottom:1rem}.py-\[6px\]{padding-top:6px;padding-bottom:6px}.pb-2{padding-bottom:0.5rem}.pb-4{padding-bottom:1rem}.pb-6{padding-bottom:1.5rem}.pl-4{padding-left:1rem}.pt-2{padding-top:0.5rem}.pt-3{padding-top:0.75rem}.pt-4{padding-top:1rem}.pr-4{padding-right:1rem}.text-center{text-align:center}.font-mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}.font-sans{font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"}.text-2xl{font-size:1.5rem;line-height:2rem}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.text-\[13px\]{font-size:13px}.text-\[15px\]{font-size:15px}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.leading-tight{line-height:1.25}.leading-\[1\.375rem\]{line-height:1.375rem}.leading-4{line-height:1rem}.tracking-wider{letter-spacing:0.05em}.text-\[\#00A8FC\]{--tw-text-opacity:1;color:rgb(0 168 252 / var(--tw-text-opacity, 1))}.text-\[\#313338\]{--tw-text-opacity:1;color:rgb(49 51 56 / var(--tw-text-opacity, 1))}.text-\[\#5865F2\]{--tw-text-opacity:1;color:rgb(88 101 242 / var(--tw-text-opacity, 1))}.text-\[\#80848E\]{--tw-text-opacity:1;color:rgb(128 132 142 / var(--tw-text-opacity, 1))}.text-\[\#949BA4\]{--tw-text-opacity:1;color:rgb(148 155 164 / var(--tw-text-opacity, 1))}.text-\[\#B5BAC1\]{--tw-text-opacity:1;color:rgb(181 186 193 / var(--tw-text-opacity, 1))}.text-\[\#dbdee1\]{--tw-text-opacity:1;color:rgb(219 222 225 / var(--tw-text-opacity, 1))}.text-red-500{--tw-text-opacity:1;color:rgb(239 68 68 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.text-red-400{--tw-text-opacity:1;color:rgb(248 113 113 / var(--tw-text-opacity, 1))}.placeholder-\[\#949BA4\]::placeholder{--tw-placeholder-opacity:1;color:rgb(148 155 164 / var(--tw-placeholder-opacity, 1))}.opacity-0{opacity:0}.opacity-100{opacity:1}.opacity-40{opacity:0.4}.opacity-50{opacity:0.5}.shadow{--tw-shadow:0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 1px 3px 0 var(--tw-shadow-color), 0 1px 2px -1px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgb(0 0 0 / 0.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-lg{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-xl{--tw-shadow:0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 20px 25px -5px var(--tw-shadow-color), 0 8px 10px -6px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.backdrop-blur{--tw-backdrop-blur:blur(8px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.backdrop-blur-sm{--tw-backdrop-blur:blur(4px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-colors{transition-property:color, background-color, border-color, fill, stroke, -webkit-text-decoration-color;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-opacity{transition-property:opacity;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-200{transition-duration:200ms}.duration-300{transition-duration:300ms}.file\:mr-4::file-selector-button{margin-right:1rem}.file\:rounded::file-selector-button{border-radius:0.25rem}.file\:border-0::file-selector-button{border-width:0px}.file\:bg-\[\#5865F2\]::file-selector-button{--tw-bg-opacity:1;background-color:rgb(88 101 242 / var(--tw-bg-opacity, 1))}.file\:px-4::file-selector-button{padding-left:1rem;padding-right:1rem}.file\:py-2::file-selector-button{padding-top:0.5rem;padding-bottom:0.5rem}.file\:text-sm::file-selector-button{font-size:0.875rem;line-height:1.25rem}.file\:font-semibold::file-selector-button{font-weight:600}.file\:text-white::file-selector-button{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.hover\:bg-\[\#35373C\]:hover{--tw-bg-opacity:1;background-color:rgb(53 55 60 / var(--tw-bg-opacity, 1))}.hover\:bg-\[\#3F4147\]:hover{--tw-bg-opacity:1;background-color:rgb(63 65 71 / var(--tw-bg-opacity, 1))}.hover\:bg-\[\#404249\]:hover{--tw-bg-opacity:1;background-color:rgb(64 66 73 / var(--tw-bg-opacity, 1))}.hover\:bg-\[\#4752C4\]:hover{--tw-bg-opacity:1;background-color:rgb(71 82 196 / var(--tw-bg-opacity, 1))}.hover\:bg-\[\#5865F2\]:hover{--tw-bg-opacity:1;background-color:rgb(88 101 242 / var(--tw-bg-opacity, 1))}.hover\:bg-\[\#f0f0f0\]:hover{--tw-bg-opacity:1;background-color:rgb(240 240 240 / var(--tw-bg-opacity, 1))}.hover\:bg-blue-500\/20:hover{background-color:rgb(59 130 246 / 0.2)}.hover\:bg-red-500\/20:hover{background-color:rgb(239 68 68 / 0.2)}.hover\:bg-\[\#2e3035\]:hover{--tw-bg-opacity:1;background-color:rgb(46 48 53 / var(--tw-bg-opacity, 1))}.hover\:bg-red-600:hover{--tw-bg-opacity:1;background-color:rgb(220 38 38 / var(--tw-bg-opacity, 1))}.hover\:text-\[\#B5BAC1\]:hover{--tw-text-opacity:1;color:rgb(181 186 193 / var(--tw-text-opacity, 1))}.hover\:text-\[\#dbdee1\]:hover{--tw-text-opacity:1;color:rgb(219 222 225 / var(--tw-text-opacity, 1))}.hover\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.hover\:text-red-500:hover{--tw-text-opacity:1;color:rgb(239 68 68 / var(--tw-text-opacity, 1))}.hover\:text-red-400:hover{--tw-text-opacity:1;color:rgb(248 113 113 / var(--tw-text-opacity, 1))}.hover\:underline:hover{-webkit-text-decoration-line:underline;text-decoration-line:underline}.hover\:opacity-80:hover{opacity:0.8}.hover\:opacity-100:hover{opacity:1}.hover\:opacity-90:hover{opacity:0.9}.hover\:file\:bg-\[\#4752C4\]::file-selector-button:hover{--tw-bg-opacity:1;background-color:rgb(71 82 196 / var(--tw-bg-opacity, 1))}.focus\:border-\[\#5865F2\]:focus{--tw-border-opacity:1;border-color:rgb(88 101 242 / var(--tw-border-opacity, 1))}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.focus\:ring-2:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-\[\#5865F2\]:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(88 101 242 / var(--tw-ring-opacity, 1))}.active\:scale-\[0\.98\]:active{--tw-scale-x:0.98;--tw-scale-y:0.98;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.group:hover .group-hover\:opacity-100{opacity:1}.group\/image:hover .group-hover\/image\:opacity-100{opacity:1}@media (min-width: 768px){.md\:block{display:block}}@media (min-width: 1024px){.lg\:hidden{display:none}.lg\:shadow-none{--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}}</style></head>
+
+<body class="bg-[#313338] text-white font-sans overflow-hidden select-none h-screen w-full" data-new-gr-c-s-check-loaded="14.1271.0" data-gr-ext-installed="">
+
+    <div id="app" class="flex h-screen w-full relative overflow-hidden">
+        <!-- Drag Drop Overlay -->
+        <div id="drag-drop-overlay" class="fixed inset-0 bg-[#5865F2]/20 backdrop-blur-sm z-[70] hidden flex items-center justify-center border-4 border-[#5865F2] border-dashed pointer-events-none">
+            <div class="bg-[#313338] rounded-lg p-8 text-center shadow-2xl">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="upload-cloud" aria-hidden="true" class="lucide lucide-upload-cloud w-16 h-16 text-[#5865F2] mx-auto mb-4"><path d="M12 13v8"></path><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="m8 17 4-4 4 4"></path></svg>
+                <h2 class="text-2xl font-bold text-white mb-2">Drop files to upload</h2>
+                <p class="text-[#949BA4]">Images, videos, documents up to 50MB</p>
+            </div>
+        </div>
+
+        <!-- Sidebar Overlay (Mobile) -->
+        <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-[60] hidden lg:hidden" onclick="closeAllSidebars()"></div>
+
+        <!-- 1. Channel Sidebar -->
+        <div id="channel-sidebar" class="w-60 bg-[#2B2D31] flex flex-col min-w-[240px] left-0 shadow-2xl lg:shadow-none">
+
+            <!-- Server Header -->
+            <div class="h-12 px-4 flex items-center justify-between shadow-sm hover:bg-[#35373C] cursor-pointer transition-colors border-b border-[#1f2023]" onclick="closeAllSidebars()">
+                <h1 class="font-bold text-[15px] truncate">Accord</h1>
+            </div>
+
+
+            <!-- Channels Section -->
+            <div class="flex-1 flex flex-col">
+                <!-- Channels Header -->
+                <div class="flex items-center justify-between px-2 mb-1">
+                    <div class="flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="chevron-down" aria-hidden="true" class="lucide lucide-chevron-down w-4 h-4 text-[#949BA4] mr-1"><path d="m6 9 6 6 6-6"></path></svg>
+                        <span class="text-[11px] font-bold uppercase text-[#949BA4]">Channels</span>
+                    </div>
+                    <button class="text-[#949BA4] hover:text-[#dbdee1] hover:bg-[#35373C] rounded-sm p-0.5 transition-all" onclick="openCreateChannelModal()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="plus" aria-hidden="true" class="lucide lucide-plus w-4 h-4"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                    </button>
+                </div>
+                
+                <!-- Channels List -->
+                <div class="flex-1 overflow-y-auto custom-scrollbar px-1" id="channels-container"><div class="mt-2"><div class="channel-item flex items-center px-2 py-[6px] rounded-[4px] cursor-pointer group mb-[2px] bg-[#404249] text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="hash" aria-hidden="true" class="lucide lucide-hash mr-1.5 w-5 h-5 text-[#80848E] flex-shrink-0"><line x1="4" x2="20" y1="9" y2="9"></line><line x1="4" x2="20" y1="15" y2="15"></line><line x1="10" x2="8" y1="3" y2="21"></line><line x1="16" x2="14" y1="3" y2="21"></line></svg>
+            <span class="font-medium truncate flex-1 ">general</span>
+            
+            
+        </div><div class="channel-item flex items-center px-2 py-[6px] rounded-[4px] cursor-pointer group mb-[2px] text-[#949BA4] hover:bg-[#35373C] hover:text-[#dbdee1]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="hash" aria-hidden="true" class="lucide lucide-hash mr-1.5 w-5 h-5 text-[#80848E] flex-shrink-0"><line x1="4" x2="20" y1="9" y2="9"></line><line x1="4" x2="20" y1="15" y2="15"></line><line x1="10" x2="8" y1="3" y2="21"></line><line x1="16" x2="14" y1="3" y2="21"></line></svg>
+            <span class="font-medium truncate flex-1 ">test</span>
+            
+            
+                <button class="delete-btn ml-auto opacity-0 group-hover:opacity-100 hover:bg-red-500/20 hover:text-red-400 text-[#949BA4] p-1 rounded cursor-pointer" onclick="event.stopPropagation(); if(confirm('Are you sure you want to delete this channel? All messages in this channel will be deleted.')) deleteChannel(2)" title="Delete channel">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="trash-2" aria-hidden="true" class="lucide lucide-trash-2 w-[14px] h-[14px]"><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+            
+        </div></div></div>
+            </div>
+
+            <!-- User Control Panel -->
+            <div class="bg-[#232428] px-2 py-1.5 flex items-center">
+                <div class="flex items-center p-1 hover:bg-[#3F4147] rounded cursor-pointer mr-auto group flex-1" onclick="openProfileModal()">
+                    <div class="relative mr-2">
+                        <div class="w-8 h-8 rounded-full bg-[#5865F2] flex items-center justify-center text-sm font-bold"><img src="http://127.0.0.1:8787/api/file/avatar-테스트-1770307578073" class="w-8 h-8 rounded-full object-cover"></div>
+                        <div class="online-status-dot absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#232428] rounded-full"></div>
+                    </div>
+                    <div class="text-sm overflow-hidden">
+                        <div class="font-semibold text-white text-[13px] leading-tight truncate" id="display-username">테스트</div>
+                        <div class="text-[11px] text-[#949BA4] truncate">#<span id="current-channel-badge">general</span></div>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <button class="p-1.5 hover:bg-[#3F4147] rounded text-[#dbdee1]" onclick="openProfileModal()" title="User Settings">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="settings" aria-hidden="true" class="lucide lucide-settings w-[19px] h-[19px]"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Main Chat Area -->
+        <div class="flex-1 flex flex-col min-w-0 bg-[#313338] relative">
+            <!-- Unread Banner -->
+            <div id="unread-banner" class="absolute top-14 left-4 right-4 bg-[#5865F2]/90 backdrop-blur hover:bg-[#5865F2] text-white px-4 py-2 rounded-t-none rounded-b-md shadow-lg cursor-pointer flex items-center justify-between z-40 transition-all duration-300 transform -translate-y-full opacity-0 hidden" onclick="jumpToUnread()">
+                <div class="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-up" aria-hidden="true" class="lucide lucide-arrow-up w-4 h-4 mr-2 animate-bounce"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>
+                    <span class="font-semibold text-sm">Unread Messages</span>
+                </div>
+                <span class="text-xs bg-white/20 px-2 py-0.5 rounded">Jump</span>
+            </div>
+
+            <!-- Scroll to Bottom Button -->
+            <div id="scroll-bottom-btn" class="absolute bottom-24 right-6 bg-[#313338] hover:bg-[#35373C] text-[#B5BAC1] hover:text-[#dbdee1] p-2.5 rounded-full shadow-lg cursor-pointer border border-[#26272D] transition-all duration-200 opacity-0 pointer-events-none z-40 transform translate-y-2" onclick="scrollToBottom()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="chevron-down" aria-hidden="true" class="lucide lucide-chevron-down w-5 h-5"><path d="m6 9 6 6 6-6"></path></svg>
+            </div>
+
+            <!-- Chat Header -->
+
+            <header class="h-12 px-4 flex items-center shadow-sm border-b border-[#26272D] flex-shrink-0 justify-between relative z-50 bg-[#313338]">
+                <div class="flex items-center overflow-hidden">
+                    <!-- Toggle Channel Button (Mobile) -->
+                    <button id="toggle-channels-btn" class="mr-2 hover:text-[#dbdee1] cursor-pointer text-[#B5BAC1] lg:hidden flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="menu" aria-hidden="true" class="lucide lucide-menu w-6 h-6"><path d="M4 5h16"></path><path d="M4 12h16"></path><path d="M4 19h16"></path></svg>
+                    </button>
+                    
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="hash" aria-hidden="true" class="lucide lucide-hash text-[#80848E] mr-2 w-6 h-6"><line x1="4" x2="20" y1="9" y2="9"></line><line x1="4" x2="20" y1="15" y2="15"></line><line x1="10" x2="8" y1="3" y2="21"></line><line x1="16" x2="14" y1="3" y2="21"></line></svg>
+                    <h3 id="header-channel-name" class="font-bold text-white mr-4 whitespace-nowrap">general</h3>
+                    <span id="header-topic" class="hidden md:block text-xs text-[#949BA4] truncate border-l border-[#3F4147] pl-4">Start of conversation</span>
+                </div>
+
+                <div class="flex items-center space-x-3 text-[#B5BAC1]">
+                    <button class="hover:text-[#dbdee1] cursor-pointer text-[#B5BAC1] flex items-center justify-center" onclick="openSearchModal()" title="Search">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="search" aria-hidden="true" class="lucide lucide-search w-6 h-6"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+                    </button>
+                    <button id="toggle-members-btn" class="hover:text-[#dbdee1] cursor-pointer text-[#B5BAC1] lg:hidden flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="users" aria-hidden="true" class="lucide lucide-users w-6 h-6"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                    </button>
+                </div>
+            </header>
+
+
+
+            <!-- Message List -->
+            <div class="flex-1 overflow-hidden relative">
+                <main id="messages-container" class="h-full overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col px-4 pt-4 pb-4"><div class="text-center py-4" id="load-more-button">
+            <button onclick="loadMoreMessages()" class="bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium py-2 px-4 rounded transition-colors">
+                Load More Messages
+            </button>
+        </div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="53" data-username="test" data-timestamp="1770263076109" data-text="아아">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:44:36 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">아아</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-53"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 53)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(53)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="54" data-username="test" data-timestamp="1770263077797" data-text="텐스트">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:44:37 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">텐스트</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-54"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 54)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(54)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="55" data-username="test" data-timestamp="1770263079398" data-text="123">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:44:39 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">123</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-55"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 55)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(55)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="56" data-username="test" data-timestamp="1770263389818" data-text="아아">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:49:49 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">아아</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-56"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 56)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(56)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="57" data-username="test" data-timestamp="1770263477283" data-text="test">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:51:17 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">test</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-57"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 57)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(57)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="58" data-username="test" data-timestamp="1770263536657" data-text="gdg">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:52:16 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">gdg</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-58"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 58)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(58)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="59" data-username="test" data-timestamp="1770263541613" data-text="dfdf">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:52:21 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">dfdf</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-59"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 59)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(59)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="60" data-username="test" data-timestamp="1770263602693" data-text="dmddo">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:53:22 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">dmddo</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-60"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 60)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(60)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="61" data-username="test" data-timestamp="1770263609587" data-text="dmddo">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:53:29 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">dmddo</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-61"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 61)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(61)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="62" data-username="test" data-timestamp="1770263636469" data-text="ㄹㅇ">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:53:56 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">ㄹㅇ</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-62"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 62)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(62)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="63" data-username="test" data-timestamp="1770263644147" data-text="응애">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:54:04 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">응애</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-63"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 63)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(63)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="64" data-username="test" data-timestamp="1770263659969" data-text="흠터">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:54:19 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">흠터</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-64"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 64)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(64)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="65" data-username="test" data-timestamp="1770263691340" data-text="아아">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:54:51 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">아아</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-65"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 65)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(65)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="66" data-username="test2" data-timestamp="1770263703655" data-text="gma">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="https://ui-avatars.com/api/?name=test2&amp;background=random" alt="test2" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test2
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:55:03 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">gma</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-66"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 66)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(66)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="67" data-username="test2" data-timestamp="1770263705002" data-text="흠">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="https://ui-avatars.com/api/?name=test2&amp;background=random" alt="test2" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test2
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:55:05 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">흠</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-67"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 67)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(67)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="68" data-username="test" data-timestamp="1770263728169" data-text="ㅇㄹ">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:55:28 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">ㅇㄹ</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-68"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 68)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(68)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="69" data-username="test" data-timestamp="1770263841979" data-text="ㅅㄷㄴㅅ">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:57:21 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">ㅅㄷㄴㅅ</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-69"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 69)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(69)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="70" data-username="test" data-timestamp="1770263847917" data-text="ㅎㅇ">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 7:57:27 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">ㅎㅇ</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-70"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 70)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(70)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="71" data-username="test" data-timestamp="1770264493422" data-text="ㅎㅇ">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 8:08:13 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">ㅎㅇ</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-71"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 71)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(71)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="72" data-username="test" data-timestamp="1770264504184" data-text="응애">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 8:08:24 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">응애</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-72"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 72)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(72)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="73" data-username="test" data-timestamp="1770264506625" data-text="왜 안해줘">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        test
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/4/2026 at 8:08:26 PM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">왜 안해줘</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-73"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 73)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(73)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="74" data-username="테스트" data-timestamp="1770307571509" data-text="1234">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-테스트-1770307578073" alt="테스트" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        테스트
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/5/2026 at 8:06:11 AM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">1234</p><div class="reactions-container flex flex-wrap mt-1" id="reactions-74"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 74)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(74)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="openEditModal(74)" title="Edit">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="edit-2" aria-hidden="true" class="lucide lucide-edit-2 w-[16px] h-[16px]"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path></svg>
+                    </div>
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-red-400 hover:text-red-500" onclick="deleteMessage(74)" title="Delete">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="trash-2" aria-hidden="true" class="lucide lucide-trash-2 w-[16px] h-[16px]"><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="78" data-username="테스트" data-timestamp="1770309666700" data-text="" data-file-key="1770309666694-download__1_.jpg" data-file-name="download (1).jpg" data-file-type="image/jpeg">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-테스트-1770307578073" alt="테스트" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        테스트
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/5/2026 at 8:41:06 AM</span>
+                </div>
+        
+                <div class="mt-2 group/image relative">
+                    <img src="http://127.0.0.1:8787/api/file/1770309666694-download__1_.jpg" alt="download (1).jpg" class="rounded-lg max-w-[300px] cursor-pointer hover:opacity-90" onclick="openImageModal('http://127.0.0.1:8787/api/file/1770309666694-download__1_.jpg')" onerror="this.style.display='none'">
+                    <a href="http://127.0.0.1:8787/api/file/1770309666694-download__1_.jpg" download="download (1).jpg" class="absolute bottom-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-2 rounded-full shadow-lg opacity-0 group-hover/image:opacity-100 transition-opacity" title="Download">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="download" aria-hidden="true" class="lucide lucide-download w-4 h-4"><path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path></svg>
+                    </a>
+                </div>
+            <div class="reactions-container flex flex-wrap mt-1" id="reactions-78"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 78)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(78)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="openEditModal(78)" title="Edit">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="edit-2" aria-hidden="true" class="lucide lucide-edit-2 w-[16px] h-[16px]"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path></svg>
+                    </div>
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-red-400 hover:text-red-500" onclick="deleteMessage(78)" title="Delete">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="trash-2" aria-hidden="true" class="lucide lucide-trash-2 w-[16px] h-[16px]"><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="79" data-username="테스트" data-timestamp="1770309981754" data-text="https://youtu.be/hT9cTYUAnUw?si=t_kQjEchXzfqiKvD">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-테스트-1770307578073" alt="테스트" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        테스트
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/5/2026 at 8:46:21 AM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">https://youtu.be/hT9cTYUAnUw?si=t_kQjEchXzfqiKvD</p>
+            <a href="https://youtu.be/hT9cTYUAnUw?si=t_kQjEchXzfqiKvD" target="_blank" class="block mt-2 ">
+                <img src="https://img.youtube.com/vi/hT9cTYUAnUw/hqdefault.jpg" alt="Link preview" class="rounded-lg max-w-full mb-2">
+                <div class="text-[#00A8FC] hover:underline font-medium">방콕 오픈과 기가 차드</div>
+                <div class="text-sm text-[#949BA4] mt-1">#체스 #하이라이트 #슥슥이</div>
+            </a>
+        <div class="reactions-container flex flex-wrap mt-1" id="reactions-79"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 79)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(79)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="openEditModal(79)" title="Edit">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="edit-2" aria-hidden="true" class="lucide lucide-edit-2 w-[16px] h-[16px]"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path></svg>
+                    </div>
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-red-400 hover:text-red-500" onclick="deleteMessage(79)" title="Delete">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="trash-2" aria-hidden="true" class="lucide lucide-trash-2 w-[16px] h-[16px]"><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="flex items-center my-4 unread-divider" id="unread-divider">
+                    <div class="flex-grow h-[1px] bg-red-500 opacity-50"></div>
+                    <span class="px-2 text-xs font-bold text-red-500 uppercase">New Messages</span>
+                    <div class="flex-grow h-[1px] bg-red-500 opacity-50"></div>
+                </div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group " data-message-id="80" data-username="테스트" data-timestamp="1770310123784" data-text="https://youtu.be/qH_3m7i1gZ4?si=k7p1KtrUL2hM7rJB">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-테스트-1770307578073" alt="테스트" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        테스트
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/5/2026 at 8:48:43 AM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">https://youtu.be/qH_3m7i1gZ4?si=k7p1KtrUL2hM7rJB</p>
+            <a href="https://youtu.be/qH_3m7i1gZ4?si=k7p1KtrUL2hM7rJB" target="_blank" class="block mt-2 ">
+                <img src="https://img.youtube.com/vi/qH_3m7i1gZ4/hqdefault.jpg" alt="Link preview" class="rounded-lg max-w-full mb-2">
+                <div class="text-[#00A8FC] hover:underline font-medium">버튜버 체스 입문시키기</div>
+                <div class="text-sm text-[#949BA4] mt-1">26년 1월 7일 하이라이트입니다당시에 감기에 걸려서 방송 준비 상태 및 목 상태가 안 좋습니다.. ㅈㅅ▶ 치지직 생방송 바로가기https://chzzk.naver.com/live/5991a358fe01fea08325369487bee8f0#체스 #로제타 #라디유</div>
+            </a>
+        <div class="reactions-container flex flex-wrap mt-1" id="reactions-80"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 80)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(80)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="openEditModal(80)" title="Edit">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="edit-2" aria-hidden="true" class="lucide lucide-edit-2 w-[16px] h-[16px]"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path></svg>
+                    </div>
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-red-400 hover:text-red-500" onclick="deleteMessage(80)" title="Delete">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="trash-2" aria-hidden="true" class="lucide lucide-trash-2 w-[16px] h-[16px]"><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div><div class="group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 mt-[17px] relative message-group" data-message-id="81" data-username="테스트" data-timestamp="1770310259757" data-text="https://youtu.be/6eJvDswhWOU?si=4dJox9qScXjIB0io">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="http://127.0.0.1:8787/api/file/avatar-테스트-1770307578073" alt="테스트" class="w-10 h-10 rounded-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        테스트
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">2/5/2026 at 8:50:59 AM</span>
+                </div>
+        <p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">https://youtu.be/6eJvDswhWOU?si=4dJox9qScXjIB0io</p>
+            <a href="https://youtu.be/6eJvDswhWOU?si=4dJox9qScXjIB0io" target="_blank" class="block mt-2 ">
+                <img src="https://img.youtube.com/vi/6eJvDswhWOU/hqdefault.jpg" alt="Link preview" class="rounded-lg max-w-full mb-2">
+                <div class="text-[#00A8FC] hover:underline font-medium">그렇게 어머니가 된다</div>
+                <div class="text-sm text-[#949BA4] mt-1">✦ 강튜브 멤버십 가입하기!월 990원으로 즐기는 강지와 강동부의 시크릿 오마카세 (｡•̀ᴗ-ღ)https://www.youtube.com/channel/UCIVFv8AiQLqM9oLHTixrNYw/join✦ 치지직 생방송 : https://naver.me/Fawk2zxt생방송에서...</div>
+            </a>
+        <div class="reactions-container flex flex-wrap mt-1" id="reactions-81"></div>
+            </div>
+            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, 81)" title="Add Reaction">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-[18px] h-[18px]"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                </div>
+                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(81)" title="Reply">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-[18px] h-[18px]"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg>
+                </div>
+                
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="openEditModal(81)" title="Edit">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="edit-2" aria-hidden="true" class="lucide lucide-edit-2 w-[16px] h-[16px]"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path></svg>
+                    </div>
+                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-red-400 hover:text-red-500" onclick="deleteMessage(81)" title="Delete">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="trash-2" aria-hidden="true" class="lucide lucide-trash-2 w-[16px] h-[16px]"><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </div>
+                
+            </div>
+        <div class="reply-swipe-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="reply" aria-hidden="true" class="lucide lucide-reply w-5 h-5"><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path><path d="m9 17-5-5 5-5"></path></svg></div></div></main>
+            </div>
+
+            <!-- Input Area -->
+            <div class="px-4 pb-6 bg-[#313338] pt-2 flex-shrink-0">
+                <!-- Reply Banner -->
+                <div id="replyBanner" class="hidden mb-2 bg-[#232428] rounded-lg px-3 py-2 flex items-center justify-between">
+                    <div class="flex items-center flex-1 overflow-hidden">
+                        <span class="text-xs text-[#949BA4] mr-2">Replying to</span>
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <span class="text-sm font-semibold text-white whitespace-nowrap" id="reply-to-username"></span>
+                            <span class="text-xs text-[#949BA4] truncate" id="reply-to-content"></span>
+                        </div>
+                    </div>
+                    <div id="reply-to-media" class="mx-2 hidden"></div>
+                    <button type="button" class="text-[#949BA4] hover:text-white transition-colors flex-shrink-0" onclick="cancelReply()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-4 h-4"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                    </button>
+                </div>
+
+
+                <!-- Typing Indicator -->
+                <div id="typingIndicator" class="h-6 mb-1 flex items-center hidden">
+                    <div class="flex space-x-1">
+                        <div class="w-1.5 h-1.5 bg-[#dbdee1] rounded-full typing-dot"></div>
+                        <div class="w-1.5 h-1.5 bg-[#dbdee1] rounded-full typing-dot"></div>
+                        <div class="w-1.5 h-1.5 bg-[#dbdee1] rounded-full typing-dot"></div>
+                    </div>
+                    <span class="text-xs text-[#dbdee1] font-bold ml-2" id="typing-text">Someone is typing...</span>
+                </div>
+
+                <div id="message-input-area" class="bg-[#383A40] rounded-lg px-4 py-2.5 flex items-center relative transition-all">
+                    <div id="mentionAutocomplete" class="hidden custom-scrollbar"></div>
+                    <button type="button" class="bg-[#B5BAC1] text-[#313338] rounded-full p-0.5 mr-3 hover:text-white transition-colors flex items-center justify-center" onclick="toggleReactionPicker(event, null)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="smile" aria-hidden="true" class="lucide lucide-smile w-4 h-4 font-bold"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>
+                    </button>
+                    <input type="file" id="fileInput" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar" multiple="" class="hidden">
+                    <form id="message-form" class="flex-1 flex items-center">
+                        <input type="text" id="message-input" placeholder="Message #general" class="bg-transparent text-[#dbdee1] w-full focus:outline-none placeholder-[#949BA4]" autocomplete="off">
+                        <div class="flex items-center text-[#B5BAC1]">
+                            <button type="button" class="p-1.5 hover:bg-[#404249] rounded transition-colors" onclick="document.getElementById('fileInput').click()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="paperclip" aria-hidden="true" class="lucide lucide-paperclip w-5 h-5"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"></path></svg>
+                            </button>
+                            <!-- Send Button (Mobile) -->
+                            <button type="submit" id="send-message-btn" class="p-1.5 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-full transition-all flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="send" aria-hidden="true" class="lucide lucide-send w-4 h-4 ml-0.5"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+
+                <!-- File Preview -->
+                <div id="filePreview" class="mt-2 flex flex-wrap gap-2 hidden"></div>
+            </div>
+        </div>
+
+        <!-- 3. Members Sidebar -->
+        <aside id="members-sidebar" class="w-[240px] bg-[#2B2D31] flex flex-col overflow-y-auto custom-scrollbar p-3 min-w-[240px] right-0 shadow-2xl lg:shadow-none"><div class="mb-6">
+            <h3 class="text-[#949BA4] text-xs font-bold uppercase mb-2 px-2">Online — 1</h3>
+            
+            <div class="flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group opacity-100">
+                <div class="relative mr-3">
+                    <img src="http://127.0.0.1:8787/api/file/avatar-테스트-1770307578073" alt="테스트" class="w-8 h-8 rounded-full object-cover">
+                    <div class="absolute bottom-0 right-0 w-3.5 h-3.5 border-[3px] border-[#2B2D31] rounded-full bg-green-500"></div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-[15px] font-medium leading-4 text-[#dbdee1] truncate">
+                        테스트
+                    </div>
+                </div>
+            </div>
+        
+        </div><div class="mb-6">
+            <h3 class="text-[#949BA4] text-xs font-bold uppercase mb-2 px-2">Offline — 3</h3>
+            
+            <div class="flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group opacity-40 hover:opacity-100">
+                <div class="relative mr-3">
+                    <img src="http://127.0.0.1:8787/api/file/avatar-ryu-1770226766277" alt="ryu" class="w-8 h-8 rounded-full object-cover">
+                    <div class="absolute bottom-0 right-0 w-3.5 h-3.5 border-[3px] border-[#2B2D31] rounded-full bg-[#949BA4]"></div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-[15px] font-medium leading-4 text-[#dbdee1] truncate">
+                        ryu
+                    </div>
+                </div>
+            </div>
+        
+            <div class="flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group opacity-40 hover:opacity-100">
+                <div class="relative mr-3">
+                    <img src="http://127.0.0.1:8787/api/file/avatar-test-1770226743319" alt="test" class="w-8 h-8 rounded-full object-cover">
+                    <div class="absolute bottom-0 right-0 w-3.5 h-3.5 border-[3px] border-[#2B2D31] rounded-full bg-[#949BA4]"></div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-[15px] font-medium leading-4 text-[#dbdee1] truncate">
+                        test
+                    </div>
+                </div>
+            </div>
+        
+            <div class="flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group opacity-40 hover:opacity-100">
+                <div class="relative mr-3">
+                    <img src="https://ui-avatars.com/api/?name=test2&amp;background=random" alt="test2" class="w-8 h-8 rounded-full object-cover">
+                    <div class="absolute bottom-0 right-0 w-3.5 h-3.5 border-[3px] border-[#2B2D31] rounded-full bg-[#949BA4]"></div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-[15px] font-medium leading-4 text-[#dbdee1] truncate">
+                        test2
+                    </div>
+                </div>
+            </div>
+        
+        </div></aside>
+
+
+    </div>
+
+    <!-- Create Channel Modal -->
+    <div id="createChannelModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden" onclick="if(event.target.id === 'createChannelModal') closeCreateChannelModal()">
+        <div class="modal-content bg-[#313338] rounded-lg max-w-md w-full mx-4 shadow-2xl border border-[#404249]" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between p-6 border-b border-[#26272D]">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-[#5865F2] rounded-full flex items-center justify-center mr-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="hash" aria-hidden="true" class="lucide lucide-hash w-6 h-6 text-white"><line x1="4" x2="20" y1="9" y2="9"></line><line x1="4" x2="20" y1="15" y2="15"></line><line x1="10" x2="8" y1="3" y2="21"></line><line x1="16" x2="14" y1="3" y2="21"></line></svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg text-white">Create Channel</h3>
+                        <p class="text-sm text-[#949BA4]">Create a new channel to start conversations</p>
+                    </div>
+                </div>
+                <button class="text-[#949BA4] hover:text-white transition-colors p-1 rounded hover:bg-[#404249]" onclick="closeCreateChannelModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-5 h-5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold text-[#B5BAC1] uppercase mb-2">Channel Name</label>
+                    <input type="text" id="newChannelName" placeholder="e.g., general, random, announcements" maxlength="30" class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all border border-transparent focus:border-[#5865F2]" onkeypress="if(event.key === 'Enter') createChannel()">
+                </div>
+                <div class="flex space-x-3">
+                    <button type="button" class="flex-1 bg-transparent hover:bg-[#404249] text-[#949BA4] hover:text-[#dbdee1] py-2.5 rounded transition-colors font-medium" onclick="closeCreateChannelModal()">
+                        Cancel
+                    </button>
+                    <button type="button" id="createChannelBtn" class="btn-ripple flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors flex items-center justify-center" onclick="createChannel()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="plus" aria-hidden="true" class="lucide lucide-plus w-4 h-4 mr-2"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                        Create Channel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Modal -->
+    <div id="searchModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden" onclick="if(event.target.id === 'searchModal') closeSearchModal()">
+        <div class="bg-[#313338] rounded-lg max-w-lg w-full mx-4 shadow-2xl max-h-[80vh] overflow-hidden flex flex-col" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between p-4 border-b border-[#26272D]">
+                <h3 class="font-bold text-lg">Search Messages</h3>
+                <button class="text-[#949BA4] hover:text-white transition-colors" onclick="closeSearchModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-5 h-5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-4 space-y-3">
+                <input type="text" id="searchQuery" placeholder="Search text..." class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all">
+                <input type="text" id="searchUsername" placeholder="Search by username..." class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all">
+                <select id="searchChannelId" class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all">
+                    <option value="all">All Channels</option>
+                </select>
+                <div class="flex gap-3">
+                    <div class="flex-1">
+                        <label class="block text-xs text-[#949BA4] mb-1">From</label>
+                        <input type="date" id="searchStartDate" class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs text-[#949BA4] mb-1">To</label>
+                        <input type="date" id="searchEndDate" class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all">
+                    </div>
+                </div>
+                <button type="button" class="btn-ripple w-full bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors" onclick="performSearch()">
+                    Search
+                </button>
+            </div>
+            <div id="searchResults" class="flex-1 overflow-y-auto custom-scrollbar border-t border-[#26272D]">
+                <!-- Search results injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Message Modal -->
+    <div id="editModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden" onclick="if(event.target.id === 'editModal') closeEditModal()">
+        <div class="bg-[#313338] rounded-lg max-w-md w-full mx-4 shadow-2xl" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between p-4 border-b border-[#26272D]">
+                <h3 class="font-bold text-lg">Edit Message</h3>
+                <button class="text-[#949BA4] hover:text-white transition-colors" onclick="closeEditModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-5 h-5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-4">
+                <textarea id="editMessageInput" rows="4" class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all resize-none mb-4"></textarea>
+                <div class="flex space-x-2">
+                    <button type="button" class="flex-1 bg-transparent hover:underline text-[#949BA4] py-2 rounded" onclick="closeEditModal()">
+                        Cancel
+                    </button>
+                    <button type="button" class="btn-ripple flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2 rounded transition-colors" onclick="saveEdit()">
+                        Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="imageModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50 hidden" onclick="closeImageModal()">
+        <button class="absolute top-4 right-4 text-white hover:text-[#B5BAC1] transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-8 h-8"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        </button>
+        <img id="imageModalImg" src="" alt="Full size" class="max-w-[90vw] max-h-[90vh] object-contain">
+    </div>
+
+    <!-- Reaction Picker Popover (Hidden by default) -->
+    <div id="reactionPicker" class="fixed z-[100] hidden bg-[#1E1F22] border border-[#26272D] rounded-lg shadow-xl p-2 flex flex-col w-[220px]">
+        <div class="flex flex-wrap gap-1 mb-2 border-b border-[#26272D] pb-2">
+            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('👍')">👍</button>
+            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('❤️')">❤️</button>
+            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('😂')">😂</button>
+            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('😮')">😮</button>
+            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('😢')">😢</button>
+            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('🔥')">🔥</button>
+            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('🎉')">🎉</button>
+            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" onclick="sendReaction('✅')">✅</button>
+        </div>
+        <div class="flex flex-col">
+            <div class="flex items-center justify-between mb-1 px-1">
+                <span class="text-[10px] font-bold uppercase text-[#949BA4]">Custom Emojis</span>
+                <button class="text-[#949BA4] hover:text-white" onclick="openEmojiModal()" title="Upload Custom Emoji">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="plus" aria-hidden="true" class="lucide lucide-plus w-3 h-3"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                </button>
+            </div>
+            <div id="customEmojisInPicker" class="flex flex-wrap gap-1 max-h-[100px] overflow-y-auto custom-scrollbar">
+                <!-- Custom emojis injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Emoji Upload Modal -->
+    <div id="emojiUploadModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden" onclick="if(event.target.id === 'emojiUploadModal') closeEmojiModal()">
+        <div class="bg-[#313338] rounded-lg max-w-sm w-full mx-4 shadow-2xl border border-[#404249]" onclick="event.stopPropagation()">
+            <div class="p-6">
+                <h3 class="font-bold text-lg mb-4">Upload Custom Emoji</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-[#B5BAC1] uppercase mb-2">Emoji Name</label>
+                        <input type="text" id="emojiNameInput" placeholder="e.g., party_blob" class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2]">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-[#B5BAC1] uppercase mb-2">Image File</label>
+                        <input type="file" id="emojiFileInput" accept="image/*" class="w-full text-sm text-[#949BA4] file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-[#5865F2] file:text-white hover:file:bg-[#4752C4]">
+                    </div>
+                    <div class="flex space-x-3 pt-2">
+                        <button type="button" class="flex-1 bg-transparent hover:underline text-[#949BA4]" onclick="closeEmojiModal()">Cancel</button>
+                        <button type="button" class="flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2 rounded transition-colors" onclick="uploadEmoji()">Upload</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profileModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden" onclick="if(event.target.id === 'profileModal') closeProfileModal()">
+        <div class="bg-[#313338] rounded-lg max-w-md w-full mx-4 shadow-2xl border border-[#404249]" onclick="event.stopPropagation()">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="font-bold text-xl">User Settings</h3>
+                    <button class="text-[#949BA4] hover:text-white" onclick="closeProfileModal()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-6 h-6"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                    </button>
+                </div>
+                
+                <div class="space-y-6">
+                    <!-- Avatar Upload -->
+                    <div class="flex flex-col items-center">
+                        <div class="relative group cursor-pointer" onclick="document.getElementById('avatarInput').click()">
+                            <img id="profilePreview" src="https://ui-avatars.com/api/?name=User" class="w-24 h-24 rounded-full object-cover border-4 border-[#1E1F22]">
+                            <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="camera" aria-hidden="true" class="lucide lucide-camera w-8 h-8 text-white"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"></path><circle cx="12" cy="13" r="3"></circle></svg>
+                            </div>
+                        </div>
+                        <input type="file" id="avatarInput" accept="image/*" class="hidden" onchange="previewAvatar(event)">
+                        <p class="text-xs text-[#949BA4] mt-2">Click to change avatar</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-[#B5BAC1] uppercase mb-2">Display Name</label>
+                        <input type="text" id="displayNameInput" placeholder="Enter display name" class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2]">
+                    </div>
+
+                    <div class="pt-4 border-t border-[#404249] flex flex-col space-y-3">
+                        <div class="bg-[#1E1F22] p-3 rounded border border-dashed border-[#5865F2] hidden" id="newRecoveryKeyContainer">
+                            <p class="text-[10px] text-[#949BA4] uppercase font-bold mb-1">New Recovery Key</p>
+                            <div class="flex items-center justify-between">
+                                <span id="newRecoveryKeyDisplay" class="font-mono font-bold text-white tracking-wider"></span>
+                                <button onclick="copyNewRecoveryKey()" class="text-[#B5BAC1] hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="copy" aria-hidden="true" class="lucide lucide-copy w-4 h-4"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button>
+                            </div>
+                        </div>
+
+                        <div class="flex space-x-3">
+                            <button type="button" class="flex-1 bg-blue-500/10 hover:bg-blue-500/20 text-[#00A8FC] py-2 rounded transition-colors font-medium text-sm" onclick="regenerateRecoveryKey()">
+                                Regenerate Key
+                            </button>
+                            <button type="button" class="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-2 rounded transition-colors font-medium text-sm" onclick="openUserSettings()">
+                                Logout
+                            </button>
+                        </div>
+                        <button type="button" class="btn-ripple w-full bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors" onclick="updateProfile()">
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PWA Install Prompt -->
+    <div id="pwaInstallPrompt" style="display: none;">
+        <div class="flex items-center gap-4">
+            <div class="pwa-icon-container flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="message-square" aria-hidden="true" class="lucide lucide-message-square text-white w-6 h-6"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"></path></svg>
+            </div>
+            <div class="flex-1">
+                <h4 class="font-bold text-white text-[15px]">Accord Chat</h4>
+                <p class="text-[#949BA4] text-xs leading-tight">Install our app for real-time notifications and a faster experience.</p>
+            </div>
+            <button onclick="closePwaPrompt()" class="text-[#949BA4] hover:text-[#dbdee1] p-1 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-5 h-5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+            </button>
+        </div>
+        <button id="pwaInstallBtn" class="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold py-2.5 rounded-lg text-sm transition-all shadow-lg active:scale-[0.98]">
+            Install App
+        </button>
+        <div id="iosInstruction" class="hidden text-[13px] text-[#dbdee1] border-t border-[#404249] pt-3 flex items-center justify-center gap-1.5">
+            Tap the <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="share" aria-hidden="true" class="lucide lucide-share w-4 h-4 text-[#00A8FC]"><path d="M12 2v13"></path><path d="m16 6-4-4-4 4"></path><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path></svg> icon and "Add to Home Screen"
+        </div>
+    </div>
+
+    <!-- PWA Update Prompt -->
+    <div id="pwaUpdatePrompt">
+        <div class="flex items-center gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="refresh-cw" aria-hidden="true" class="lucide lucide-refresh-cw text-white w-5 h-5 animate-spin-slow"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>
+            <span class="text-white text-sm font-semibold">New version available!</span>
+        </div>
+        <button id="pwaUpdateBtn" class="bg-white text-[#5865F2] px-4 py-1.5 rounded-lg text-sm font-bold shadow hover:bg-[#f0f0f0] transition-colors">
+            Update
+        </button>
+    </div>
+
+    <script src="chat.js"></script>
+
+
+</body><grammarly-desktop-integration data-grammarly-shadow-root="true"><template shadowrootmode="open"><style>
+      div.grammarly-desktop-integration {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+        -moz-user-select: none;
+        -webkit-user-select: none;
+        -ms-user-select:none;
+        user-select:none;
+      }
+
+      div.grammarly-desktop-integration:before {
+        content: attr(data-content);
+      }
+    </style><div aria-label="grammarly-integration" role="group" tabindex="-1" class="grammarly-desktop-integration" data-content="{&quot;mode&quot;:&quot;full&quot;,&quot;isActive&quot;:true,&quot;isUserDisabled&quot;:false}"></div></template></grammarly-desktop-integration></html>

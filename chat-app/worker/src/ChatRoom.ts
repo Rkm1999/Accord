@@ -34,9 +34,9 @@ interface Reaction {
   message_id?: number;
 }
 
-export class ChatRoom extends DurableObject<Env> {
+export class ChatRoom extends DurableObject {
 
-  constructor(ctx: DurableObjectState, env: Env) {
+  constructor(public ctx: any, public env: any) {
     super(ctx, env);
   }
 
@@ -63,9 +63,9 @@ export class ChatRoom extends DurableObject<Env> {
     const avatarKey = user?.avatar_key || null;
 
     // Check if user is already online in another tab BEFORE accepting this one
-    const isAlreadyOnline = this.ctx.getWebSockets().some(ws => {
+    const isAlreadyOnline = this.ctx.getWebSockets().some((ws: any) => {
         try {
-            const state = ws.deserializeAttachment<UserState>();
+            const state = ws.deserializeAttachment();
             return state && state.username === username;
         } catch {
             return false;
@@ -240,7 +240,8 @@ export class ChatRoom extends DurableObject<Env> {
       mentions.push(replyData.replyUsername);
     }
 
-    this.broadcastMessage(username, data.message, linkMetadata, fileAttachment, replyData, messageId, channelId, displayName, avatarKey, mentions);
+    // @ts-ignore
+    this.broadcastMessage(username, data.message, linkMetadata || undefined, fileAttachment || undefined, replyData || undefined, messageId, channelId, displayName, avatarKey, mentions);
   }
 
   async webSocketClose(ws: WebSocket) {
@@ -250,9 +251,9 @@ export class ChatRoom extends DurableObject<Env> {
 
     // Check if any OTHER connections for this user still exist
     const allSockets = this.ctx.getWebSockets();
-    const hasRemainingTabs = allSockets.some(s => {
+    const hasRemainingTabs = allSockets.some((s: any) => {
         try {
-            const sState = s.deserializeAttachment<UserState>();
+            const sState = s.deserializeAttachment() as any;
             return s !== ws && sState && sState.username === username;
         } catch {
             return false;
@@ -268,7 +269,7 @@ export class ChatRoom extends DurableObject<Env> {
     this.broadcastOnlineList(ws); 
   }
 
-  private broadcastMessage(username: string, message: string, linkMetadata?: LinkMetadata, fileAttachment?: FileAttachment, replyData?: {
+  private broadcastMessage(username: string, message: string, linkMetadata?: LinkMetadata | null, fileAttachment?: FileAttachment | null, replyData?: {
     replyTo: number;
     replyUsername: string;
     replyMessage: string;
@@ -333,7 +334,7 @@ export class ChatRoom extends DurableObject<Env> {
 
 
     for (const ws of webSockets) {
-      const state = ws.deserializeAttachment<UserState>();
+      const state = ws.deserializeAttachment() as any;
       if (state.channelId === channelId) {
         ws.send(payload);
       }
@@ -349,7 +350,7 @@ export class ChatRoom extends DurableObject<Env> {
     });
 
     for (const ws of webSockets) {
-      const state = ws.deserializeAttachment<UserState>();
+      const state = ws.deserializeAttachment() as any;
       if (state.channelId === channelId) {
         ws.send(payload);
       }
@@ -358,8 +359,8 @@ export class ChatRoom extends DurableObject<Env> {
 
   private sendOnlineUsers(ws: WebSocket) {
     const webSockets = this.ctx.getWebSockets();
-    const uniqueUsernames = [...new Set(webSockets.map(s => {
-        try { return s.deserializeAttachment<UserState>()?.username; } catch { return null; }
+    const uniqueUsernames = [...new Set(webSockets.map((s: any) => {
+        try { return (s.deserializeAttachment() as any)?.username; } catch { return null; }
     }))].filter(u => u !== null);
     
     ws.send(JSON.stringify({
@@ -370,9 +371,9 @@ export class ChatRoom extends DurableObject<Env> {
 
   private broadcastOnlineList(excludeSocket?: WebSocket) {
     const webSockets = this.ctx.getWebSockets();
-    const uniqueUsernames = [...new Set(webSockets.map(s => {
+    const uniqueUsernames = [...new Set(webSockets.map((s: any) => {
         if (excludeSocket && s === excludeSocket) return null;
-        try { return s.deserializeAttachment<UserState>()?.username; } catch { return null; }
+        try { return (s.deserializeAttachment() as any)?.username; } catch { return null; }
     }))].filter(u => u !== null);
 
     const payload = JSON.stringify({
@@ -387,29 +388,29 @@ export class ChatRoom extends DurableObject<Env> {
   }
 
   private async sendChatHistory(ws: WebSocket, channelId: number, offset = 0) {
-    const state = ws.deserializeAttachment<UserState>();
+    const state = ws.deserializeAttachment() as any;
     const username = state.username;
 
     const lastRead = await this.env.DB.prepare(
         "SELECT message_id FROM channel_last_read WHERE username = ? AND channel_id = ?"
-    ).bind(username, channelId).first<{ message_id: number }>();
+    ).bind(username, channelId).first() as any;
 
-    const { results: messages } = await this.env.DB.prepare(
-      `SELECT m.*, u.display_name as displayName, u.avatar_key as avatarKey 
+    const { results: messages }: any = await this.env.DB.prepare(
+      `SELECT m.*, u.display_name, u.avatar_key as user_avatar 
        FROM messages m 
        LEFT JOIN users u ON m.username = u.username 
        WHERE m.channel_id = ? 
        ORDER BY m.timestamp DESC LIMIT 25 OFFSET ?`
-    ).bind(channelId, offset).all() as { results: any[] };
+    ).bind(channelId, offset).all();
 
     if (messages.length > 0) {
-      const messageIds = messages.map(m => m.id);
+        const messageIds = messages.map((m: any) => m.id);
       const placeholders = messageIds.map(() => '?').join(',');
       const { results: reactions } = await this.env.DB.prepare(
         `SELECT message_id, emoji, username FROM reactions WHERE message_id IN (${placeholders})`
       ).bind(...messageIds).all() as { results: any[] };
 
-      messages.forEach(m => {
+      messages.forEach((m: any) => {
         m.reactions = reactions.filter(r => r.message_id === m.id);
       });
     }
@@ -418,7 +419,7 @@ export class ChatRoom extends DurableObject<Env> {
 
     const totalCount = await this.env.DB.prepare(
       "SELECT COUNT(*) as count FROM messages WHERE channel_id = ?"
-    ).bind(channelId).first<{ count: number }>();
+    ).bind(channelId).first() as any;
 
     ws.send(JSON.stringify({
       type: "history",
@@ -468,7 +469,7 @@ export class ChatRoom extends DurableObject<Env> {
     });
 
     for (const ws of webSockets) {
-      const state = ws.deserializeAttachment<UserState>();
+      const state = ws.deserializeAttachment() as any;
       if (state.channelId === channelId) {
         ws.send(payload);
       }
@@ -501,56 +502,100 @@ export class ChatRoom extends DurableObject<Env> {
       let description = '';
       let image = '';
 
-      const urlObj = new URL(url);
+      // Helper to extract meta tags regardless of attribute order
+      const getMeta = (prop: string) => {
+        const patterns = [
+          new RegExp(`<meta[^>]+(?:property|name)=["'](?:og|twitter):${prop}["'][^>]+content=["']([^"']+)["']`, 'i'),
+          new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og|twitter):${prop}["']`, 'i')
+        ];
+        for (const p of patterns) {
+          const m = html.match(p);
+          if (m) return m[1];
+        }
+        return '';
+      };
 
+      // 1. Try standard OpenGraph / Twitter Tags first
+      title = getMeta('title');
+      description = getMeta('description');
+      image = getMeta('image');
+
+      // 2. YouTube Specific Enhancements
+      const urlObj = new URL(url);
       if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
         const videoId = this.extractYouTubeVideoId(url);
-
         if (videoId) {
+          // Construct high-quality thumbnail URL
           image = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 
-          const ytTitleMatch = html.match(/"title":"([^"]+)"/i) ||
-                              html.match(/<meta itemprop="name" content="([^"]+)"/i);
-          if (ytTitleMatch) {
-            title = ytTitleMatch[1].replace(/\\u0026/g, '&').replace(/\\u003c/g, '<').replace(/\\u003e/g, '>');
+          // Try YouTube oEmbed API for reliable title
+          try {
+            const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+            const oembedRes = await fetch(oembedUrl);
+            if (oembedRes.ok) {
+              const oembedData: any = await oembedRes.json();
+              if (oembedData.title) title = oembedData.title;
+            }
+          } catch (e) {
+            console.error('YouTube oEmbed fetch failed:', e);
           }
 
-          const ytDescMatch = html.match(/"shortDescription":"([^"]+)"/i);
-          if (ytDescMatch) {
-            description = ytDescMatch[1].replace(/\\n/g, ' ').replace(/\\u0026/g, '&');
+          // Force override if generic or numeric
+          const isGeneric = (str: string) => !str || str === 'YouTube' || /^\d+(\.\d+)?[KMB]?$/.test(str) || 
+                                           str.includes('Enjoy the videos') || 
+                                           str.includes('Share your videos') || 
+                                           str.includes('YouTube is an American') ||
+                                           str.includes('YouTube에서 마음에 드는') ||
+                                           str.includes('YouTube でお気に入りの');
+
+          if (isGeneric(title)) {
+            const ytTitleMatch = html.match(/"videoDetails":\{.*?"title":"([^"]+)"/i) || 
+                                html.match(/<meta[^>]+itemprop=["']name["'][^>]+content=["']([^"']+)["']/i) ||
+                                html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+itemprop=["']name["']/i);
+            if (ytTitleMatch) {
+              title = ytTitleMatch[1].replace(/\\u0026/g, '&').replace(/\\u003c/g, '<').replace(/\\u003e/g, '>');
+            }
+          }
+
+          if (isGeneric(description)) {
+            const ytDescMatch = html.match(/"shortDescription":"([^"]+)"/i) ||
+                               html.match(/"videoDetails":\{.*?"shortDescription":"([^"]+)"/i) ||
+                               html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
+                               html.match(/<meta[^>]+itemprop=["']description["'][^>]+content=["']([^"']+)["']/i) ||
+                               html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+itemprop=["']description["']/i);
+            if (ytDescMatch) {
+              description = ytDescMatch[1].replace(/\\n/g, ' ').replace(/\\u0026/g, '&');
+            }
           }
         }
       }
 
-      if (!image) {
-        const imageMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
-                          html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
-        image = imageMatch ? imageMatch[1] : '';
-      }
-
-      if (!title) {
-        const titleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
-                          html.match(/<meta[^>]+name=["']twitter:title["'][^>]+content=["']([^"']+)["']/i);
-        title = titleMatch ? titleMatch[1] : '';
-      }
-
+      // 3. Fallbacks for title and description
       if (!title) {
         const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
         title = titleMatch ? titleMatch[1].trim() : url;
       }
 
       if (!description) {
-        const descMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
-                        html.match(/<meta[^>]+name=["']twitter:description["'][^>]+content=["']([^"']+)["']/i) ||
-                        html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
-        description = descMatch ? (descMatch[1] || descMatch[2] || descMatch[3]) : '';
+        const descMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i);
+        description = descMatch ? descMatch[1] : '';
       }
+
+      // Cleanup entities and extra whitespace
+      const decode = (str: string) => str
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .trim();
 
       if (title || description || image) {
         return {
           url,
-          title,
-          description,
+          title: decode(title),
+          description: decode(description),
           image,
         };
       }
@@ -711,7 +756,7 @@ export class ChatRoom extends DurableObject<Env> {
     });
 
     for (const ws of webSockets) {
-      const state = ws.deserializeAttachment<UserState>();
+      const state = ws.deserializeAttachment() as any;
       if (state.channelId === channelId) {
         ws.send(payload);
       }
@@ -726,7 +771,7 @@ export class ChatRoom extends DurableObject<Env> {
     });
 
     for (const ws of webSockets) {
-      const state = ws.deserializeAttachment<UserState>();
+      const state = ws.deserializeAttachment() as any;
       if (state.channelId === channelId) {
         ws.send(payload);
       }
@@ -737,7 +782,7 @@ export class ChatRoom extends DurableObject<Env> {
     const webSockets = this.ctx.getWebSockets();
 
     for (const ws of webSockets) {
-      if (ws.deserializeAttachment<UserState>().username === username) {
+      if ((ws.deserializeAttachment() as any)?.username === username) {
         ws.send(JSON.stringify({
           type: "error",
           message,

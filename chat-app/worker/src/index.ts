@@ -2,7 +2,7 @@ import { DurableObjectNamespace } from "cloudflare:workers";
 import { ChatRoom } from "./ChatRoom";
 
 export interface Env {
-  CHAT_ROOM: DurableObjectNamespace<ChatRoom>;
+  CHAT_ROOM: any;
   DB: D1Database;
   BUCKET: R2Bucket;
   ASSETS: Fetcher;
@@ -76,7 +76,7 @@ export default {
     }
 
     if (url.pathname === "/api/auth/register" && request.method === "POST") {
-      const { username, password } = await request.json();
+      const { username, password } = await request.json() as any;
       if (!username || !password) return corsResponse("Missing fields", 400, corsHeaders);
 
       const recoveryKey = generateRecoveryKey();
@@ -100,7 +100,7 @@ export default {
     }
 
     if (url.pathname === "/api/auth/login" && request.method === "POST") {
-      const { username, password } = await request.json();
+      const { username, password } = await request.json() as any;
       const user: any = await env.DB.prepare("SELECT * FROM users WHERE username = ?").bind(username).first();
       
       if (!user) return corsResponse("Invalid credentials", 401, corsHeaders);
@@ -116,7 +116,7 @@ export default {
     }
 
     if (url.pathname === "/api/auth/reset-password" && request.method === "POST") {
-      const { username, recoveryKey, newPassword } = await request.json();
+      const { username, recoveryKey, newPassword } = await request.json() as any;
       const user: any = await env.DB.prepare("SELECT recovery_key_hash FROM users WHERE username = ?").bind(username).first();
       
       if (!user) return corsResponse("Invalid user", 404, corsHeaders);
@@ -134,7 +134,7 @@ export default {
     }
 
     if (url.pathname === "/api/user/profile" && request.method === "POST") {
-      const { username, displayName, avatarImage, generateNewRecoveryKey } = await request.json();
+      const { username, displayName, avatarImage, generateNewRecoveryKey } = await request.json() as any;
       let avatarKey = null;
       let newRecoveryKey = null;
 
@@ -179,7 +179,7 @@ export default {
     }
 
     if (url.pathname === "/api/emojis" && request.method === "POST") {
-      const { name, image, username } = await request.json();
+      const { name, image, username } = await request.json() as any;
       if (!name || !image || !username) return corsResponse("Missing required fields", 400, corsHeaders);
 
       const emojiName = name.replace(/:/g, "");
@@ -204,7 +204,7 @@ export default {
     }
 
     if (url.pathname === "/api/channels" && request.method === "POST") {
-      const { name, createdBy } = await request.json();
+      const { name, createdBy } = await request.json() as any;
       if (!name || !createdBy) return corsResponse("Name and createdBy are required", 400, corsHeaders);
 
       try {
@@ -272,7 +272,7 @@ export default {
     }
 
     if (url.pathname === "/api/search" && request.method === "POST") {
-      const { query, username: searchUser, channelId, startDate, endDate, offset = 0 } = await request.json();
+      const { query, username: searchUser, channelId, startDate, endDate, offset = 0 } = await request.json() as any;
 
       let countSql = `SELECT COUNT(*) as count FROM messages m
                     LEFT JOIN channels c ON m.channel_id = c.id

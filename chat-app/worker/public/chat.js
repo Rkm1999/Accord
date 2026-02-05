@@ -220,6 +220,41 @@ function getFileIcon(type) {
     return '📄';
 }
 
+function extractYouTubeVideoId(url) {
+    const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([^&\n?#]+)/,
+    ];
+
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) {
+            return match[1];
+        }
+    }
+    return null;
+}
+
+function playYouTube(videoId, elementId) {
+    const container = document.getElementById(elementId);
+    if (!container) return;
+
+    // Maintain scroll bottom before layout change
+    maintainScrollBottom(() => {
+        container.innerHTML = `
+            <div class="relative w-full aspect-video rounded-lg overflow-hidden bg-black mt-2">
+                <iframe 
+                    src="https://www.youtube.com/embed/${videoId}?autoplay=1" 
+                    class="absolute top-0 left-0 w-full h-full" 
+                    frameborder="0" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                    referrerpolicy="strict-origin-when-cross-origin" 
+                    allowfullscreen>
+                </iframe>
+            </div>
+        `;
+    });
+}
+
 function connect() {
     ws = new WebSocket(wsUrl);
 
@@ -420,6 +455,10 @@ function displayHistory(messages, lastReadMessageId = 0, offset = 0, hasMore = f
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
             lastScrollTop = messagesContainer.scrollHeight;
         }
+        
+        // Update global scroll tracking variables
+        wasAtBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 100;
+        distanceToBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop;
     }, 50);
 
     if (unreadDividerShown) {
@@ -560,11 +599,19 @@ let lastResizeTime = 0;
 let lastSendMessageTime = 0;
 
 // Add scroll listener to auto-hide banner if we scroll up to the divider
-document.getElementById('messages-container').addEventListener('scroll', () => {
-    const container = document.getElementById('messages-container');
+const messagesContainer = document.getElementById('messages-container');
+let wasAtBottom = true;
+let distanceToBottom = 0;
+
+messagesContainer.addEventListener('scroll', () => {
+    const container = messagesContainer;
     const banner = document.getElementById('unread-banner');
     const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
     const messageInput = document.getElementById('message-input');
+
+    // Update bottom tracking
+    wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+    distanceToBottom = container.scrollHeight - container.scrollTop;
 
     // Close keyboard on mobile when scrolling messages
     // But ignore if a resize just happened (e.g. keyboard opening)
@@ -633,6 +680,26 @@ document.getElementById('messages-container').addEventListener('scroll', () => {
     lastScrollTop = container.scrollTop;
 });
 
+// Handle images and other media loading to maintain scroll position
+const handleMediaLayoutChange = (e) => {
+    if (e.target.tagName === 'IMG' || e.target.tagName === 'VIDEO' || e.target.tagName === 'IFRAME') {
+        if (wasAtBottom) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else {
+            const rect = e.target.getBoundingClientRect();
+            const containerRect = messagesContainer.getBoundingClientRect();
+            if (rect.top < containerRect.top) {
+                // Media loaded above current view, preserve distance to bottom
+                // to prevent the content from jumping down
+                messagesContainer.scrollTop = messagesContainer.scrollHeight - distanceToBottom;
+            }
+        }
+    }
+};
+
+messagesContainer.addEventListener('load', handleMediaLayoutChange, true);
+messagesContainer.addEventListener('error', handleMediaLayoutChange, true);
+
 function createMessageElement(data, isHistory = false) {
     const time = new Date(data.timestamp).toLocaleTimeString();
     const date = new Date(data.timestamp).toLocaleDateString();
@@ -680,13 +747,37 @@ function createMessageElement(data, isHistory = false) {
 
     if (linkMetadata && linkMetadata.url) {
         const hasImage = !!linkMetadata.image;
-        messageHtml += `
-            <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="block mt-2 ${!hasImage ? 'border-l-2 border-[#5865F2] pl-3' : ''}">
-                ${hasImage ? `<img src="${escapeHtml(linkMetadata.image)}" alt="Link preview" class="rounded-lg max-w-full mb-2">` : ''}
-                ${linkMetadata.title ? `<div class="text-[#00A8FC] hover:underline font-medium">${escapeHtml(linkMetadata.title)}</div>` : ''}
-                ${linkMetadata.description ? `<div class="text-sm text-[#949BA4] mt-1">${escapeHtml(linkMetadata.description)}</div>` : ''}
-            </a>
-        `;
+        const ytVideoId = extractYouTubeVideoId(linkMetadata.url);
+
+        if (ytVideoId) {
+            const playerContainerId = `yt-player-${data.id || Math.random().toString(36).substr(2, 9)}`;
+            messageHtml += `
+                <div class="mt-2 max-w-full">
+                    <div id="${playerContainerId}">
+                        <div class="relative group/yt cursor-pointer rounded-lg overflow-hidden max-w-[400px]" onclick="playYouTube('${ytVideoId}', '${playerContainerId}')">
+                            <img src="${escapeHtml(linkMetadata.image || `https://img.youtube.com/vi/${ytVideoId}/hqdefault.jpg`)}" alt="YouTube thumbnail" class="w-full h-auto">
+                            <div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/yt:bg-black/40 transition-colors">
+                                <div class="w-16 h-11 bg-[#FF0000] rounded-lg flex items-center justify-center shadow-lg group-hover/yt:scale-110 transition-transform">
+                                    <div class="w-0 h-0 border-t-[8px] border-t-transparent border-l-[14px] border-l-white border-b-[8px] border-b-transparent ml-1"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="block mt-2">
+                        ${linkMetadata.title ? `<div class="text-[#00A8FC] hover:underline font-medium">${escapeHtml(linkMetadata.title)}</div>` : ''}
+                        ${linkMetadata.description ? `<div class="text-sm text-[#949BA4] mt-1">${escapeHtml(linkMetadata.description)}</div>` : ''}
+                    </a>
+                </div>
+            `;
+        } else {
+            messageHtml += `
+                <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="block mt-2 ${!hasImage ? 'border-l-2 border-[#5865F2] pl-3' : ''}">
+                    ${hasImage ? `<img src="${escapeHtml(linkMetadata.image)}" alt="Link preview" class="rounded-lg max-w-full mb-2">` : ''}
+                    ${linkMetadata.title ? `<div class="text-[#00A8FC] hover:underline font-medium">${escapeHtml(linkMetadata.title)}</div>` : ''}
+                    ${linkMetadata.description ? `<div class="text-sm text-[#949BA4] mt-1">${escapeHtml(linkMetadata.description)}</div>` : ''}
+                </a>
+            `;
+        }
     }
 
     if (fileAttachment && fileAttachment.key) {
@@ -700,6 +791,15 @@ function createMessageElement(data, isHistory = false) {
                     <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="rounded-lg max-w-[300px] cursor-pointer hover:opacity-90" onclick="openImageModal('${fileUrl}')" onerror="this.style.display='none'">
                     <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute bottom-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-2 rounded-full shadow-lg opacity-0 group-hover/image:opacity-100 transition-opacity" title="Download">
                         <i data-lucide="download" class="w-4 h-4"></i>
+                    </a>
+                </div>
+            `;
+        } else if (fileAttachment.type && fileAttachment.type.startsWith('video/')) {
+            messageHtml += `
+                <div class="mt-2 group/video relative max-w-[400px]">
+                    <video src="${fileUrl}" controls preload="metadata" class="w-full rounded-lg bg-black/20"></video>
+                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute top-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-1.5 rounded-full shadow-lg opacity-0 group-hover/video:opacity-100 transition-opacity" title="Download">
+                        <i data-lucide="download" class="w-3 h-3"></i>
                     </a>
                 </div>
             `;
@@ -987,13 +1087,37 @@ function displayMessage(data, isHistory = false) {
 
     if (linkMetadata && linkMetadata.url) {
         const hasImage = !!linkMetadata.image;
-        messageHtml += `
-            <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="block mt-2 ${!hasImage ? 'border-l-2 border-[#5865F2] pl-3' : ''}">
-                ${hasImage ? `<img src="${escapeHtml(linkMetadata.image)}" alt="Link preview" class="rounded-lg max-w-full mb-2">` : ''}
-                ${linkMetadata.title ? `<div class="text-[#00A8FC] hover:underline font-medium">${escapeHtml(linkMetadata.title)}</div>` : ''}
-                ${linkMetadata.description ? `<div class="text-sm text-[#949BA4] mt-1">${escapeHtml(linkMetadata.description)}</div>` : ''}
-            </a>
-        `;
+        const ytVideoId = extractYouTubeVideoId(linkMetadata.url);
+
+        if (ytVideoId) {
+            const playerContainerId = `yt-player-${data.id || Math.random().toString(36).substr(2, 9)}`;
+            messageHtml += `
+                <div class="mt-2 max-w-full">
+                    <div id="${playerContainerId}">
+                        <div class="relative group/yt cursor-pointer rounded-lg overflow-hidden max-w-[400px]" onclick="playYouTube('${ytVideoId}', '${playerContainerId}')">
+                            <img src="${escapeHtml(linkMetadata.image || `https://img.youtube.com/vi/${ytVideoId}/hqdefault.jpg`)}" alt="YouTube thumbnail" class="w-full h-auto">
+                            <div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/yt:bg-black/40 transition-colors">
+                                <div class="w-16 h-11 bg-[#FF0000] rounded-lg flex items-center justify-center shadow-lg group-hover/yt:scale-110 transition-transform">
+                                    <div class="w-0 h-0 border-t-[8px] border-t-transparent border-l-[14px] border-l-white border-b-[8px] border-b-transparent ml-1"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="block mt-2">
+                        ${linkMetadata.title ? `<div class="text-[#00A8FC] hover:underline font-medium">${escapeHtml(linkMetadata.title)}</div>` : ''}
+                        ${linkMetadata.description ? `<div class="text-sm text-[#949BA4] mt-1">${escapeHtml(linkMetadata.description)}</div>` : ''}
+                    </a>
+                </div>
+            `;
+        } else {
+            messageHtml += `
+                <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="block mt-2 ${!hasImage ? 'border-l-2 border-[#5865F2] pl-3' : ''}">
+                    ${hasImage ? `<img src="${escapeHtml(linkMetadata.image)}" alt="Link preview" class="rounded-lg max-w-full mb-2">` : ''}
+                    ${linkMetadata.title ? `<div class="text-[#00A8FC] hover:underline font-medium">${escapeHtml(linkMetadata.title)}</div>` : ''}
+                    ${linkMetadata.description ? `<div class="text-sm text-[#949BA4] mt-1">${escapeHtml(linkMetadata.description)}</div>` : ''}
+                </a>
+            `;
+        }
     }
 
     if (fileAttachment && fileAttachment.key) {
@@ -1007,6 +1131,15 @@ function displayMessage(data, isHistory = false) {
                     <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="rounded-lg max-w-[300px] cursor-pointer hover:opacity-90" onclick="openImageModal('${fileUrl}')" onerror="this.style.display='none'">
                     <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute bottom-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-2 rounded-full shadow-lg opacity-0 group-hover/image:opacity-100 transition-opacity" title="Download">
                         <i data-lucide="download" class="w-4 h-4"></i>
+                    </a>
+                </div>
+            `;
+        } else if (fileAttachment.type && fileAttachment.type.startsWith('video/')) {
+            messageHtml += `
+                <div class="mt-2 group/video relative max-w-[400px]">
+                    <video src="${fileUrl}" controls preload="metadata" class="w-full rounded-lg bg-black/20"></video>
+                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute top-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-1.5 rounded-full shadow-lg opacity-0 group-hover/video:opacity-100 transition-opacity" title="Download">
+                        <i data-lucide="download" class="w-3 h-3"></i>
                     </a>
                 </div>
             `;
@@ -1134,7 +1267,7 @@ function displayMessage(data, isHistory = false) {
 
         // Always scroll to own message, otherwise preserve scroll position
         if (isOwnMessage) {
-            msgEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            msgEl.scrollIntoView({ block: 'end' });
             lastScrollTop = messagesContainer.scrollTop;
         } else if (wasNearBottom) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -1212,17 +1345,19 @@ function startReply(messageId) {
 }
 
 function cancelReply() {
-    replyingTo = null;
-    const replyBanner = document.getElementById('replyBanner');
-    const replyToMediaEl = document.getElementById('reply-to-media');
-    replyBanner.classList.add('hidden');
-    if (replyToMediaEl) replyToMediaEl.innerHTML = '';
-    
-    // Ensure keyboard stays open if it was open
-    const input = document.getElementById('message-input');
-    if (document.activeElement === input) {
-        input.focus();
-    }
+    maintainScrollBottom(() => {
+        replyingTo = null;
+        const replyBanner = document.getElementById('replyBanner');
+        const replyToMediaEl = document.getElementById('reply-to-media');
+        replyBanner.classList.add('hidden');
+        if (replyToMediaEl) replyToMediaEl.innerHTML = '';
+        
+        // Ensure keyboard stays open if it was open
+        const input = document.getElementById('message-input');
+        if (document.activeElement === input) {
+            input.focus();
+        }
+    });
 }
 
 
@@ -1341,26 +1476,51 @@ function updateTypingIndicator(data) {
     showTypingIndicator();
 }
 
+function maintainScrollBottom(callback) {
+    const messagesContainer = document.getElementById('messages-container');
+    if (!messagesContainer) return callback();
+
+    // Check if we are near bottom before changing layout
+    const wasNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 100;
+
+    const result = callback();
+
+    // If we were at bottom, stay at bottom after layout change
+    if (wasNearBottom) {
+        setTimeout(() => {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }, 0);
+    }
+
+    return result;
+}
+
 function showTypingIndicator() {
     const typingIndicator = document.getElementById('typingIndicator');
     const typingText = document.getElementById('typing-text');
     const users = Array.from(typingUsers);
 
-    if (users.length === 0) {
-        typingIndicator.classList.add('hidden');
-        return;
-    }
+    maintainScrollBottom(() => {
+        const isCurrentlyHidden = typingIndicator.classList.contains('hidden');
 
-    typingIndicator.classList.remove('hidden');
-    typingIndicator.classList.add('active');
+        if (users.length === 0) {
+            if (!isCurrentlyHidden) {
+                typingIndicator.classList.add('hidden');
+            }
+            return;
+        }
 
-    if (users.length === 1) {
-        typingText.textContent = `${escapeHtml(users[0])} is typing...`;
-    } else if (users.length === 2) {
-        typingText.textContent = `${escapeHtml(users[0])} and ${escapeHtml(users[1])} are typing...`;
-    } else {
-        typingText.textContent = `${users.length} people are typing...`;
-    }
+        typingIndicator.classList.remove('hidden');
+        typingIndicator.classList.add('active');
+
+        if (users.length === 1) {
+            typingText.textContent = `${escapeHtml(users[0])} is typing...`;
+        } else if (users.length === 2) {
+            typingText.textContent = `${escapeHtml(users[0])} and ${escapeHtml(users[1])} are typing...`;
+        } else {
+            typingText.textContent = `${users.length} people are typing...`;
+        }
+    });
 }
 
 function sendTypingStatus(isTyping) {
@@ -1529,42 +1689,46 @@ function handleDrop(event) {
 }
 
 function showFilePreview() {
-    const preview = document.getElementById('filePreview');
+    maintainScrollBottom(() => {
+        const preview = document.getElementById('filePreview');
 
-    if (selectedFiles.length === 0) {
-        hideFilePreview();
-        return;
-    }
-
-    preview.classList.remove('hidden');
-    let previewHtml = '';
-
-    selectedFiles.forEach((file, index) => {
-        if (file.type.startsWith('image/')) {
-            const imageDataUrl = `data:${file.type};base64,${file.data}`;
-            previewHtml += `
-                <div class="relative group">
-                    <img src="${imageDataUrl}" alt="Preview" class="w-16 h-16 rounded-lg object-cover">
-                    <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" onclick="removeFile(${index})">✕</button>
-                </div>
-            `;
-        } else {
-            previewHtml += `
-                <div class="relative group bg-[#2B2D31] p-2 rounded-lg">
-                    <div class="text-xl">${getFileIcon(file.type)}</div>
-                    <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" onclick="removeFile(${index})">✕</button>
-                </div>
-            `;
+        if (selectedFiles.length === 0) {
+            hideFilePreview();
+            return;
         }
-    });
 
-    preview.innerHTML = previewHtml;
+        preview.classList.remove('hidden');
+        let previewHtml = '';
+
+        selectedFiles.forEach((file, index) => {
+            if (file.type.startsWith('image/')) {
+                const imageDataUrl = `data:${file.type};base64,${file.data}`;
+                previewHtml += `
+                    <div class="relative group">
+                        <img src="${imageDataUrl}" alt="Preview" class="w-16 h-16 rounded-lg object-cover">
+                        <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" onclick="removeFile(${index})">✕</button>
+                    </div>
+                `;
+            } else {
+                previewHtml += `
+                    <div class="relative group bg-[#2B2D31] p-2 rounded-lg">
+                        <div class="text-xl">${getFileIcon(file.type)}</div>
+                        <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" onclick="removeFile(${index})">✕</button>
+                    </div>
+                `;
+            }
+        });
+
+        preview.innerHTML = previewHtml;
+    });
 }
 
 function hideFilePreview() {
-    const preview = document.getElementById('filePreview');
-    preview.classList.add('hidden');
-    preview.innerHTML = '';
+    maintainScrollBottom(() => {
+        const preview = document.getElementById('filePreview');
+        preview.classList.add('hidden');
+        preview.innerHTML = '';
+    });
 }
 
 function removeFile(index) {

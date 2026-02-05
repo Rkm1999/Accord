@@ -744,6 +744,16 @@
                 </div>
 
 
+                <!-- Typing Indicator -->
+                <div id="typingIndicator" class="h-6 mb-1 flex items-center hidden">
+                    <div class="flex space-x-1">
+                        <div class="w-1.5 h-1.5 bg-[#dbdee1] rounded-full typing-dot"></div>
+                        <div class="w-1.5 h-1.5 bg-[#dbdee1] rounded-full typing-dot"></div>
+                        <div class="w-1.5 h-1.5 bg-[#dbdee1] rounded-full typing-dot"></div>
+                    </div>
+                    <span class="text-xs text-[#dbdee1] font-bold ml-2" id="typing-text">Someone is typing...</span>
+                </div>
+
                 <div id="message-input-area" class="bg-[#383A40] rounded-lg px-4 py-2.5 flex items-center relative transition-all">
                     <div id="mentionAutocomplete" class="hidden custom-scrollbar"></div>
                     <button type="button" class="bg-[#B5BAC1] text-[#313338] rounded-full p-0.5 mr-3 hover:text-white transition-colors flex items-center justify-center" onclick="toggleReactionPicker(event, null)">
@@ -768,16 +778,6 @@
                 <!-- File Preview -->
                 <div id="filePreview" class="hidden mt-2 flex flex-wrap gap-2">
                     <!-- File previews injected by JS -->
-                </div>
-
-                <!-- Typing Indicator -->
-                <div id="typingIndicator" class="h-6 mt-1 flex items-center hidden">
-                    <div class="flex space-x-1">
-                        <div class="w-1.5 h-1.5 bg-[#dbdee1] rounded-full typing-dot"></div>
-                        <div class="w-1.5 h-1.5 bg-[#dbdee1] rounded-full typing-dot"></div>
-                        <div class="w-1.5 h-1.5 bg-[#dbdee1] rounded-full typing-dot"></div>
-                    </div>
-                    <span class="text-xs text-[#dbdee1] font-bold ml-2" id="typing-text">Someone is typing...</span>
                 </div>
             </div>
         </div>
