@@ -218,7 +218,7 @@ class_name = "ChatRoom"
 [[d1_databases]]
 binding = "DB"
 database_name = "chat-history"
-database_id = "be39a7e7-1885-4867-aff9-41c7eb3fa850"
+database_id = "c020574a-5623-407b-be0c-cd192bab9545"
 ```
 
 ### tsconfig.json

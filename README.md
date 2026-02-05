@@ -1,6 +1,6 @@
 # Accord - Real-time Chat Application
 
-A Discord-inspired, modern real-time chat application built with Cloudflare Pages, Workers, Durable Objects, and D1 database.
+A Discord-inspired, modern real-time chat application built with Cloudflare Workers (using Workers Assets), Durable Objects, D1 database, and R2 storage.
 
 ## Features
 
@@ -20,6 +20,7 @@ A Discord-inspired, modern real-time chat application built with Cloudflare Page
 - Read receipts per channel
 - Search (text, user, channel, date range)
 - Online user presence tracking
+- PWA support (Service Worker for offline capabilities)
 - Beautiful, responsive Discord-inspired UI
 - Automatic reconnection on disconnect
 
@@ -28,13 +29,7 @@ A Discord-inspired, modern real-time chat application built with Cloudflare Page
 ```
 ┌─────────────────┐
 │  Cloudflare      │
-│     Pages        │  (Frontend - HTML/CSS/JS)
-└────────┬────────┘
-         │ HTTP/WebSocket
-         ▼
-┌─────────────────┐
-│  Cloudflare      │
-│     Worker       │  (API & Routing)
+│     Worker       │  (API, Routing & Static Assets)
 └────────┬────────┘
          │
          ├───► Durable Object (WebSocket connections & real-time state)
@@ -235,7 +230,7 @@ cd chat-app/worker
 npx wrangler d1 create chat-history
 ```
 
-Copy the `database_id` from the output (e.g., `be39a7e7-1885-4867-aff9-41c7eb3fa850`).
+Copy the `database_id` from the output (e.g., `c020574a-5623-407b-be0c-cd192bab9545`).
 
 #### 3. Create R2 Bucket
 
@@ -258,7 +253,7 @@ Update `chat-app/worker/wrangler.toml` with the database_id:
 [[d1_databases]]
 binding = "DB"
 database_name = "chat-history"
-database_id = "be39a7e7-1885-4867-aff9-41c7eb3fa850"
+database_id = "c020574a-5623-407b-be0c-cd192bab9545"
 ```
 
 **Note:** `wrangler.toml` is in `.gitignore` to avoid committing your database_id. Use `wrangler.toml.example` as a template.
@@ -502,8 +497,7 @@ npx wrangler d1 execute chat-history --local --command="PRAGMA foreign_key_list(
 
 ## Technologies Used
 
-- **Cloudflare Pages** - Frontend hosting
-- **Cloudflare Workers** - Serverless backend
+- **Cloudflare Workers** - Serverless backend & Static Assets hosting (Workers Assets)
 - **Cloudflare Durable Objects** - Real-time WebSocket management
 - **Cloudflare D1** - Serverless SQL database
 - **Cloudflare R2** - Object storage for files
