@@ -157,8 +157,12 @@ export class ChatRoom extends DurableObject<Env> {
         return;
     }
 
-    if (data.type === "load_more") {
+    if (data.type === "load_more" || data.type === "load_history") {
       await this.sendChatHistory(ws, channelId, data.offset || 0);
+      return;
+    }
+
+    if (data.type !== "chat") {
       return;
     }
 
@@ -472,6 +476,7 @@ export class ChatRoom extends DurableObject<Env> {
   }
 
   private async fetchLinkMetadata(message: string): Promise<LinkMetadata | null> {
+    if (!message) return null;
 
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const matches = message.match(urlRegex);

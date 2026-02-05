@@ -1,4 +1,5 @@
 const username = localStorage.getItem('chatUsername');
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
 // Register Service Worker for PWA & Handle Updates
 if ('serviceWorker' in navigator) {
@@ -166,6 +167,11 @@ let searchIsLoading = false;
 let searchIsAutoLoading = false;
 let currentSearchParams = {};
 
+
+function dismissKeyboard() {
+    const input = document.getElementById('message-input');
+    if (input) input.blur();
+}
 
 function escapeHtml(text) {
     if (!text) return '';
@@ -399,9 +405,22 @@ function displayHistory(messages, lastReadMessageId = 0, offset = 0, hasMore = f
     // Scroll to bottom after loading history
     // Use a small timeout to ensure DOM is fully rendered and layout is settled
     setTimeout(() => {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        lastScrollTop = messagesContainer.scrollHeight; // Initialize scroll tracking
-    }, 0);
+        const divider = document.getElementById('unread-divider');
+        const searchTargetId = localStorage.getItem('searchTargetMessageId');
+
+        if (searchTargetId) {
+            // Let the search jump handler handle it below
+            return;
+        }
+
+        if (divider) {
+            divider.scrollIntoView({ block: 'center' });
+            lastScrollTop = messagesContainer.scrollTop;
+        } else {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            lastScrollTop = messagesContainer.scrollHeight;
+        }
+    }, 50);
 
     if (unreadDividerShown) {
         showUnreadBanner();
@@ -448,6 +467,7 @@ function hideUnreadBanner() {
 }
 
 function jumpToUnread() {
+    dismissKeyboard();
     const divider = document.getElementById('unread-divider');
     if (divider) {
         divider.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -536,6 +556,9 @@ function jumpToReply(messageId) {
     scrollToMessage(messageId);
 }
 
+let lastResizeTime = 0;
+let lastSendMessageTime = 0;
+
 // Add scroll listener to auto-hide banner if we scroll up to the divider
 document.getElementById('messages-container').addEventListener('scroll', () => {
     const container = document.getElementById('messages-container');
@@ -544,7 +567,10 @@ document.getElementById('messages-container').addEventListener('scroll', () => {
     const messageInput = document.getElementById('message-input');
 
     // Close keyboard on mobile when scrolling messages
-    if (window.innerWidth < 1024 && messageInput && document.activeElement === messageInput) {
+    // But ignore if a resize just happened (e.g. keyboard opening)
+    // OR if a message was just sent (to allow auto-scroll to bottom)
+    const now = Date.now();
+    if (window.innerWidth < 1024 && messageInput && document.activeElement === messageInput && (now - lastResizeTime > 500) && (now - lastSendMessageTime > 1000)) {
         const scrollDistance = Math.abs(container.scrollTop - lastScrollTop);
         if (scrollDistance > 5) {
             messageInput.blur();
@@ -585,19 +611,23 @@ document.getElementById('messages-container').addEventListener('scroll', () => {
     const isScrollingUp = lastScrollTop > container.scrollTop && scrollDistance > 10;
 
     if (isNearTop && hasMoreMessages && !isLoadingMore && currentOffset >= 0 && !isAutoLoading && isScrollingUp) {
-        isAutoLoading = true;
-        loadMoreMessages();
+        if (loadMoreMessages(false)) {
+            isAutoLoading = true;
+            const distanceFromBottom = container.scrollHeight - container.scrollTop;
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.className = 'text-center py-4';
+            loadingIndicator.id = 'auto-loading-indicator';
+            loadingIndicator.innerHTML = '<div class="flex items-center justify-center"><div class="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent"></div>Loading older messages...</div>';
+            container.insertBefore(loadingIndicator, container.firstChild);
+            
+            // Preserve scroll position relative to bottom
+            container.scrollTop = container.scrollHeight - distanceFromBottom;
 
-        const loadingIndicator = document.createElement('div');
-        loadingIndicator.className = 'text-center py-4';
-        loadingIndicator.id = 'auto-loading-indicator';
-        loadingIndicator.innerHTML = '<div class="flex items-center justify-center"><div class="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent"></div>Loading older messages...</div>';
-        container.insertBefore(loadingIndicator, container.firstChild);
-
-        // Debounce: prevent rapid repeated loading
-        setTimeout(() => {
-            isAutoLoading = false;
-        }, 500);
+            // Debounce: prevent rapid repeated loading
+            setTimeout(() => {
+                isAutoLoading = false;
+            }, 500);
+        }
     }
 
     lastScrollTop = container.scrollTop;
@@ -796,74 +826,74 @@ function createMessageElement(data, isHistory = false) {
     return msgEl;
 }
 
-function loadMoreMessages() {
-    if (!isConnected) return;
+function loadMoreMessages(showButtonLoading = true) {
+    if (isLoadingMore || !hasMoreMessages) return false;
 
     isLoadingMore = true;
-    const newOffset = currentOffset + 25;
+    if (showButtonLoading) {
+        const loadMoreBtn = document.getElementById('load-more-button');
+        if (loadMoreBtn) {
+            loadMoreBtn.innerHTML = '<div class="flex items-center justify-center"><div class="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent mr-2"></div>Loading more messages...</div>';
+        }
+    }
 
     ws.send(JSON.stringify({
-        type: 'load_more',
-        offset: newOffset
+        type: 'load_history',
+        offset: currentOffset + 25, // History uses 25 messages per page in ChatRoom.ts
+        limit: 25
     }));
-
-    const loadMoreBtn = document.getElementById('load-more-button');
-    if (loadMoreBtn) {
-        loadMoreBtn.innerHTML = '<div class="flex items-center justify-center"><div class="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent mr-2"></div>Loading...</div>';
-    }
+    return true;
 }
 
 function displayMoreMessages(messages, newOffset, hasMore) {
-    const messagesContainer = document.getElementById('messages-container');
-    const loadMoreBtn = document.getElementById('load-more-button');
-    const loadingIndicator = document.getElementById('auto-loading-indicator');
+    try {
+        const messagesContainer = document.getElementById('messages-container');
+        const loadMoreBtn = document.getElementById('load-more-button');
+        const loadingIndicator = document.getElementById('auto-loading-indicator');
 
-    currentOffset = newOffset;
-    hasMoreMessages = hasMore;
-    isLoadingMore = false;
-    isAutoLoading = false;
+        currentOffset = newOffset;
+        hasMoreMessages = hasMore;
 
-    if (loadingIndicator) {
-        loadingIndicator.remove();
-    }
+        // Get current scroll position relative to bottom before any changes
+        const distanceFromBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop;
 
-    const fragment = document.createDocumentFragment();
-
-    messages.forEach(msg => {
-        if (msg.message || msg.file_name) {
-            const msgEl = createMessageElement(msg, true);
-            fragment.appendChild(msgEl);
+        if (loadingIndicator) {
+            loadingIndicator.remove();
         }
-    });
 
-    // Get current scroll position and height before inserting
-    const oldScrollTop = messagesContainer.scrollTop;
-    const oldScrollHeight = messagesContainer.scrollHeight;
+        const fragment = document.createDocumentFragment();
 
-    // Insert new messages at top (above button or at container start)
-    messagesContainer.insertBefore(fragment, loadMoreBtn ? loadMoreBtn.nextSibling : messagesContainer.firstChild);
+        messages.forEach(msg => {
+            if (msg.message || msg.file_name) {
+                const msgEl = createMessageElement(msg, true);
+                fragment.appendChild(msgEl);
+            }
+        });
 
-    lucide.createIcons();
+        // Insert new messages at top (above button or at container start)
+        messagesContainer.insertBefore(fragment, loadMoreBtn ? loadMoreBtn.nextSibling : messagesContainer.firstChild);
 
-    // Calculate how much content was added
-    const heightDifference = messagesContainer.scrollHeight - oldScrollHeight;
+        lucide.createIcons();
 
-    // Preserve scroll position by adjusting scrollTop
-    if (heightDifference > 0) {
-        messagesContainer.scrollTop = oldScrollTop + heightDifference;
-        lastScrollTop = oldScrollTop + heightDifference;
-    }
+        // Preserve scroll position relative to bottom
+        messagesContainer.scrollTop = messagesContainer.scrollHeight - distanceFromBottom;
+        lastScrollTop = messagesContainer.scrollTop;
 
-    if (!hasMore || messages.length === 0) {
-        if (loadMoreBtn) {
-            loadMoreBtn.remove();
+        if (!hasMore || messages.length === 0) {
+            if (loadMoreBtn) {
+                loadMoreBtn.remove();
+            }
+        } else if (loadMoreBtn) {
+            loadMoreBtn.innerHTML = `
+                <button onclick="loadMoreMessages()" class="bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium py-2 px-4 rounded transition-colors">
+                    Load More Messages
+                </button>
+            `;
+            lucide.createIcons();
         }
-    } else if (loadMoreBtn) {
-        loadMoreBtn.innerHTML = `
-            <button onclick="loadMoreMessages()" class="bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium py-2 px-4 rounded transition-colors">
-                Load More Messages
-            </button>
-        `;
+    } finally {
+        isLoadingMore = false;
+        isAutoLoading = false;
     }
 }
 
@@ -1187,6 +1217,12 @@ function cancelReply() {
     const replyToMediaEl = document.getElementById('reply-to-media');
     replyBanner.classList.add('hidden');
     if (replyToMediaEl) replyToMediaEl.innerHTML = '';
+    
+    // Ensure keyboard stays open if it was open
+    const input = document.getElementById('message-input');
+    if (document.activeElement === input) {
+        input.focus();
+    }
 }
 
 
@@ -1542,6 +1578,12 @@ function removeFile(index) {
         showFilePreview();
     }
     updateSendButtonVisibility();
+
+    // Ensure keyboard stays open if it was open
+    const input = document.getElementById('message-input');
+    if (document.activeElement === input) {
+        input.focus();
+    }
 }
 
 async function fetchChannels() {
@@ -1637,6 +1679,7 @@ function displayChannels() {
 
 function switchChannel(channelId) {
     if (channelId === currentChannelId) return;
+    dismissKeyboard();
 
     unreadChannels.delete(channelId);
     localStorage.setItem('unreadChannels', JSON.stringify(Array.from(unreadChannels)));
@@ -1648,6 +1691,7 @@ function switchChannel(channelId) {
 let escapeHandler = null;
 
 function openCreateChannelModal() {
+    dismissKeyboard();
     const modal = document.getElementById('createChannelModal');
     const input = document.getElementById('newChannelName');
     input.value = '';
@@ -1817,6 +1861,7 @@ async function deleteChannel(channelId) {
 
 function openSearchModal() {
     closeAllSidebars();
+    dismissKeyboard();
     const modal = document.getElementById('searchModal');
     const channelIdSelect = document.getElementById('searchChannelId');
 
@@ -2150,6 +2195,7 @@ function openUserSettings() {
 }
 
 function openEmojiModal() {
+    dismissKeyboard();
     const modal = document.getElementById('emojiUploadModal');
     modal.classList.remove('hidden');
     modal.classList.add('visible');
@@ -2202,6 +2248,7 @@ async function uploadEmoji() {
 
 function openProfileModal() {
     closeAllSidebars();
+    dismissKeyboard();
     const modal = document.getElementById('profileModal');
     const nameInput = document.getElementById('displayNameInput');
     const preview = document.getElementById('profilePreview');
@@ -2432,6 +2479,7 @@ function copyNewRecoveryKey() {
 }
 
 function toggleReactionPicker(event, messageId) {
+    event.preventDefault();
     event.stopPropagation();
     const picker = document.getElementById('reactionPicker');
     const isHidden = picker.classList.contains('hidden');
@@ -2578,6 +2626,7 @@ function closeImageModal() {
 
 function closeAllSidebars() {
     if (window.innerWidth >= 1024) return;
+    dismissKeyboard();
 
     const channelSidebar = document.getElementById('channel-sidebar');
     const membersSidebar = document.getElementById('members-sidebar');
@@ -2590,6 +2639,7 @@ function closeAllSidebars() {
 
 function toggleSidebar(id) {
     if (window.innerWidth >= 1024) return;
+    dismissKeyboard();
 
     const sidebar = document.getElementById(id);
     const otherId = id === 'channel-sidebar' ? 'members-sidebar' : 'channel-sidebar';
@@ -2647,6 +2697,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+    const messagesContainerEl = document.getElementById('messages-container');
+    if (messagesContainerEl) {
+        messagesContainerEl.addEventListener('click', (e) => {
+            // Dismiss keyboard if clicking background or message area (but not buttons/links)
+            if (e.target.id === 'messages-container' || e.target.closest('.message-group')) {
+                // If it's a message group, check if they clicked an interactive element
+                if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.reaction-badge')) {
+                    return;
+                }
+                dismissKeyboard();
+            }
+        });
+    }
+
     const fileInputEl = document.getElementById('fileInput');
     if (fileInputEl) {
         fileInputEl.addEventListener('change', handleFileSelect);
@@ -2668,6 +2732,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.addEventListener('drop', (e) => e.preventDefault());
 
+    const sendBtn = document.getElementById('send-message-btn');
+    if (sendBtn) {
+        sendBtn.addEventListener('pointerdown', (e) => {
+            // Prevent the button from taking focus away from the input
+            // This stops the keyboard from flickering on mobile
+            e.preventDefault();
+        });
+    }
+
     const messageFormEl = document.getElementById('message-form');
     if (messageFormEl) {
         messageFormEl.addEventListener('submit', async (e) => {
@@ -2677,7 +2750,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!message && selectedFiles.length === 0) return;
 
+            // Keep focus synchronously at the start to prevent keyboard dismissal
+            if (window.innerWidth < 1024) {
+                input.focus();
+                // Ensure it stays focused even if browser tries to blur on submit
+                setTimeout(() => input.focus(), 0);
+            }
+
             if (isConnected) {
+                lastSendMessageTime = Date.now();
                 const filesToSend = [...selectedFiles];
 
                 if (message) {
@@ -2709,10 +2790,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sendBtn = document.getElementById('send-message-btn');
                 if (sendBtn) sendBtn.classList.remove('visible');
 
-                // Keep input focused on mobile to keep keyboard open
+                // Final check to maintain focus after all async operations
                 if (window.innerWidth < 1024) {
-                    input.blur();
-                    setTimeout(() => input.focus(), 150);
+                    input.focus();
                 }
             }
         });
@@ -2743,33 +2823,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Fix for mobile keyboard covering input
         messageInputEl.addEventListener('focus', () => {
-            if (window.innerWidth < 1024) {
-                setTimeout(() => {
-                    messageInputEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                }, 300);
-            }
+            // Browser usually handles this better than manual scrollIntoView
+            // which can cause focus loss on some Android versions
         });
     }
 
     // Handle Visual Viewport for mobile keyboard
     if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', () => {
+        const handleViewportChange = () => {
+            const container = document.getElementById('messages-container');
+            const oldHeight = container ? container.clientHeight : 0;
+            const oldScrollTop = container ? container.scrollTop : 0;
+
+            lastResizeTime = Date.now();
             const app = document.getElementById('app');
             if (!app) return;
             
             const height = window.visualViewport.height;
+            const offsetTop = window.visualViewport.offsetTop;
+            
+            // Adjust app height to match visual viewport
             app.style.height = `${height}px`;
             
-            // If focused on input, make sure it's in view
-            if (document.activeElement && document.activeElement.id === 'message-input') {
-                document.activeElement.scrollIntoView({ behavior: 'auto', block: 'end' });
+            // On iOS, the viewport can be scrolled/offset when the keyboard is open.
+            // We use transform to pin the app to the current visible top.
+            if (isIOS) {
+                app.style.transform = `translateY(${offsetTop}px)`;
+                window.scrollTo(0, 0);
             }
-        });
-        
-        window.visualViewport.addEventListener('scroll', () => {
-            // Prevent the viewport from scrolling away from the app
-            window.scrollTo(0, 0);
-        });
+            
+            // Update lastScrollTop after resize to prevent large scrollDistance
+            // when the keyboard opens and shifts the container
+            if (container) {
+                const newHeight = container.clientHeight;
+                // Preserve scroll position relative to the bottom
+                // This keeps whatever was at the bottom of the screen visible
+                container.scrollTop = oldScrollTop + (oldHeight - newHeight);
+                lastScrollTop = container.scrollTop;
+            }
+            
+            // On resize (keyboard opening), ensure the active element is visible
+            // but use a slight delay and only if needed to avoid focus loss
+            if (document.activeElement && document.activeElement.id === 'message-input') {
+                setTimeout(() => {
+                    document.activeElement.scrollIntoView({ behavior: 'auto', block: 'end' });
+                }, 100);
+            }
+        };
+
+        window.visualViewport.addEventListener('resize', handleViewportChange);
+        window.visualViewport.addEventListener('scroll', handleViewportChange);
     }
 
 
