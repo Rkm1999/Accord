@@ -518,7 +518,7 @@
         /* PWA Update Prompt */
         #pwaUpdatePrompt {
             position: fixed;
-            bottom: 24px;
+            top: 16px;
             left: 16px;
             right: 16px;
             background: #5865F2;
@@ -530,7 +530,7 @@
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            animation: slideUpPwa 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            animation: slideDownPwa 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
         /* PWA Install Prompt */
@@ -549,6 +549,11 @@
             flex-direction: column;
             gap: 12px;
             animation: slideUpPwa 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes slideDownPwa {
+            from { transform: translateY(-120%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
         }
 
         @keyframes slideUpPwa {
@@ -1016,17 +1021,14 @@
         </div>
     </div>
 
-    <!-- PWA Update Notification -->
-    <div id="pwaUpdatePrompt" class="fixed top-4 left-1/2 -translate-x-1/2 bg-[#5865F2] text-white px-4 py-3 rounded-lg shadow-2xl z-[200] hidden flex-col items-center gap-2 min-w-[300px] animate-bounce-in">
-        <div class="flex items-center gap-3 w-full">
-            <i data-lucide="refresh-cw" class="w-5 h-5 animate-spin"></i>
-            <div class="flex-1">
-                <h4 class="font-bold text-sm">Update Available</h4>
-                <p class="text-xs text-white/90">A new version of Accord is available.</p>
-            </div>
+    <!-- PWA Update Prompt -->
+    <div id="pwaUpdatePrompt">
+        <div class="flex items-center gap-3">
+            <i data-lucide="refresh-cw" class="text-white w-5 h-5 animate-spin-slow"></i>
+            <span class="text-white text-sm font-semibold">New version available!</span>
         </div>
-        <button id="pwaUpdateBtn" class="w-full bg-white text-[#5865F2] font-bold py-1.5 rounded text-sm hover:bg-gray-100 transition-colors mt-1">
-            Update Now
+        <button id="pwaUpdateBtn" class="bg-white text-[#5865F2] px-4 py-1.5 rounded-lg text-sm font-bold shadow hover:bg-[#f0f0f0] transition-colors">
+            Update
         </button>
     </div>
 

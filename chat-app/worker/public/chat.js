@@ -33,6 +33,7 @@ function showUpdatePrompt(worker) {
     const btn = document.getElementById('pwaUpdateBtn');
     
     if (prompt && btn) {
+        prompt.classList.remove('hidden');
         prompt.style.display = 'flex';
         btn.onclick = () => {
             worker.postMessage({ type: 'SKIP_WAITING' });

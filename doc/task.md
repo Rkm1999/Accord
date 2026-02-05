@@ -1,4 +1,8 @@
-# Realtime Chat Website - Implementation Tasks
+# Accord Chat - Legacy Implementation Tasks
+
+> **Note**: This document contains the original implementation tasks for the initial Accord project.  
+> **Current Status**: ✅ **COMPLETED** - All basic features have been implemented  
+> **Next Steps**: See `/doc/tasks.md` for ongoing development roadmap and `/doc/features.md` for future feature planning.
 
 ## Phase 1: Project Initialization
 
