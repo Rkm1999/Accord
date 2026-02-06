@@ -589,8 +589,11 @@ function scrollToMessage(messageId) {
                     if (hasMoreMessages && !isLoadingMore) {
                         loadMoreMessages();
                         setTimeout(tryFindAgain, 500);
+                    } else {
+                        setTimeout(tryFindAgain, 500);
                     }
                 } else {
+                    removeSystemMessage(); // Clear loading message
                     showSystemMessage('Message could not be loaded. It may have been deleted.');
                 }
             };
@@ -601,6 +604,9 @@ function scrollToMessage(messageId) {
         }
         return;
     }
+
+    // Message found! Remove any pending system messages (like "Loading older messages...")
+    removeSystemMessage();
 
     console.log('Found message element, scrolling to it...');
     console.log('Element before highlight:', msgEl);
@@ -756,20 +762,57 @@ function createMessageElement(data, isHistory = false) {
         key: data.file_key
     };
 
+    // For history loading, we currently disable grouping to keep it simple and safe
+    const shouldGroup = false;
+
+    // Persistent Highlight Check
+    const isMentioned = (data.mentions && data.mentions.includes(username)) || 
+                        (data.reply_username === username) ||
+                        (data.message && data.message.includes(`@${username}`));
+
+    // Prepare Reply HTML (to show at top of content)
+    let replyHtml = '';
+    if (data.reply_to) {
+        const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
+        const replyFileUrl = data.reply_file_key 
+            ? (isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
+            : null;
+
+        // Use a simpler layout for inside-content reply, matching displayMessage logic
+        replyHtml = `
+            <div class="flex items-center gap-1 mb-0.5 opacity-60 hover:opacity-100 cursor-pointer transition-opacity select-none" onclick="event.stopPropagation(); jumpToReply(${data.reply_to})">
+                <i data-lucide="corner-up-left" class="w-3 h-3 text-[#949BA4] mr-1"></i>
+                <span class="text-xs font-semibold text-[#b5bac1] hover:underline">@${escapeHtml(data.reply_username)}</span>
+                <span class="text-xs text-[#949BA4] truncate max-w-[300px]">${escapeHtml(data.reply_message || (data.reply_file_name ? 'Attachment' : ''))}</span>
+            </div>
+        `;
+    }
+
     let messageHtml = '';
 
-    messageHtml += `
-        <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
-            <img src="${avatarUrl}" alt="${escapeHtml(display_name)}" class="w-10 h-10 rounded-full object-cover">
-        </div>
-        <div class="flex-1 min-w-0">
-            <div class="flex items-center">
-                <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
-                    ${escapeHtml(display_name)}
-                </span>
-                <span class="text-xs text-[#949BA4] ml-1">${date} at ${time}</span>
+    if (!shouldGroup) {
+        messageHtml += `
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="${avatarUrl}" alt="${escapeHtml(display_name)}" class="w-10 h-10 rounded-full object-cover">
             </div>
-    `;
+            <div class="flex-1 min-w-0">
+                ${replyHtml}
+                <div class="flex items-center">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                        ${escapeHtml(display_name)}
+                    </span>
+                    <span class="text-xs text-[#949BA4] ml-1">${date} at ${time}</span>
+                </div>
+        `;
+
+    } else {
+        messageHtml += `
+            <div class="w-10 mr-4 text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100 flex items-center justify-end select-none">
+                ${time}
+            </div>
+            <div class="flex-1 min-w-0">
+        `;
+    }
 
     if (data.message) {
         messageHtml += `<p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">${escapeHtml(data.message)}${data.is_edited ? '<span class="edited-text">(edited)</span>' : ''}</p>`;
@@ -849,37 +892,7 @@ function createMessageElement(data, isHistory = false) {
         }
     }
 
-    if (data.reply_to) {
-        const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
-        const replyFileUrl = data.reply_file_key
-            ? (isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
-            : null;
-
-        messageHtml += `
-            <div class="mt-2 bg-[#2B2D31] p-2 rounded-lg border-l-2 border-[#5865F2] opacity-90 hover:bg-[#36383E] cursor-pointer transition-colors" onclick="event.stopPropagation(); jumpToReply(${data.reply_to})">
-                <div class="flex items-center text-xs text-[#949BA4] mb-1">
-                    <i data-lucide="corner-up-right" class="w-3 h-3 mr-1"></i>
-                    <span class="font-semibold">${escapeHtml(data.reply_username)}</span>
-                    <span class="ml-1">${replyTime}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    ${replyFileUrl && data.reply_file_type?.startsWith('image/') ? `
-                        <img src="${replyFileUrl}" class="w-12 h-12 rounded object-cover flex-shrink-0">
-                    ` : ''}
-                    <div class="flex-1 min-w-0">
-                        ${data.reply_message ? `<p class="text-sm text-[#B5BAC1] truncate">${escapeHtml(data.reply_message)}</p>` : ''}
-                        ${data.reply_file_name && !data.reply_file_type?.startsWith('image/') ? `
-                            <div class="flex items-center text-xs text-[#949BA4] mt-0.5">
-                                <i data-lucide="file" class="w-3 h-3 mr-1"></i>
-                                <span class="truncate">${escapeHtml(data.reply_file_name)}</span>
-                            </div>
-                        ` : ''}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
+    // Reactions
     let reactionsHtml = `<div class="reactions-container flex flex-wrap mt-1" id="reactions-${data.id}">`;
     if (data.reactions && data.reactions.length > 0) {
         const grouped = data.reactions.reduce((acc, r) => {
@@ -933,7 +946,7 @@ function createMessageElement(data, isHistory = false) {
         `;
 
     const msgEl = document.createElement('div');
-    msgEl.className = `group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 relative message-group`;
+    msgEl.className = `group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 ${shouldGroup ? 'mt-0' : 'mt-[17px]'} relative message-group ${isMentioned ? 'mention-highlight' : ''}`;
     msgEl.dataset.messageId = data.id || '';
 
     msgEl.dataset.username = data.username;
@@ -1061,7 +1074,7 @@ function displayMessage(data, isHistory = false) {
         const prevUsername = prevMessage.dataset.username;
         const prevTimestamp = parseInt(prevMessage.dataset.timestamp);
         const timeDiff = Date.now() - prevTimestamp;
-        shouldGroup = prevUsername === data.username && timeDiff < 60000;
+        shouldGroup = prevUsername === data.username && timeDiff < 60000 && !data.reply_to;
     }
 
     // Persistent Highlight Check
@@ -1085,6 +1098,38 @@ function displayMessage(data, isHistory = false) {
         msgEl.dataset.fileType = fileAttachment.type;
     }
 
+    // Prepare Reply HTML (to show at top of content)
+    let replyHtml = '';
+    if (data.reply_to) {
+        const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
+        const replyFileUrl = data.reply_file_key 
+            ? (isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
+            : null;
+
+        replyHtml = `
+            <div class="flex items-center gap-2 mb-1 opacity-80 hover:opacity-100 cursor-pointer transition-opacity group/reply select-none" onclick="event.stopPropagation(); jumpToReply(${data.reply_to})">
+                <div class="w-8 flex justify-end">
+                    <div class="w-6 h-3 border-l-2 border-t-2 border-[#949BA4] rounded-tl ml-auto mt-2"></div>
+                </div>
+                <div class="flex items-center gap-1 text-xs text-[#949BA4] flex-1 min-w-0">
+                    <img src="${isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`}" class="w-4 h-4 rounded-full object-cover hidden"> 
+                    <!-- We don't have author avatar in reply data easily available, so skip for now or use generic -->
+                    <span class="font-semibold text-[#b5bac1] whitespace-nowrap">@${escapeHtml(data.reply_username)}</span>
+                    <span class="truncate flex-1 hover:text-white transition-colors">${escapeHtml(data.reply_message || (data.reply_file_name ? 'Click to see attachment' : ''))}</span>
+                </div>
+            </div>
+        `;
+        
+        // Use a simpler layout for inside-content reply
+        replyHtml = `
+            <div class="flex items-center gap-1 mb-0.5 opacity-60 hover:opacity-100 cursor-pointer transition-opacity select-none" onclick="event.stopPropagation(); jumpToReply(${data.reply_to})">
+                <i data-lucide="corner-up-left" class="w-3 h-3 text-[#949BA4] mr-1"></i>
+                <span class="text-xs font-semibold text-[#b5bac1] hover:underline">@${escapeHtml(data.reply_username)}</span>
+                <span class="text-xs text-[#949BA4] truncate max-w-[300px]">${escapeHtml(data.reply_message || (data.reply_file_name ? 'Attachment' : ''))}</span>
+            </div>
+        `;
+    }
+
 
     let messageHtml = '';
 
@@ -1094,6 +1139,7 @@ function displayMessage(data, isHistory = false) {
                 <img src="${avatarUrl}" alt="${escapeHtml(display_name)}" class="w-10 h-10 rounded-full object-cover">
             </div>
             <div class="flex-1 min-w-0">
+                ${replyHtml}
                 <div class="flex items-center">
                     <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
                         ${escapeHtml(display_name)}
@@ -1187,37 +1233,6 @@ function displayMessage(data, isHistory = false) {
                 </div>
             `;
         }
-    }
-
-    if (data.reply_to) {
-        const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
-        const replyFileUrl = data.reply_file_key 
-            ? (isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
-            : null;
-
-        messageHtml += `
-            <div class="mt-2 bg-[#2B2D31] p-2 rounded-lg border-l-2 border-[#5865F2] opacity-90 hover:bg-[#36383E] cursor-pointer transition-colors" onclick="event.stopPropagation(); jumpToReply(${data.reply_to})">
-                <div class="flex items-center text-xs text-[#949BA4] mb-1">
-                    <i data-lucide="corner-up-right" class="w-3 h-3 mr-1"></i>
-                    <span class="font-semibold">${escapeHtml(data.reply_username)}</span>
-                    <span class="ml-1">${replyTime}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    ${replyFileUrl && data.reply_file_type?.startsWith('image/') ? `
-                        <img src="${replyFileUrl}" class="w-12 h-12 rounded object-cover flex-shrink-0">
-                    ` : ''}
-                    <div class="flex-1 min-w-0">
-                        ${data.reply_message ? `<p class="text-sm text-[#B5BAC1] truncate">${escapeHtml(data.reply_message)}</p>` : ''}
-                        ${data.reply_file_name && !data.reply_file_type?.startsWith('image/') ? `
-                            <div class="flex items-center text-xs text-[#949BA4] mt-0.5">
-                                <i data-lucide="file" class="w-3 h-3 mr-1"></i>
-                                <span class="truncate">${escapeHtml(data.reply_file_name)}</span>
-                            </div>
-                        ` : ''}
-                    </div>
-                </div>
-            </div>
-        `;
     }
 
     // Reactions
