@@ -184,7 +184,8 @@ export class ChatRoom extends DurableObject {
 
     const linkMetadata = await this.fetchLinkMetadata(data.message);
 
-    const fileAttachment = data.file ? await this.uploadFile(data.file) : null;
+    // File attachment is now uploaded via HTTP and passed as metadata in WebSocket
+    const fileAttachment = data.file || null;
     const timestamp = Date.now();
 
     let replyData = null;
@@ -697,45 +698,6 @@ export class ChatRoom extends DurableObject {
     }
 
     return null;
-  }
-
-  private async uploadFile(file: { name: string; type: string; data: string }): Promise<FileAttachment | null> {
-    if (!file || !file.data) return null;
-
-    try {
-      const fileData = this.base64ToArrayBuffer(file.data);
-      const timestamp = Date.now();
-      const key = `${timestamp}-${this.sanitizeFileName(file.name)}`;
-
-      await this.env.BUCKET.put(key, fileData, {
-        httpMetadata: {
-          contentType: file.type,
-        },
-      });
-
-      return {
-        name: file.name,
-        type: file.type,
-        size: fileData.byteLength,
-        key: key,
-      };
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      return null;
-    }
-  }
-
-  private base64ToArrayBuffer(base64: string): ArrayBuffer {
-    const binaryString = atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes.buffer;
-  }
-
-  private sanitizeFileName(fileName: string): string {
-    return fileName.replace(/[^\p{L}\p{N}.\-_]/gu, '_');
   }
 
   private async editMessage(messageId: number, newMessage: string, username: string, channelId: number): Promise<boolean> {

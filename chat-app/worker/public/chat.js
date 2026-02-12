@@ -1588,7 +1588,9 @@ function updateSendButtonVisibility() {
     const input = document.getElementById('message-input');
     if (!sendBtn || !input) return;
 
-    if (input.value.trim().length > 0 || selectedFiles.length > 0) {
+    const hasContent = input.value.trim().length > 0 || selectedFiles.length > 0;
+
+    if (hasContent) {
         sendBtn.classList.add('visible');
     } else {
         sendBtn.classList.remove('visible');
@@ -1597,71 +1599,39 @@ function updateSendButtonVisibility() {
 
 function handleFileSelect(event) {
     const files = Array.from(event.target.files);
-
     if (files.length === 0) return;
 
     const newCount = selectedFiles.length + files.length;
-
     if (newCount > 20) {
         alert(`You can only upload up to 20 files at a time.`);
         return;
     }
 
-    let invalidFiles = false;
-
     files.forEach(file => {
         if (file.size > 50 * 1024 * 1024) {
             alert(`File "${file.name}" is too large. Maximum size is 50MB per file.`);
-            invalidFiles = true;
-            return;
+        } else {
+            processFile(file);
         }
     });
-
-    if (invalidFiles) return;
-
-    let processedCount = 0;
-
-    files.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            selectedFiles.push({
-                name: file.name,
-                type: file.type,
-                data: e.target.result.split(',')[1]
-            });
-            processedCount++;
-
-            if (processedCount === files.length) {
-                showFilePreview();
-                updateSendButtonVisibility();
-            }
-        };
-        reader.readAsDataURL(file);
-    });
+    
+    // Clear the input so the same file can be selected again
+    event.target.value = '';
 }
 
 function processFile(file) {
-    if (file.size > 50 * 1024 * 1024) {
-        alert(`File "${file.name}" is too large. Maximum size is 50MB per file.`);
-        return;
-    }
-
-    if (selectedFiles.length >= 20) {
-        alert(`You can only upload up to 20 files at a time.`);
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        selectedFiles.push({
-            name: file.name,
-            type: file.type,
-            data: e.target.result.split(',')[1]
-        });
-        showFilePreview();
-        updateSendButtonVisibility();
-    };
-    reader.readAsDataURL(file);
+    // We store the raw file object now
+    selectedFiles.push({
+        file: file,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        // Preview URL for UI
+        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+    });
+    
+    showFilePreview();
+    updateSendButtonVisibility();
 }
 
 function handlePaste(event) {
@@ -1730,6 +1700,40 @@ function handleDrop(event) {
     }
 }
 
+function uploadFileWithProgress(fileItem, index) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', fileItem.file);
+        formData.append('username', username);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/upload', true);
+
+        // Show progress bar
+        const container = document.getElementById(`progress-container-${index}`);
+        const bar = document.getElementById(`progress-bar-${index}`);
+        if (container) container.style.display = 'block';
+
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                if (bar) bar.style.width = percentComplete + '%';
+            }
+        };
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(JSON.parse(xhr.responseText));
+            } else {
+                reject(new Error(`Upload failed: ${xhr.statusText}`));
+            }
+        };
+
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.send(formData);
+    });
+}
+
 function showFilePreview() {
     maintainScrollBottom(() => {
         const preview = document.getElementById('filePreview');
@@ -1744,18 +1748,24 @@ function showFilePreview() {
 
         selectedFiles.forEach((file, index) => {
             if (file.type.startsWith('image/')) {
-                const imageDataUrl = `data:${file.type};base64,${file.data}`;
                 previewHtml += `
-                    <div class="relative group">
-                        <img src="${imageDataUrl}" alt="Preview" class="w-16 h-16 rounded-lg object-cover">
-                        <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" onclick="removeFile(${index})">✕</button>
+                    <div class="relative group" id="preview-${index}">
+                        <img src="${file.previewUrl}" alt="Preview" class="w-16 h-16 rounded-lg object-cover border border-[#404249]">
+                        <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg transition-transform hover:scale-110" onclick="removeFile(${index})">✕</button>
+                        <div class="upload-progress-container" id="progress-container-${index}">
+                            <div class="upload-progress-bar" id="progress-bar-${index}"></div>
+                        </div>
                     </div>
                 `;
             } else {
                 previewHtml += `
-                    <div class="relative group bg-[#2B2D31] p-2 rounded-lg">
+                    <div class="relative group bg-[#2B2D31] p-3 rounded-lg border border-[#404249] flex items-center gap-2" id="preview-${index}">
                         <div class="text-xl">${getFileIcon(file.type)}</div>
-                        <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" onclick="removeFile(${index})">✕</button>
+                        <div class="text-[10px] text-[#dbdee1] max-w-[60px] truncate">${escapeHtml(file.name)}</div>
+                        <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg transition-transform hover:scale-110" onclick="removeFile(${index})">✕</button>
+                        <div class="upload-progress-container" id="progress-container-${index}">
+                            <div class="upload-progress-bar" id="progress-bar-${index}"></div>
+                        </div>
                     </div>
                 `;
             }
@@ -1774,6 +1784,10 @@ function hideFilePreview() {
 }
 
 function removeFile(index) {
+    const file = selectedFiles[index];
+    if (file && file.previewUrl) {
+        URL.revokeObjectURL(file.previewUrl);
+    }
     selectedFiles.splice(index, 1);
 
     if (selectedFiles.length === 0) {
@@ -3009,55 +3023,85 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const messageFormEl = document.getElementById('message-form');
+    let isSending = false;
+
     if (messageFormEl) {
         messageFormEl.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isSending) return;
+
             const input = document.getElementById('message-input');
             const message = input.value.trim();
+            const sendBtn = document.getElementById('send-message-btn');
 
             if (!message && selectedFiles.length === 0) return;
 
             // Keep focus synchronously at the start to prevent keyboard dismissal
             if (window.innerWidth < 1024) {
                 input.focus();
-                // Ensure it stays focused even if browser tries to blur on submit
                 setTimeout(() => input.focus(), 0);
             }
 
             if (isConnected) {
+                isSending = true;
+                const originalBtnContent = sendBtn.innerHTML;
+                sendBtn.innerHTML = '<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>';
+                sendBtn.disabled = true;
+
                 lastSendMessageTime = Date.now();
                 const filesToSend = [...selectedFiles];
 
-                if (message) {
-                    ws.send(JSON.stringify({
-                        type: 'chat',
-                        message,
-                        replyTo: replyingTo?.messageId,
-                    }));
-                    input.value = '';
-                    // Close emoji picker after sending
-                    document.getElementById('reactionPicker').classList.add('hidden');
+                try {
+                    // 1. Upload files first via HTTP with progress tracking
+                    const uploadedFiles = [];
+                    for (let i = 0; i < filesToSend.length; i++) {
+                        sendBtn.innerHTML = `<span class="text-[10px] font-bold">${i + 1}/${filesToSend.length}</span>`;
+                        const uploadResult = await uploadFileWithProgress(filesToSend[i], i);
+                        uploadedFiles.push(uploadResult);
+                    }
+
+                    sendBtn.innerHTML = '<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>';
+
+                    // 2. Send message over WebSocket
+                    if (message) {
+                        ws.send(JSON.stringify({
+                            type: 'chat',
+                            message,
+                            replyTo: replyingTo?.messageId,
+                        }));
+                        input.value = '';
+                        document.getElementById('reactionPicker').classList.add('hidden');
+                    }
+
+                    // 3. Send file messages over WebSocket (only metadata)
+                    for (const uploadedFile of uploadedFiles) {
+                        ws.send(JSON.stringify({
+                            type: 'chat',
+                            message: '',
+                            file: uploadedFile,
+                            replyTo: replyingTo?.messageId,
+                        }));
+                    }
+
+                    // Cleanup
+                    filesToSend.forEach(f => {
+                        if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+                    });
+                    selectedFiles = [];
+                    const fileInput = document.getElementById('fileInput');
+                    if (fileInput) fileInput.value = '';
+                    hideFilePreview();
+                    cancelReply();
+                    sendTypingStatus(false);
+                } catch (err) {
+                    console.error('Send error:', err);
+                    alert('Failed to send message or upload files. Please try again.');
+                } finally {
+                    isSending = false;
+                    sendBtn.innerHTML = originalBtnContent;
+                    sendBtn.disabled = false;
+                    updateSendButtonVisibility();
                 }
-
-                for (const file of filesToSend) {
-                    ws.send(JSON.stringify({
-                        type: 'chat',
-                        message: '',
-                        file,
-                        replyTo: replyingTo?.messageId,
-                    }));
-                }
-
-                selectedFiles = [];
-                const fileInput = document.getElementById('fileInput');
-                fileInput.value = '';
-                hideFilePreview();
-                cancelReply();
-                sendTypingStatus(false);
-
-                // Hide send button on mobile after sending
-                const sendBtn = document.getElementById('send-message-btn');
-                if (sendBtn) sendBtn.classList.remove('visible');
 
                 // Final check to maintain focus after all async operations
                 if (window.innerWidth < 1024) {

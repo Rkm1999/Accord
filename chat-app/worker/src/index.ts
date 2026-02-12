@@ -456,6 +456,38 @@ export default {
       }
     }
 
+    if (url.pathname === "/api/upload" && request.method === "POST") {
+      try {
+        const formData = await request.formData();
+        const file = formData.get("file") as File;
+        const username = formData.get("username") as string;
+
+        if (!file || !username) {
+          return corsResponse("Missing file or username", 400, corsHeaders);
+        }
+
+        const timestamp = Date.now();
+        const sanitizedName = file.name.replace(/[^\p{L}\p{N}.\-_]/gu, '_');
+        const key = `${timestamp}-${sanitizedName}`;
+
+        await env.BUCKET.put(key, file.stream(), {
+          httpMetadata: {
+            contentType: file.type,
+          },
+        });
+
+        return corsResponse({
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          key: key
+        }, 201, corsHeaders);
+      } catch (e: any) {
+        console.error("Upload error:", e);
+        return corsResponse("Upload failed", 500, corsHeaders);
+      }
+    }
+
     if (url.pathname === "/chat") {
       const chatUrl = new URL("/chat.html", url.origin);
       return await env.ASSETS.fetch(new Request(chatUrl.toString(), request));

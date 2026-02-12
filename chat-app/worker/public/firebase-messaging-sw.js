@@ -13,29 +13,48 @@ const CRITICAL_ASSETS = [
 ];
 
 // Initialize Firebase in Service Worker
+let messaging = null;
+
 async function initFirebaseInSW() {
     try {
         const response = await fetch('/api/config');
         const config = await response.json();
         firebase.initializeApp(config.firebaseConfig);
-        const messaging = firebase.messaging();
+        messaging = firebase.messaging();
 
         // Background message handler
         messaging.onBackgroundMessage((payload) => {
             console.log('[firebase-messaging-sw.js] Received background message ', payload);
-            const notificationTitle = payload.notification.title;
-            const notificationOptions = {
-                body: payload.notification.body,
-                icon: '/icons/icon-192x192.png',
-                data: payload.data
-            };
-
-            self.registration.showNotification(notificationTitle, notificationOptions);
+            showNotification(payload);
         });
     } catch (err) {
         console.error('Failed to initialize Firebase in Service Worker:', err);
     }
 }
+
+function showNotification(payload) {
+    const notificationTitle = payload.notification.title;
+    const notificationOptions = {
+        body: payload.notification.body,
+        icon: '/icons/icon-192x192.png',
+        data: payload.data
+    };
+    return self.registration.showNotification(notificationTitle, notificationOptions);
+}
+
+// Background message handler for the compat SDK (sometimes needed as fallback)
+self.addEventListener('push', (event) => {
+    if (event.data) {
+        try {
+            const data = event.data.json();
+            if (data.notification) {
+                event.waitUntil(showNotification(data));
+            }
+        } catch (e) {
+            console.error('Error handling push event:', e);
+        }
+    }
+});
 
 initFirebaseInSW();
 

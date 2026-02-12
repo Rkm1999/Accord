@@ -1,0 +1,3 @@
+node_modules
+.wrangler
+chat-app/worker/public/output.css
