@@ -433,8 +433,8 @@ export default {
 
       try {
         await env.DB.prepare(
-          "INSERT INTO push_tokens (username, token, platform, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(username, token) DO UPDATE SET updated_at = ?"
-        ).bind(username, token, platform || "web", Date.now(), Date.now()).run();
+          "INSERT INTO push_tokens (username, token, platform, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(username, token) DO UPDATE SET platform = ?, updated_at = ?"
+        ).bind(username, token, platform || "web", Date.now(), platform || "web", Date.now()).run();
         return corsResponse({ success: true }, 200, corsHeaders);
       } catch (e: any) {
         console.error("Push register error:", e);
@@ -454,6 +454,28 @@ export default {
         console.error("Push unregister error:", e);
         return corsResponse("Internal error", 500, corsHeaders);
       }
+    }
+
+    if (url.pathname === "/api/notifications/settings" && request.method === "GET") {
+      const username = url.searchParams.get("username");
+      if (!username) return corsResponse("Username required", 400, corsHeaders);
+      
+      const { results } = await env.DB.prepare(
+        "SELECT channel_id, level FROM notification_settings WHERE username = ?"
+      ).bind(username).all();
+      
+      return corsResponse(results, 200, corsHeaders);
+    }
+
+    if (url.pathname === "/api/notifications/settings" && request.method === "POST") {
+      const { username, channelId, level } = await request.json() as any;
+      if (!username || !channelId || !level) return corsResponse("Missing fields", 400, corsHeaders);
+      
+      await env.DB.prepare(
+        "INSERT INTO notification_settings (username, channel_id, level, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(username, channel_id) DO UPDATE SET level = ?, updated_at = ?"
+      ).bind(username, channelId, level, Date.now(), level, Date.now()).run();
+      
+      return corsResponse({ success: true }, 200, corsHeaders);
     }
 
     if (url.pathname === "/api/upload/check" && request.method === "GET") {

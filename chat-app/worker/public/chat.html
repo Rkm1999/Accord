@@ -1034,15 +1034,15 @@
                             class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2]">
                     </div>
 
-                    <div class="flex items-center justify-between p-3 bg-[#1E1F22] rounded">
-                        <div class="flex flex-col">
-                            <span class="text-sm font-semibold text-[#dbdee1]">Push Notifications</span>
-                            <span class="text-xs text-[#949BA4]">Enable browser notifications</span>
+                    <div class="flex items-center justify-between p-3 bg-[#1E1F22] rounded cursor-pointer hover:bg-[#2B2D31] transition-colors" onclick="openNotificationSettingsModal()">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="bell" class="w-5 h-5 text-[#B5BAC1]"></i>
+                            <div class="flex flex-col">
+                                <span class="text-sm font-semibold text-[#dbdee1]">Notification Settings</span>
+                                <span class="text-xs text-[#949BA4]">Manage channel alerts</span>
+                            </div>
                         </div>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="pushToggle" class="sr-only peer" onchange="togglePushNotifications(this.checked)">
-                            <div class="w-11 h-6 bg-[#404249] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#22C55E]"></div>
-                        </label>
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-[#949BA4]"></i>
                     </div>
 
                     <div class="pt-4 border-t border-[#404249] flex flex-col space-y-3">
@@ -1100,6 +1100,54 @@
                     <i data-lucide="message-square" class="w-4 h-4"></i>
                     Send Message
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Settings Modal -->
+    <div id="notificationSettingsModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[110] hidden" onclick="if(event.target.id === 'notificationSettingsModal') closeNotificationSettingsModal()">
+        <div class="bg-[#313338] rounded-lg max-w-lg w-full mx-4 shadow-2xl border border-[#404249]" onclick="event.stopPropagation()">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="bell" class="w-6 h-6 text-[#5865F2]"></i>
+                        <h3 class="font-bold text-xl text-white">Notification Settings</h3>
+                    </div>
+                    <button class="text-[#949BA4] hover:text-white" onclick="closeNotificationSettingsModal()">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+
+                <div class="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 space-y-6">
+                    <!-- Global Settings -->
+                    <div>
+                        <h4 class="text-[10px] font-bold uppercase text-[#949BA4] mb-3 tracking-wider">Global Settings</h4>
+                        <div class="flex items-center justify-between p-3 bg-[#2B2D31] rounded-lg border border-[#404249]">
+                            <div class="flex flex-col">
+                                <span class="text-sm font-semibold text-[#dbdee1]">Push Notifications</span>
+                                <span class="text-[11px] text-[#949BA4]">Enable browser notifications for this device</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="globalPushToggle" class="sr-only peer" onchange="togglePushNotifications(this.checked)">
+                                <div class="w-11 h-6 bg-[#404249] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#22C55E]"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Channel Settings -->
+                    <div>
+                        <h4 class="text-[10px] font-bold uppercase text-[#949BA4] mb-3 tracking-wider">Channel Overrides</h4>
+                        <div id="channelNotificationList" class="space-y-2">
+                            <!-- Injected by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button onclick="closeNotificationSettingsModal()" class="bg-[#5865F2] hover:bg-[#4752C4] text-white px-6 py-2 rounded font-semibold transition-colors">
+                        Done
+                    </button>
+                </div>
             </div>
         </div>
     </div>

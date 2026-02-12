@@ -15,6 +15,7 @@ interface UserState {
   avatarKey: string | null;
   joinedAt: number;
   channelId: number;
+  platform: string;
 }
 
 
@@ -59,6 +60,7 @@ export class ChatRoom extends DurableObject {
 
     const username = url.searchParams.get("username") || "Anonymous";
     const channelId = parseInt(url.searchParams.get("channelId") || "1");
+    const platform = url.searchParams.get("platform") || "web";
 
     // Security check: If it's a DM, ensure user is a member
     const channel = await this.env.DB.prepare("SELECT type FROM channels WHERE id = ?").bind(channelId).first();
@@ -99,6 +101,7 @@ export class ChatRoom extends DurableObject {
       avatarKey,
       joinedAt: Date.now(),
       channelId,
+      platform,
     } as UserState);
 
     // Only broadcast "joined" if this is the first connection for this user
@@ -132,8 +135,11 @@ export class ChatRoom extends DurableObject {
       const newChannelId = data.channelId;
       ws.serializeAttachment({
         username,
+        displayName,
+        avatarKey,
         joinedAt: Date.now(),
         channelId: newChannelId,
+        platform: state.platform,
       } as UserState);
 
       await this.sendChatHistory(ws, newChannelId);
@@ -285,37 +291,87 @@ export class ChatRoom extends DurableObject {
           .bind(channelId, senderUsername).all();
         usersToNotify = members.results.map((r: any) => r.username);
       } else {
-        // Notify mentions + @everyone/@here if applicable (later)
-        usersToNotify = mentions.filter(u => u !== senderUsername);
-        
-        if (message.includes("@everyone")) {
-             const allUsers: any = await this.env.DB.prepare("SELECT username FROM users WHERE username != ?").bind(senderUsername).all();
-             usersToNotify = [...new Set([...usersToNotify, ...allUsers.results.map((r: any) => r.username)])];
-        }
+        // For public channels, notify everyone by default, but we will filter by settings below
+        const members: any = await this.env.DB.prepare("SELECT username FROM users WHERE username != ?")
+          .bind(senderUsername).all();
+        usersToNotify = members.results.map((r: any) => r.username);
       }
 
       if (usersToNotify.length === 0) return;
 
-      // Get tokens for these users
+      // Get tokens AND settings for these users
       const placeholders = usersToNotify.map(() => "?").join(",");
-      const { results: tokens }: any = await this.env.DB.prepare(
-        `SELECT username, token FROM push_tokens WHERE username IN (${placeholders})`
-      ).bind(...usersToNotify).all();
+
+      // Get the most recent token for EACH specific device type (platform) for each user.
+      // This ensures notifications hit all devices (iPhone, iPad, PC) but prevents
+      // duplicates if multiple browsers are used on the same device.
+      const { results: tokens }: any = await this.env.DB.prepare(`
+        SELECT t1.username, t1.token, t1.platform
+        FROM push_tokens t1
+        JOIN (
+            SELECT username, platform, MAX(updated_at) as max_ts
+            FROM push_tokens
+            WHERE username IN (${placeholders})
+            GROUP BY username, platform
+        ) t2 ON t1.username = t2.username 
+            AND t1.platform = t2.platform 
+            AND t1.updated_at = t2.max_ts
+      `).bind(...usersToNotify).all();
+
+      const { results: settings }: any = await this.env.DB.prepare(
+        `SELECT username, level FROM notification_settings WHERE channel_id = ? AND username IN (${placeholders})`
+      ).bind(channelId, ...usersToNotify).all();
 
       if (!tokens || tokens.length === 0) return;
 
+      // Identify which platforms for which users are CURRENTLY looking at this channel
+      const activePlatformsInChannel = new Set<string>(); // Format: "username:platform"
+      this.ctx.getWebSockets().forEach((ws: any) => {
+        try {
+          const s = ws.deserializeAttachment() as UserState;
+          if (s && s.channelId === channelId) {
+            activePlatformsInChannel.add(`${s.username}:${s.platform}`);
+          }
+        } catch {}
+      });
+
       const channelName = isDm ? senderUsername : (channel?.name || "channel");
 
-      for (const { token } of tokens as any) {
-        await firebase.sendNotification(
+      for (const { username: recipientUsername, token, platform: recipientPlatform } of tokens as any) {
+        // Skip if this specific device/platform is already looking at the channel
+        if (activePlatformsInChannel.has(`${recipientUsername}:${recipientPlatform}`)) {
+          continue;
+        }
+
+        const userSetting = settings.find((s: any) => s.username === recipientUsername)?.level || 'all';
+        const isMentioned = mentions.includes(recipientUsername) || message.includes("@everyone");
+
+        // Filter based on settings
+        if (userSetting === 'none') continue;
+        if (userSetting === 'mentions' && !isMentioned) continue;
+
+        const result = await firebase.sendNotification(
           token,
           isDm ? `Message from ${senderUsername}` : `#${channelName}`,
           `${senderUsername}: ${message.substring(0, 100)}${message.length > 100 ? "..." : ""}`,
           {
             link: `/chat`,
             channelId: channelId.toString(),
+            notificationType: isMentioned ? 'mention' : 'regular',
           }
         );
+
+        // If the token is invalid or no longer registered, remove it from our DB
+        if (!result.success && result.error) {
+          const errorCode = result.error.error?.code;
+          const errorMessage = result.error.error?.message;
+          
+          if (errorCode === 404 || errorCode === 410 || errorMessage?.includes('not found') || errorMessage?.includes('unregistered')) {
+            console.log(`Removing dead token for user ${recipientUsername}`);
+            await this.env.DB.prepare("DELETE FROM push_tokens WHERE token = ?")
+              .bind(token).run();
+          }
+        }
       }
     } catch (e) {
       console.error("Error sending push notifications:", e);

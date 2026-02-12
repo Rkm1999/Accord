@@ -53,8 +53,12 @@ async function updateAppBadge() {
 
 function openBadgeDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open('AccordBadgeDB', 1);
-        request.onupgradeneeded = () => request.result.createObjectStore('badge');
+        const request = indexedDB.open('AccordBadgeDB', 2);
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains('badge')) db.createObjectStore('badge');
+            if (!db.objectStoreNames.contains('unreadChannels')) db.createObjectStore('unreadChannels');
+        };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
@@ -66,8 +70,9 @@ window.addEventListener('load', async () => {
         navigator.clearAppBadge();
         try {
             const db = await openBadgeDB();
-            const tx = db.transaction('badge', 'readwrite');
+            const tx = db.transaction(['badge', 'unreadChannels'], 'readwrite');
             await tx.objectStore('badge').put(0, 'unreadCount');
+            await tx.objectStore('unreadChannels').clear();
         } catch (e) {}
     }
 });
@@ -77,8 +82,9 @@ document.addEventListener('visibilitychange', async () => {
         navigator.clearAppBadge();
         try {
             const db = await openBadgeDB();
-            const tx = db.transaction('badge', 'readwrite');
+            const tx = db.transaction(['badge', 'unreadChannels'], 'readwrite');
             await tx.objectStore('badge').put(0, 'unreadCount');
+            await tx.objectStore('unreadChannels').clear();
         } catch (e) {}
     }
 });
@@ -187,8 +193,17 @@ const currentChannelId = parseInt(localStorage.getItem('currentChannelId') || '1
 const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const apiBaseUrl = isLocalDev ? window.location.origin : '';
 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const wsUrl = `${protocol}//${window.location.host}/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}`;
+    // Detect platform for WebSocket state
+    let platform = 'web';
+    const ua = navigator.userAgent.toLowerCase();
+    if (/ipad/.test(ua)) platform = 'ios-ipad';
+    else if (/iphone|ipod/.test(ua)) platform = 'ios-iphone';
+    else if (/android/.test(ua)) {
+        if (/mobile/.test(ua)) platform = 'android-phone';
+        else platform = 'android-tablet';
+    }
 
+    const wsUrl = `${protocol}//${window.location.host}/ws?username=${encodeURIComponent(username)}&channelId=${currentChannelId}&platform=${platform}`;
 let ws;
 let isConnected = false;
 let heartbeatInterval;
@@ -201,6 +216,7 @@ let reactionPickerMessageId = null;
 let channels = [];
 let dms = [];
 let customEmojis = [];
+let notificationSettings = [];
 let allUsers = [];
 let onlineUsernames = new Set();
 let joinedUsers = new Set();
@@ -1915,6 +1931,93 @@ async function fetchCustomEmojis() {
     }
 }
 
+async function fetchNotificationSettings() {
+    try {
+        const response = await fetch(`/api/notifications/settings?username=${username}`);
+        notificationSettings = await response.json();
+    } catch (error) {
+        console.error('Error fetching notification settings:', error);
+    }
+}
+
+async function updateChannelNotificationLevel(channelId, level) {
+    try {
+        await fetch('/api/notifications/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, channelId, level })
+        });
+        
+        // Update local state
+        const existing = notificationSettings.find(s => s.channel_id === channelId);
+        if (existing) {
+            existing.level = level;
+        } else {
+            notificationSettings.push({ channel_id: channelId, level });
+        }
+        
+        renderChannelNotificationSettings();
+    } catch (error) {
+        console.error('Error updating notification settings:', error);
+    }
+}
+
+function openNotificationSettingsModal() {
+    const modal = document.getElementById('notificationSettingsModal');
+    const globalToggle = document.getElementById('globalPushToggle');
+    
+    if (globalToggle) {
+        // Use the explicit flag if it exists, otherwise fallback to token presence
+        const isEnabled = localStorage.getItem('pushEnabled') !== 'false' && !!localStorage.getItem('fcmToken');
+        globalToggle.checked = isEnabled && Notification.permission === 'granted';
+    }
+    
+    renderChannelNotificationSettings();
+    modal.classList.remove('hidden');
+    lucide.createIcons();
+}
+
+function closeNotificationSettingsModal() {
+    document.getElementById('notificationSettingsModal').classList.add('hidden');
+}
+
+function renderChannelNotificationSettings() {
+    const list = document.getElementById('channelNotificationList');
+    if (!list) return;
+    
+    list.innerHTML = channels.map(channel => {
+        const setting = notificationSettings.find(s => s.channel_id === channel.id)?.level || 'all';
+        
+        return `
+            <div class="p-3 bg-[#2B2D31] rounded-lg border border-[#404249]">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="hash" class="w-4 h-4 text-[#80848E]"></i>
+                        <span class="font-bold text-white text-sm">${escapeHtml(channel.name)}</span>
+                    </div>
+                </div>
+                
+                <div class="flex gap-1 bg-[#1E1F22] p-1 rounded-md">
+                    <button onclick="updateChannelNotificationLevel(${channel.id}, 'all')" 
+                        class="flex-1 text-[10px] font-bold py-1.5 rounded transition-all ${setting === 'all' ? 'bg-[#5865F2] text-white' : 'text-[#949BA4] hover:bg-[#35373C]'}">
+                        ALL
+                    </button>
+                    <button onclick="updateChannelNotificationLevel(${channel.id}, 'mentions')" 
+                        class="flex-1 text-[10px] font-bold py-1.5 rounded transition-all ${setting === 'mentions' ? 'bg-[#5865F2] text-white' : 'text-[#949BA4] hover:bg-[#35373C]'}">
+                        MENTIONS
+                    </button>
+                    <button onclick="updateChannelNotificationLevel(${channel.id}, 'none')" 
+                        class="flex-1 text-[10px] font-bold py-1.5 rounded transition-all ${setting === 'none' ? 'bg-[#5865F2] text-white' : 'text-[#949BA4] hover:bg-[#35373C]'}">
+                        NOTHING
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    lucide.createIcons();
+}
+
 async function fetchRegisteredUsers() {
     try {
         const apiUrl = isLocalDev
@@ -2522,10 +2625,12 @@ async function openUserSettings() {
 
 async function togglePushNotifications(enabled) {
     if (enabled) {
+        localStorage.setItem('pushEnabled', 'true');
         if (typeof window.requestPushPermission === 'function') {
             await window.requestPushPermission();
         }
     } else {
+        localStorage.setItem('pushEnabled', 'false');
         const token = localStorage.getItem('fcmToken');
         if (token && username) {
             try {
@@ -3109,7 +3214,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await Promise.all([
         fetchRegisteredUsers(),
         fetchChannels(),
-        fetchDMs()
+        fetchDMs(),
+        fetchNotificationSettings()
     ]);
     renderMembers();
     connect();

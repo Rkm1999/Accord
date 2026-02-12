@@ -35,27 +35,54 @@ async function initFirebaseInSW() {
 // Shared DB logic
 function openBadgeDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open('AccordBadgeDB', 1);
-        request.onupgradeneeded = () => request.result.createObjectStore('badge');
+        const request = indexedDB.open('AccordBadgeDB', 2); // Version 2 for new store
+        request.onupgradeneeded = (e) => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains('badge')) db.createObjectStore('badge');
+            if (!db.objectStoreNames.contains('unreadChannels')) db.createObjectStore('unreadChannels');
+        };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
 }
 
-async function getAndIncrementBadgeCount() {
+async function getAndIncrementBadgeCount(payload) {
     try {
         const db = await openBadgeDB();
-        const tx = db.transaction('badge', 'readwrite');
-        const store = tx.objectStore('badge');
+        const tx = db.transaction(['badge', 'unreadChannels'], 'readwrite');
+        const badgeStore = tx.objectStore('badge');
+        const channelStore = tx.objectStore('unreadChannels');
         
+        const channelId = payload.data?.channelId;
+        const type = payload.data?.notificationType; // 'mention' or 'regular'
+
         return new Promise((resolve) => {
-            const getReq = store.get('unreadCount');
-            getReq.onsuccess = () => {
-                const newCount = (getReq.result || 0) + 1;
-                store.put(newCount, 'unreadCount');
-                resolve(newCount);
+            const getBadgeReq = badgeStore.get('unreadCount');
+            getBadgeReq.onsuccess = () => {
+                const currentCount = getBadgeReq.result || 0;
+                
+                if (type === 'mention') {
+                    // Mentions ALWAYS increment
+                    const newCount = currentCount + 1;
+                    badgeStore.put(newCount, 'unreadCount');
+                    resolve(newCount);
+                } else {
+                    // Regular messages only increment if this channel isn't already unread
+                    const getChannelReq = channelStore.get(channelId);
+                    getChannelReq.onsuccess = () => {
+                        if (!getChannelReq.result) {
+                            // First unread message for this channel
+                            const newCount = currentCount + 1;
+                            badgeStore.put(newCount, 'unreadCount');
+                            channelStore.put(true, channelId);
+                            resolve(newCount);
+                        } else {
+                            // Channel already unread, don't increment badge
+                            resolve(currentCount);
+                        }
+                    };
+                }
             };
-            getReq.onerror = () => resolve(1);
         });
     } catch (e) {
         return 1;
@@ -63,9 +90,9 @@ async function getAndIncrementBadgeCount() {
 }
 
 async function showNotification(payload) {
-    const notificationTitle = payload.notification.title;
+    const notificationTitle = payload.notification ? payload.notification.title : (payload.data?.title || "New Message");
     const notificationOptions = {
-        body: payload.notification.body,
+        body: payload.notification ? payload.notification.body : (payload.data?.body || ""),
         icon: '/icons/icon-192x192.png',
         data: payload.data
     };
@@ -76,7 +103,7 @@ async function showNotification(payload) {
 
     // Set app badge based on shared state
     if ('setAppBadge' in navigator) {
-        const count = await getAndIncrementBadgeCount();
+        const count = await getAndIncrementBadgeCount(payload);
         promises.push(navigator.setAppBadge(count).catch(err => console.error('Error setting badge:', err)));
     }
 

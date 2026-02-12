@@ -58,11 +58,21 @@ async function registerTokenOnServer(token) {
     const username = localStorage.getItem('chatUsername');
     if (!username) return;
 
+    // Detect platform specifically to distinguish between devices
+    let platform = 'web';
+    const ua = navigator.userAgent.toLowerCase();
+    if (/ipad/.test(ua)) platform = 'ios-ipad';
+    else if (/iphone|ipod/.test(ua)) platform = 'ios-iphone';
+    else if (/android/.test(ua)) {
+        if (/mobile/.test(ua)) platform = 'android-phone';
+        else platform = 'android-tablet';
+    }
+
     try {
         await fetch('/api/push/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, token, platform: 'web' })
+            body: JSON.stringify({ username, token, platform })
         });
         localStorage.setItem('fcmToken', token);
     } catch (err) {
@@ -70,10 +80,27 @@ async function registerTokenOnServer(token) {
     }
 }
 
-// Auto request on load if we don't have a token yet
-if (localStorage.getItem('chatUsername') && !localStorage.getItem('fcmToken')) {
-    // Small delay to not interrupt loading
-    setTimeout(requestPushPermission, 5000);
+// Auto request/sync on load
+if (localStorage.getItem('chatUsername') && localStorage.getItem('pushEnabled') !== 'false') {
+    // If we already have a token, just re-register it to sync platform tag
+    // If not, request permission
+    setTimeout(async () => {
+        try {
+            if (!messaging) await initFirebase();
+            const registration = await navigator.serviceWorker.ready;
+            const token = await getToken(messaging, { 
+                vapidKey,
+                serviceWorkerRegistration: registration
+            });
+            if (token) {
+                await registerTokenOnServer(token);
+            } else if (!localStorage.getItem('fcmToken')) {
+                await requestPushPermission();
+            }
+        } catch (e) {
+            console.log('Push sync skipped:', e);
+        }
+    }, 5000);
 }
 
 window.requestPushPermission = requestPushPermission;
