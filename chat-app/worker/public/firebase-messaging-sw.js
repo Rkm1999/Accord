@@ -32,14 +32,55 @@ async function initFirebaseInSW() {
     }
 }
 
-function showNotification(payload) {
+// Shared DB logic
+function openBadgeDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('AccordBadgeDB', 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('badge');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function getAndIncrementBadgeCount() {
+    try {
+        const db = await openBadgeDB();
+        const tx = db.transaction('badge', 'readwrite');
+        const store = tx.objectStore('badge');
+        
+        return new Promise((resolve) => {
+            const getReq = store.get('unreadCount');
+            getReq.onsuccess = () => {
+                const newCount = (getReq.result || 0) + 1;
+                store.put(newCount, 'unreadCount');
+                resolve(newCount);
+            };
+            getReq.onerror = () => resolve(1);
+        });
+    } catch (e) {
+        return 1;
+    }
+}
+
+async function showNotification(payload) {
     const notificationTitle = payload.notification.title;
     const notificationOptions = {
         body: payload.notification.body,
         icon: '/icons/icon-192x192.png',
         data: payload.data
     };
-    return self.registration.showNotification(notificationTitle, notificationOptions);
+
+    const promises = [
+        self.registration.showNotification(notificationTitle, notificationOptions)
+    ];
+
+    // Set app badge based on shared state
+    if ('setAppBadge' in navigator) {
+        const count = await getAndIncrementBadgeCount();
+        promises.push(navigator.setAppBadge(count).catch(err => console.error('Error setting badge:', err)));
+    }
+
+    return Promise.all(promises);
 }
 
 // Background message handler for the compat SDK (sometimes needed as fallback)
@@ -51,7 +92,10 @@ self.addEventListener('push', (event) => {
                 event.waitUntil(showNotification(data));
             }
         } catch (e) {
-            console.error('Error handling push event:', e);
+            // If it's not JSON, we still want to increment the badge if possible
+            if ('setAppBadge' in navigator) {
+                event.waitUntil(getAndIncrementBadgeCount().then(c => navigator.setAppBadge(c)));
+            }
         }
     }
 });

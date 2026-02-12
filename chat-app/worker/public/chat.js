@@ -29,6 +29,60 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+// App Badging API support with IndexedDB syncing for Service Worker
+async function updateAppBadge() {
+    if ('setAppBadge' in navigator) {
+        const count = unreadChannels.size;
+        
+        // Sync to IndexedDB for SW access
+        try {
+            const db = await openBadgeDB();
+            const tx = db.transaction('badge', 'readwrite');
+            await tx.objectStore('badge').put(count, 'unreadCount');
+        } catch (e) {
+            console.error('Failed to sync badge count to IndexedDB:', e);
+        }
+
+        if (count > 0) {
+            navigator.setAppBadge(count).catch(err => console.error('Error setting badge:', err));
+        } else {
+            navigator.clearAppBadge().catch(err => console.error('Error clearing badge:', err));
+        }
+    }
+}
+
+function openBadgeDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('AccordBadgeDB', 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('badge');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// Clear badge on load and when app becomes visible
+window.addEventListener('load', async () => {
+    if ('clearAppBadge' in navigator) {
+        navigator.clearAppBadge();
+        try {
+            const db = await openBadgeDB();
+            const tx = db.transaction('badge', 'readwrite');
+            await tx.objectStore('badge').put(0, 'unreadCount');
+        } catch (e) {}
+    }
+});
+
+document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible' && 'clearAppBadge' in navigator) {
+        navigator.clearAppBadge();
+        try {
+            const db = await openBadgeDB();
+            const tx = db.transaction('badge', 'readwrite');
+            await tx.objectStore('badge').put(0, 'unreadCount');
+        } catch (e) {}
+    }
+});
+
 function showUpdatePrompt(worker) {
     const prompt = document.getElementById('pwaUpdatePrompt');
     const btn = document.getElementById('pwaUpdateBtn');
@@ -1878,6 +1932,7 @@ function markChannelUnread(channelId) {
     unreadChannels.add(channelId);
     localStorage.setItem('unreadChannels', JSON.stringify(Array.from(unreadChannels)));
     displayChannels();
+    updateAppBadge();
 }
 
 function displayChannels() {
@@ -1933,6 +1988,7 @@ function switchChannel(channelId) {
 
     unreadChannels.delete(channelId);
     localStorage.setItem('unreadChannels', JSON.stringify(Array.from(unreadChannels)));
+    updateAppBadge();
 
     localStorage.setItem('currentChannelId', channelId);
     window.location.reload();
