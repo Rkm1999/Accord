@@ -1,8 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
+import { FirebaseService } from "./FirebaseService";
 
 export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
+  FIREBASE_PROJECT_ID: string;
+  FIREBASE_CLIENT_EMAIL: string;
+  FIREBASE_PRIVATE_KEY: string;
 }
 
 interface UserState {
@@ -254,6 +258,67 @@ export class ChatRoom extends DurableObject {
 
     // @ts-ignore
     this.broadcastMessage(username, data.message, linkMetadata || undefined, fileAttachment || undefined, replyData || undefined, messageId, channelId, displayName, avatarKey, mentions);
+
+    // Trigger push notifications
+    this.ctx.waitUntil(this.sendPushNotifications(username, data.message, channelId, mentions));
+  }
+
+  private async sendPushNotifications(senderUsername: string, message: string, channelId: number, mentions: string[]) {
+    try {
+      if (!this.env.FIREBASE_PROJECT_ID) return;
+
+      const firebase = new FirebaseService(
+        this.env.FIREBASE_PROJECT_ID,
+        this.env.FIREBASE_CLIENT_EMAIL,
+        this.env.FIREBASE_PRIVATE_KEY
+      );
+
+      // Check if it's a DM
+      const channel = await this.env.DB.prepare("SELECT name, type FROM channels WHERE id = ?").bind(channelId).first();
+      const isDm = channel?.type === 'dm';
+
+      // Find who to notify
+      let usersToNotify: string[] = [];
+      if (isDm) {
+        const members: any = await this.env.DB.prepare("SELECT username FROM channel_members WHERE channel_id = ? AND username != ?")
+          .bind(channelId, senderUsername).all();
+        usersToNotify = members.results.map((r: any) => r.username);
+      } else {
+        // Notify mentions + @everyone/@here if applicable (later)
+        usersToNotify = mentions.filter(u => u !== senderUsername);
+        
+        if (message.includes("@everyone")) {
+             const allUsers: any = await this.env.DB.prepare("SELECT username FROM users WHERE username != ?").bind(senderUsername).all();
+             usersToNotify = [...new Set([...usersToNotify, ...allUsers.results.map((r: any) => r.username)])];
+        }
+      }
+
+      if (usersToNotify.length === 0) return;
+
+      // Get tokens for these users
+      const placeholders = usersToNotify.map(() => "?").join(",");
+      const { results: tokens }: any = await this.env.DB.prepare(
+        `SELECT username, token FROM push_tokens WHERE username IN (${placeholders})`
+      ).bind(...usersToNotify).all();
+
+      if (!tokens || tokens.length === 0) return;
+
+      const channelName = isDm ? senderUsername : (channel?.name || "channel");
+
+      for (const { token } of tokens as any) {
+        await firebase.sendNotification(
+          token,
+          isDm ? `Message from ${senderUsername}` : `#${channelName}`,
+          `${senderUsername}: ${message.substring(0, 100)}${message.length > 100 ? "..." : ""}`,
+          {
+            link: `/chat`,
+            channelId: channelId.toString(),
+          }
+        );
+      }
+    } catch (e) {
+      console.error("Error sending push notifications:", e);
+    }
   }
 
   async webSocketClose(ws: WebSocket) {

@@ -4,3 +4,8 @@ node_modules
 .env
 .env.local
 wrangler.toml
+.dev.vars
+
+# Ignore everything in firebase/ except .example files
+firebase/*
+!firebase/*.example

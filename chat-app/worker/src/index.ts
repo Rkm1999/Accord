@@ -1,4 +1,3 @@
-import { DurableObjectNamespace } from "cloudflare:workers";
 import { ChatRoom } from "./ChatRoom";
 
 export interface Env {
@@ -6,6 +5,9 @@ export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   ASSETS: Fetcher;
+  FIREBASE_PROJECT_ID: string;
+  FIREBASE_CLIENT_EMAIL: string;
+  FIREBASE_PRIVATE_KEY: string;
 }
 
 
@@ -402,6 +404,35 @@ export default {
       }, 200, corsHeaders);
     }
 
+    if (url.pathname === "/api/push/register" && request.method === "POST") {
+      const { username, token, platform } = await request.json() as any;
+      if (!username || !token) return corsResponse("Missing fields", 400, corsHeaders);
+
+      try {
+        await env.DB.prepare(
+          "INSERT INTO push_tokens (username, token, platform, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(username, token) DO UPDATE SET updated_at = ?"
+        ).bind(username, token, platform || "web", Date.now(), Date.now()).run();
+        return corsResponse({ success: true }, 200, corsHeaders);
+      } catch (e: any) {
+        console.error("Push register error:", e);
+        return corsResponse("Internal error", 500, corsHeaders);
+      }
+    }
+
+    if (url.pathname === "/api/push/unregister" && request.method === "POST") {
+      const { username, token } = await request.json() as any;
+      if (!username || !token) return corsResponse("Missing fields", 400, corsHeaders);
+
+      try {
+        await env.DB.prepare("DELETE FROM push_tokens WHERE username = ? AND token = ?")
+          .bind(username, token).run();
+        return corsResponse({ success: true }, 200, corsHeaders);
+      } catch (e: any) {
+        console.error("Push unregister error:", e);
+        return corsResponse("Internal error", 500, corsHeaders);
+      }
+    }
+
     if (url.pathname === "/chat") {
       const chatUrl = new URL("/chat.html", url.origin);
       return await env.ASSETS.fetch(new Request(chatUrl.toString(), request));
@@ -409,7 +440,7 @@ export default {
 
     try {
       const response = await env.ASSETS.fetch(request);
-      if (response.status === 404 && !url.pathname.startsWith("/api/")) {
+      if (response.status === 404 && !url.pathname.startsWith("/api/") && !url.pathname.includes(".")) {
         const indexUrl = new URL("/index.html", url.origin);
         return await env.ASSETS.fetch(new Request(indexUrl.toString(), request));
       }

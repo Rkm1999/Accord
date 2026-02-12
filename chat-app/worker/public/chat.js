@@ -4,7 +4,7 @@ const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 // Register Service Worker for PWA & Handle Updates
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').then(reg => {
+        navigator.serviceWorker.register('/firebase-messaging-sw.js').then(reg => {
             console.log('Service Worker registered');
 
             // Check for updates on load
@@ -2403,12 +2403,43 @@ function renderMembers() {
 }
 
 
-function openUserSettings() {
+async function openUserSettings() {
     if (confirm('Do you want to logout?')) {
+        const token = localStorage.getItem('fcmToken');
+        if (token && username) {
+            try {
+                await fetch('/api/push/unregister', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, token })
+                });
+            } catch (e) { console.error('Failed to unregister push token', e); }
+        }
         localStorage.removeItem('chatUsername');
         localStorage.removeItem('displayName');
         localStorage.removeItem('avatarKey');
+        localStorage.removeItem('fcmToken');
         window.location.replace('/');
+    }
+}
+
+async function togglePushNotifications(enabled) {
+    if (enabled) {
+        if (typeof window.requestPushPermission === 'function') {
+            await window.requestPushPermission();
+        }
+    } else {
+        const token = localStorage.getItem('fcmToken');
+        if (token && username) {
+            try {
+                await fetch('/api/push/unregister', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, token })
+                });
+                localStorage.removeItem('fcmToken');
+            } catch (e) { console.error('Failed to unregister push token', e); }
+        }
     }
 }
 
@@ -2475,6 +2506,11 @@ function openProfileModal() {
     preview.src = avatarKey 
         ? (isLocalDev ? `${apiBaseUrl}/api/file/${avatarKey}` : `/api/file/${avatarKey}`)
         : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
+
+    const pushToggle = document.getElementById('pushToggle');
+    if (pushToggle) {
+        pushToggle.checked = !!localStorage.getItem('fcmToken') && Notification.permission === 'granted';
+    }
 
     modal.classList.remove('hidden');
     modal.classList.add('visible');

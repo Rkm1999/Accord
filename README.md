@@ -54,22 +54,17 @@ chat-app/
 │   │   ├── index.ts         # Worker entry point (API routes)
 │   │   └── ChatRoom.ts      # Durable Object class
 │   ├── wrangler.toml          # Worker configuration
+│   ├── wrangler.toml.example  # Template for worker configuration
+│   ├── .dev.vars.example      # Template for local environment variables
 │   ├── package.json
 │   └── tsconfig.json
 ├── database/
 │   └── migrations/          # D1 migration files (one per table)
-│       ├── 0000_drop_all.sql         # Drop all tables
-│       ├── 0001_messages.sql         # Messages table
-│       ├── 0002_channels.sql         # Channels table
-│       ├── 0003_users.sql            # Users table
-│       ├── 0004_reactions.sql        # Reactions table
-│       ├── 0005_custom_emojis.sql    # Custom emojis table
-│       ├── 0006_channel_last_read.sql # Read receipts table
-│       ├── 9999_migrate_all.sql     # Run all migrations
-│       └── test_schema.sql           # 20 test queries
+├── firebase/                # Firebase configuration (ignored by git)
+│   ├── firebaseconfig.example
+│   ├── vapid_key.example
+│   └── service-account.json.example
 ├── doc/                        # Documentation
-│   ├── task.md                  # Implementation tasks
-│   └── research.md              # Technical research
 ├── README.md
 └── .gitignore
 ```
@@ -107,7 +102,33 @@ npx wrangler dev  # Starts on http://localhost:8787
 cd chat-app
 ```
 
-### 2. Authenticate with Cloudflare
+### 2. Environment Configuration
+
+The project requires several environment variables and configuration files for Firebase integration.
+
+**Worker Secrets (.dev.vars):**
+1. Copy `chat-app/worker/.dev.vars.example` to `chat-app/worker/.dev.vars`.
+2. Fill in your Firebase project ID, client email, and private key (from your Firebase Service Account JSON).
+
+```bash
+cp chat-app/worker/.dev.vars.example chat-app/worker/.dev.vars
+```
+
+**Firebase Client Config:**
+1. Update the hardcoded `firebaseConfig` and `vapidKey` in `chat-app/worker/public/firebase-messaging.js`.
+2. Update the hardcoded `firebaseConfig` in `chat-app/worker/public/firebase-messaging-sw.js`.
+3. (Optional) Use `firebase/firebaseconfig.example` as a reference for your config values.
+
+**VAPID Key (for Push Notifications):**
+1. Copy `firebase/vapid_key.example` to `firebase/vapid_key`.
+2. Add your Firebase Cloud Messaging VAPID public key.
+3. Also ensure this key is updated in `chat-app/worker/public/firebase-messaging.js`.
+
+**Service Account Key:**
+1. Download your service account JSON from the Firebase Console (Project Settings > Service Accounts).
+2. Save it as `firebase/service-account.json`. (A template is provided in `firebase/service-account.json.example`).
+
+### 3. Authenticate with Cloudflare
 
 ```bash
 npx wrangler login
