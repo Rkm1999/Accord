@@ -246,7 +246,7 @@ export class ChatRoom extends DurableObject {
 
     // Extract mentions
     const mentions: string[] = [];
-    const mentionRegex = /@(\w+)/g;
+    const mentionRegex = /@([\p{L}\p{N}_]+)/gu;
     let match;
     while ((match = mentionRegex.exec(data.message)) !== null) {
       mentions.push(match[1]);
@@ -735,7 +735,7 @@ export class ChatRoom extends DurableObject {
   }
 
   private sanitizeFileName(fileName: string): string {
-    return fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    return fileName.replace(/[^\p{L}\p{N}.\-_]/gu, '_');
   }
 
   private async editMessage(messageId: number, newMessage: string, username: string, channelId: number): Promise<boolean> {

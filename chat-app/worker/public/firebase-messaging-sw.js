@@ -13,29 +13,31 @@ const CRITICAL_ASSETS = [
 ];
 
 // Initialize Firebase in Service Worker
-firebase.initializeApp({
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
-});
+async function initFirebaseInSW() {
+    try {
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        firebase.initializeApp(config.firebaseConfig);
+        const messaging = firebase.messaging();
 
-const messaging = firebase.messaging();
+        // Background message handler
+        messaging.onBackgroundMessage((payload) => {
+            console.log('[firebase-messaging-sw.js] Received background message ', payload);
+            const notificationTitle = payload.notification.title;
+            const notificationOptions = {
+                body: payload.notification.body,
+                icon: '/icons/icon-192x192.png',
+                data: payload.data
+            };
 
-// Background message handler
-messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Received background message ', payload);
-  const notificationTitle = payload.notification.title;
-  const notificationOptions = {
-    body: payload.notification.body,
-    icon: '/icons/icon-192x192.png', // Adjust as needed
-    data: payload.data
-  };
+            self.registration.showNotification(notificationTitle, notificationOptions);
+        });
+    } catch (err) {
+        console.error('Failed to initialize Firebase in Service Worker:', err);
+    }
+}
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
-});
+initFirebaseInSW();
 
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {

@@ -1,22 +1,33 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging.js";
 
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
-  measurementId: "YOUR_MEASUREMENT_ID"
-};
+async function getFirebaseConfig() {
+    const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const baseUrl = isLocalDev ? 'http://localhost:8787' : '';
+    const response = await fetch(`${baseUrl}/api/config`);
+    return await response.json();
+}
 
-const app = initializeApp(firebaseConfig);
-const messaging = getMessaging(app);
-const vapidKey = "YOUR_VAPID_PUBLIC_KEY";
+let messaging = null;
+let vapidKey = null;
+
+async function initFirebase() {
+    const config = await getFirebaseConfig();
+    const app = initializeApp(config.firebaseConfig);
+    messaging = getMessaging(app);
+    vapidKey = config.vapidKey;
+
+    // Handle foreground messages
+    onMessage(messaging, (payload) => {
+        console.log('Message received. ', payload);
+    });
+
+    return messaging;
+}
 
 export async function requestPushPermission() {
     try {
+        if (!messaging) await initFirebase();
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
             console.log('Notification permission granted.');
@@ -58,13 +69,6 @@ async function registerTokenOnServer(token) {
         console.error('Failed to register token on server:', err);
     }
 }
-
-// Handle foreground messages
-onMessage(messaging, (payload) => {
-    console.log('Message received. ', payload);
-    // You can show a custom toast here if you want
-    // But usually we already have real-time websocket messages
-});
 
 // Auto request on load if we don't have a token yet
 if (localStorage.getItem('chatUsername') && !localStorage.getItem('fcmToken')) {

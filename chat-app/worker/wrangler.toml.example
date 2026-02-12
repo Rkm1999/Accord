@@ -28,3 +28,9 @@ new_sqlite_classes = ["ChatRoom"]
 [assets]
 directory = "public"
 binding = "ASSETS"
+
+# These are the variables used by the frontend via the /api/config endpoint
+# In production, use `wrangler secret put <NAME>` for these.
+# For local dev, use .dev.vars
+[vars]
+# You can put non-sensitive config here if desired

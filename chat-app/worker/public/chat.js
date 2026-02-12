@@ -188,7 +188,7 @@ function escapeHtml(text) {
     });
 
     // Highlight mentions @username
-    const mentionRegex = /@(\w+)/g;
+    const mentionRegex = /@([\p{L}\p{N}_]+)/gu;
     html = html.replace(mentionRegex, (match, p1) => {
         const user = allUsers.find(u => u.username === p1);
         const dName = user ? (user.display_name || user.username) : p1;
@@ -768,7 +768,11 @@ function createMessageElement(data, isHistory = false) {
     // Persistent Highlight Check
     const isMentioned = (data.mentions && data.mentions.includes(username)) || 
                         (data.reply_username === username) ||
-                        (data.message && data.message.includes(`@${username}`));
+                        (data.message && (
+                            data.message.includes(`@${username}`) || 
+                            data.message.includes('@everyone') || 
+                            data.message.includes('@here')
+                        ));
 
     // Prepare Reply HTML (to show at top of content)
     let replyHtml = '';
@@ -1080,7 +1084,11 @@ function displayMessage(data, isHistory = false) {
     // Persistent Highlight Check
     const isMentioned = (data.mentions && data.mentions.includes(username)) || 
                         (data.reply_username === username) ||
-                        (data.message && data.message.includes(`@${username}`));
+                        (data.message && (
+                            data.message.includes(`@${username}`) || 
+                            data.message.includes('@everyone') || 
+                            data.message.includes('@here')
+                        ));
 
     const msgEl = document.createElement('div');
     msgEl.className = `group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 ${shouldGroup ? 'mt-0' : 'mt-[17px]'} relative message-group ${isMentioned ? 'mention-highlight' : ''}`;

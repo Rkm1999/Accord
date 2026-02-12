@@ -8,6 +8,14 @@ export interface Env {
   FIREBASE_PROJECT_ID: string;
   FIREBASE_CLIENT_EMAIL: string;
   FIREBASE_PRIVATE_KEY: string;
+  // Firebase Client Config (for the frontend)
+  FIREBASE_API_KEY: string;
+  FIREBASE_AUTH_DOMAIN: string;
+  FIREBASE_STORAGE_BUCKET: string;
+  FIREBASE_MESSAGING_SENDER_ID: string;
+  FIREBASE_APP_ID: string;
+  FIREBASE_MEASUREMENT_ID: string;
+  FIREBASE_VAPID_PUBLIC_KEY: string;
 }
 
 
@@ -57,6 +65,21 @@ export default {
     const url = new URL(request.url);
     const corsHeaders = handleCors(request);
     if (corsHeaders instanceof Response) return corsHeaders;
+
+    if (url.pathname === "/api/config" && request.method === "GET") {
+      return corsResponse({
+        firebaseConfig: {
+          apiKey: env.FIREBASE_API_KEY,
+          authDomain: env.FIREBASE_AUTH_DOMAIN,
+          projectId: env.FIREBASE_PROJECT_ID,
+          storageBucket: env.FIREBASE_STORAGE_BUCKET,
+          messagingSenderId: env.FIREBASE_MESSAGING_SENDER_ID,
+          appId: env.FIREBASE_APP_ID,
+          measurementId: env.FIREBASE_MEASUREMENT_ID,
+        },
+        vapidKey: env.FIREBASE_VAPID_PUBLIC_KEY,
+      }, 200, corsHeaders);
+    }
 
     if (url.pathname === "/ws") {
       const username = url.searchParams.get("username");

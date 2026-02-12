@@ -104,43 +104,41 @@ cd chat-app
 
 ### 2. Environment Configuration
 
-The project requires several environment variables and configuration files for Firebase integration.
+The project uses a dynamic configuration system. Secrets are managed via `.dev.vars` for local development and Wrangler Secrets for production.
 
-**Worker Secrets (.dev.vars):**
+**Local Development (.dev.vars):**
 1. Copy `chat-app/worker/.dev.vars.example` to `chat-app/worker/.dev.vars`.
-2. Fill in your Firebase project ID, client email, and private key (from your Firebase Service Account JSON).
+2. Fill in all the fields using your Firebase project settings and Service Account JSON.
 
 ```bash
 cp chat-app/worker/.dev.vars.example chat-app/worker/.dev.vars
 ```
 
-**Firebase Client Config:**
-1. Update the hardcoded `firebaseConfig` and `vapidKey` in `chat-app/worker/public/firebase-messaging.js`.
-2. Update the hardcoded `firebaseConfig` in `chat-app/worker/public/firebase-messaging-sw.js`.
-3. (Optional) Use `firebase/firebaseconfig.example` as a reference for your config values.
+**Production Secrets:**
+For production, set each variable using the wrangler CLI:
+```bash
+npx wrangler secret put FIREBASE_PROJECT_ID
+npx wrangler secret put FIREBASE_CLIENT_EMAIL
+npx wrangler secret put FIREBASE_PRIVATE_KEY
+npx wrangler secret put FIREBASE_API_KEY
+npx wrangler secret put FIREBASE_AUTH_DOMAIN
+npx wrangler secret put FIREBASE_STORAGE_BUCKET
+npx wrangler secret put FIREBASE_MESSAGING_SENDER_ID
+npx wrangler secret put FIREBASE_APP_ID
+npx wrangler secret put FIREBASE_MEASUREMENT_ID
+npx wrangler secret put FIREBASE_VAPID_PUBLIC_KEY
+```
 
-**VAPID Key (for Push Notifications):**
-1. Copy `firebase/vapid_key.example` to `firebase/vapid_key`.
-2. Add your Firebase Cloud Messaging VAPID public key.
-3. Also ensure this key is updated in `chat-app/worker/public/firebase-messaging.js`.
+### 3. Dynamic Configuration Reference
 
-**Service Account Key:**
-1. Download your service account JSON from the Firebase Console (Project Settings > Service Accounts).
-2. Save it as `firebase/service-account.json`. (A template is provided in `firebase/service-account.json.example`).
+The application now fetches its Firebase configuration dynamically from the Worker at runtime. You no longer need to manually edit `firebase-messaging.js` or `firebase-messaging-sw.js`.
 
-### 3. Placeholders Reference
-
-The following files contain placeholders that **MUST** be replaced with your actual credentials before the application will function correctly:
-
-| File Path | Placeholders to Replace |
+| Setting | Source |
 |-----------|-------------------------|
-| `chat-app/worker/.dev.vars` | `your-project-id`, `your-client-email`, `your-private-key` |
-| `chat-app/worker/public/firebase-messaging.js` | `YOUR_API_KEY`, `YOUR_AUTH_DOMAIN`, `YOUR_PROJECT_ID`, `YOUR_STORAGE_BUCKET`, `YOUR_MESSAGING_SENDER_ID`, `YOUR_APP_ID`, `YOUR_MEASUREMENT_ID`, `YOUR_VAPID_PUBLIC_KEY` |
-| `chat-app/worker/public/firebase-messaging-sw.js` | `YOUR_API_KEY`, `YOUR_AUTH_DOMAIN`, `YOUR_PROJECT_ID`, `YOUR_STORAGE_BUCKET`, `YOUR_MESSAGING_SENDER_ID`, `YOUR_APP_ID` |
-| `firebase/firebaseconfig` | `YOUR_API_KEY`, `YOUR_AUTH_DOMAIN`, etc. (if used) |
-| `firebase/vapid_key` | `YOUR_VAPID_PUBLIC_KEY_HERE` |
-| `firebase/service-account.json` | `YOUR_PROJECT_ID`, `YOUR_PRIVATE_KEY`, `YOUR_CLIENT_EMAIL`, etc. |
-| `chat-app/worker/wrangler.toml` | `YOUR_DATABASE_ID_HERE` |
+| Backend Service Account | `.dev.vars` (local) / Secrets (prod) |
+| Frontend Firebase Config | Served via `/api/config` |
+| VAPID Key | Served via `/api/config` |
+| Database ID | `wrangler.toml` |
 
 ### 4. Authenticate with Cloudflare
 
