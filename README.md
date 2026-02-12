@@ -128,7 +128,21 @@ cp chat-app/worker/.dev.vars.example chat-app/worker/.dev.vars
 1. Download your service account JSON from the Firebase Console (Project Settings > Service Accounts).
 2. Save it as `firebase/service-account.json`. (A template is provided in `firebase/service-account.json.example`).
 
-### 3. Authenticate with Cloudflare
+### 3. Placeholders Reference
+
+The following files contain placeholders that **MUST** be replaced with your actual credentials before the application will function correctly:
+
+| File Path | Placeholders to Replace |
+|-----------|-------------------------|
+| `chat-app/worker/.dev.vars` | `your-project-id`, `your-client-email`, `your-private-key` |
+| `chat-app/worker/public/firebase-messaging.js` | `YOUR_API_KEY`, `YOUR_AUTH_DOMAIN`, `YOUR_PROJECT_ID`, `YOUR_STORAGE_BUCKET`, `YOUR_MESSAGING_SENDER_ID`, `YOUR_APP_ID`, `YOUR_MEASUREMENT_ID`, `YOUR_VAPID_PUBLIC_KEY` |
+| `chat-app/worker/public/firebase-messaging-sw.js` | `YOUR_API_KEY`, `YOUR_AUTH_DOMAIN`, `YOUR_PROJECT_ID`, `YOUR_STORAGE_BUCKET`, `YOUR_MESSAGING_SENDER_ID`, `YOUR_APP_ID` |
+| `firebase/firebaseconfig` | `YOUR_API_KEY`, `YOUR_AUTH_DOMAIN`, etc. (if used) |
+| `firebase/vapid_key` | `YOUR_VAPID_PUBLIC_KEY_HERE` |
+| `firebase/service-account.json` | `YOUR_PROJECT_ID`, `YOUR_PRIVATE_KEY`, `YOUR_CLIENT_EMAIL`, etc. |
+| `chat-app/worker/wrangler.toml` | `YOUR_DATABASE_ID_HERE` |
+
+### 4. Authenticate with Cloudflare
 
 ```bash
 npx wrangler login
