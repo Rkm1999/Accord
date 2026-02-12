@@ -456,6 +456,22 @@ export default {
       }
     }
 
+    if (url.pathname === "/api/upload/check" && request.method === "GET") {
+      const hash = url.searchParams.get("hash");
+      if (!hash) return corsResponse("Hash required", 400, corsHeaders);
+      
+      const key = `file-${hash}`;
+      const existing = await env.BUCKET.head(key);
+      
+      if (existing) {
+        // Return basic metadata if found. 
+        // Note: filename isn't stored in R2 metadata here for simplicity, 
+        // but we can return the key so the client knows we have it.
+        return corsResponse({ exists: true, key }, 200, corsHeaders);
+      }
+      return corsResponse({ exists: false }, 200, corsHeaders);
+    }
+
     if (url.pathname === "/api/upload" && request.method === "POST") {
       try {
         const formData = await request.formData();
@@ -466,15 +482,27 @@ export default {
           return corsResponse("Missing file or username", 400, corsHeaders);
         }
 
-        const timestamp = Date.now();
-        const sanitizedName = file.name.replace(/[^\p{L}\p{N}.\-_]/gu, '_');
-        const key = `${timestamp}-${sanitizedName}`;
+        // Calculate SHA-256 Hash
+        const arrayBuffer = await file.arrayBuffer();
+        const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+        
+        const key = `file-${hashHex}`;
 
-        await env.BUCKET.put(key, file.stream(), {
-          httpMetadata: {
-            contentType: file.type,
-          },
-        });
+        // Check if exists
+        const existing = await env.BUCKET.head(key);
+        if (!existing) {
+          await env.BUCKET.put(key, arrayBuffer, {
+            httpMetadata: {
+              contentType: file.type,
+            },
+            customMetadata: {
+              originalName: file.name,
+              uploadedBy: username
+            }
+          });
+        }
 
         return corsResponse({
           name: file.name,

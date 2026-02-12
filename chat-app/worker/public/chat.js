@@ -1700,19 +1700,49 @@ function handleDrop(event) {
     }
 }
 
+async function calculateFileHash(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 function uploadFileWithProgress(fileItem, index) {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
+        // 1. Calculate hash and check if server already has it
+        const bar = document.getElementById(`progress-bar-${index}`);
+        const container = document.getElementById(`progress-container-${index}`);
+        if (container) container.style.display = 'block';
+        
+        try {
+            const hash = await calculateFileHash(fileItem.file);
+            const checkRes = await fetch(`/api/upload/check?hash=${hash}`);
+            const checkData = await checkRes.json();
+            
+            if (checkData.exists) {
+                // Instant upload!
+                if (bar) bar.style.width = '100%';
+                setTimeout(() => {
+                    resolve({
+                        name: fileItem.name,
+                        type: fileItem.type,
+                        size: fileItem.size,
+                        key: checkData.key
+                    });
+                }, 100);
+                return;
+            }
+        } catch (e) {
+            console.warn('Deduplication check failed, proceeding with normal upload', e);
+        }
+
+        // 2. Normal upload if not found
         const formData = new FormData();
         formData.append('file', fileItem.file);
         formData.append('username', username);
 
         const xhr = new XMLHttpRequest();
         xhr.open('POST', '/api/upload', true);
-
-        // Show progress bar
-        const container = document.getElementById(`progress-container-${index}`);
-        const bar = document.getElementById(`progress-bar-${index}`);
-        if (container) container.style.display = 'block';
 
         xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
