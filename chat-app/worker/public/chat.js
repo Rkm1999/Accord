@@ -32,7 +32,7 @@ if ('serviceWorker' in navigator) {
 function showUpdatePrompt(worker) {
     const prompt = document.getElementById('pwaUpdatePrompt');
     const btn = document.getElementById('pwaUpdateBtn');
-    
+
     if (prompt && btn) {
         prompt.classList.remove('hidden');
         prompt.style.display = 'flex';
@@ -56,10 +56,10 @@ function initPwaInstallation() {
         console.warn('PWA prompt element not found');
         return;
     }
-    
+
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || localStorage.getItem('debug_pwa') === 'true';
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || document.referrer.includes('android-app://');
-    
+
     console.log('PWA Init:', { isMobile, isStandalone, debug: localStorage.getItem('debug_pwa') });
 
     // Don't show if already installed
@@ -75,7 +75,7 @@ function initPwaInstallation() {
         console.log('beforeinstallprompt event fired');
         e.preventDefault();
         deferredPrompt = e;
-        
+
         if (isMobile) {
             pwaPrompt.style.display = 'flex';
             if (installBtn) installBtn.classList.remove('hidden');
@@ -377,7 +377,7 @@ function displayHistory(messages, lastReadMessageId = 0, offset = 0, hasMore = f
 
     const publicChannel = channels.find(c => c.id === currentChannelId);
     const dmChannel = dms.find(d => d.id === currentChannelId);
-    
+
     let channelName = 'general';
     let isDm = false;
 
@@ -392,7 +392,7 @@ function displayHistory(messages, lastReadMessageId = 0, offset = 0, hasMore = f
 
     document.title = `Accord - ${displayTitle}`;
     document.getElementById('header-channel-name').textContent = channelName;
-    
+
     // Update header icon
     const headerIcon = document.querySelector('#header-channel-name').previousElementSibling;
     if (headerIcon) {
@@ -404,7 +404,7 @@ function displayHistory(messages, lastReadMessageId = 0, offset = 0, hasMore = f
     }
 
     document.getElementById('message-input').placeholder = `Message ${displayTitle}`;
-    
+
     // Update footer badge
     const footerBadge = document.getElementById('current-channel-badge');
     if (footerBadge) {
@@ -485,7 +485,7 @@ function displayHistory(messages, lastReadMessageId = 0, offset = 0, hasMore = f
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
             lastScrollTop = messagesContainer.scrollHeight;
         }
-        
+
         // Update global scroll tracking variables
         wasAtBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 100;
         distanceToBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop;
@@ -691,7 +691,7 @@ messagesContainer.addEventListener('scroll', () => {
             loadingIndicator.id = 'auto-loading-indicator';
             loadingIndicator.innerHTML = '<div class="flex items-center justify-center"><div class="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent"></div>Loading older messages...</div>';
             container.insertBefore(loadingIndicator, container.firstChild);
-            
+
             // Preserve scroll position relative to bottom
             container.scrollTop = container.scrollHeight - distanceFromBottom;
 
@@ -755,19 +755,19 @@ function createMessageElement(data, isHistory = false) {
     const shouldGroup = false;
 
     // Persistent Highlight Check
-    const isMentioned = (data.mentions && data.mentions.includes(username)) || 
-                        (data.reply_username === username) ||
-                        (data.message && (
-                            data.message.includes(`@${username}`) || 
-                            data.message.includes('@everyone') || 
-                            data.message.includes('@here')
-                        ));
+    const isMentioned = (data.mentions && data.mentions.includes(username)) ||
+        (data.reply_username === username) ||
+        (data.message && (
+            data.message.includes(`@${username}`) ||
+            data.message.includes('@everyone') ||
+            data.message.includes('@here')
+        ));
 
     // Prepare Reply HTML (to show at top of content)
     let replyHtml = '';
     if (data.reply_to) {
         const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
-        const replyFileUrl = data.reply_file_key 
+        const replyFileUrl = data.reply_file_key
             ? (isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
             : null;
 
@@ -785,16 +785,16 @@ function createMessageElement(data, isHistory = false) {
 
     if (!shouldGroup) {
         messageHtml += `
-            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity" onclick="openUserDetailModal('${escapeHtml(data.username)}')">
                 <img src="${avatarUrl}" alt="${escapeHtml(display_name)}" class="w-10 h-10 rounded-full object-cover">
             </div>
             <div class="flex-1 min-w-0">
                 ${replyHtml}
                 <div class="flex items-center">
-                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]" onclick="openUserDetailModal('${escapeHtml(data.username)}')">
                         ${escapeHtml(display_name)}
                     </span>
-                    <span class="text-xs text-[#949BA4] ml-1">${date} at ${time}</span>
+                    <span class="text-xs text-[#949BA4] ml-1">${date} - ${time}</span>
                 </div>
         `;
 
@@ -1040,11 +1040,11 @@ function displayMessage(data, isHistory = false) {
     const date = new Date(data.timestamp).toLocaleDateString();
     const isOwnMessage = data.username === username;
     const prevMessage = messagesContainer.lastElementChild;
-    
+
     const display_name = data.displayName || data.display_name || data.username;
     const avatar_key = data.avatarKey || data.avatar_key || data.user_avatar;
-    
-    const avatarUrl = avatar_key 
+
+    const avatarUrl = avatar_key
         ? (isLocalDev ? `${apiBaseUrl}/api/file/${avatar_key}` : `/api/file/${avatar_key}`)
         : `https://ui-avatars.com/api/?name=${encodeURIComponent(display_name)}&background=random`;
 
@@ -1071,13 +1071,13 @@ function displayMessage(data, isHistory = false) {
     }
 
     // Persistent Highlight Check
-    const isMentioned = (data.mentions && data.mentions.includes(username)) || 
-                        (data.reply_username === username) ||
-                        (data.message && (
-                            data.message.includes(`@${username}`) || 
-                            data.message.includes('@everyone') || 
-                            data.message.includes('@here')
-                        ));
+    const isMentioned = (data.mentions && data.mentions.includes(username)) ||
+        (data.reply_username === username) ||
+        (data.message && (
+            data.message.includes(`@${username}`) ||
+            data.message.includes('@everyone') ||
+            data.message.includes('@here')
+        ));
 
     const msgEl = document.createElement('div');
     msgEl.className = `group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 ${shouldGroup ? 'mt-0' : 'mt-[17px]'} relative message-group ${isMentioned ? 'mention-highlight' : ''}`;
@@ -1099,7 +1099,7 @@ function displayMessage(data, isHistory = false) {
     let replyHtml = '';
     if (data.reply_to) {
         const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
-        const replyFileUrl = data.reply_file_key 
+        const replyFileUrl = data.reply_file_key
             ? (isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
             : null;
 
@@ -1116,7 +1116,7 @@ function displayMessage(data, isHistory = false) {
                 </div>
             </div>
         `;
-        
+
         // Use a simpler layout for inside-content reply
         replyHtml = `
             <div class="flex items-center gap-1 mb-0.5 opacity-60 hover:opacity-100 cursor-pointer transition-opacity select-none" onclick="event.stopPropagation(); jumpToReply(${data.reply_to})">
@@ -1132,16 +1132,16 @@ function displayMessage(data, isHistory = false) {
 
     if (!shouldGroup) {
         messageHtml += `
-            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity">
+            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity" onclick="openUserDetailModal('${escapeHtml(data.username)}')">
                 <img src="${avatarUrl}" alt="${escapeHtml(display_name)}" class="w-10 h-10 rounded-full object-cover">
             </div>
             <div class="flex-1 min-w-0">
                 ${replyHtml}
                 <div class="flex items-center">
-                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]">
+                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]" onclick="openUserDetailModal('${escapeHtml(data.username)}')">
                         ${escapeHtml(display_name)}
                     </span>
-                    <span class="text-xs text-[#949BA4] ml-1">${date} at ${time}</span>
+                    <span class="text-xs text-[#949BA4] ml-1">${date} - ${time}</span>
                 </div>
         `;
 
@@ -1346,13 +1346,13 @@ function startReply(messageId) {
     if (msgEl) {
         replyToUsernameEl.textContent = msgEl.dataset.username;
         replyToContentEl.textContent = msgEl.dataset.text || '';
-        
+
         if (msgEl.dataset.fileKey) {
             replyToMediaEl.classList.remove('hidden');
-            const fileUrl = isLocalDev 
-                ? `${apiBaseUrl}/api/file/${msgEl.dataset.fileKey}` 
+            const fileUrl = isLocalDev
+                ? `${apiBaseUrl}/api/file/${msgEl.dataset.fileKey}`
                 : `/api/file/${msgEl.dataset.fileKey}`;
-            
+
             if (msgEl.dataset.fileType && msgEl.dataset.fileType.startsWith('image/')) {
                 replyToMediaEl.innerHTML = `<img src="${fileUrl}" class="w-12 h-12 rounded object-cover">`;
             } else {
@@ -1393,7 +1393,7 @@ function cancelReply() {
         const replyToMediaEl = document.getElementById('reply-to-media');
         replyBanner.classList.add('hidden');
         if (replyToMediaEl) replyToMediaEl.innerHTML = '';
-        
+
         // Ensure keyboard stays open if it was open
         const input = document.getElementById('message-input');
         if (document.activeElement === input) {
@@ -1614,7 +1614,7 @@ function handleFileSelect(event) {
             processFile(file);
         }
     });
-    
+
     // Clear the input so the same file can be selected again
     event.target.value = '';
 }
@@ -1629,7 +1629,7 @@ function processFile(file) {
         // Preview URL for UI
         previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
     });
-    
+
     showFilePreview();
     updateSendButtonVisibility();
 }
@@ -1713,12 +1713,12 @@ function uploadFileWithProgress(fileItem, index) {
         const bar = document.getElementById(`progress-bar-${index}`);
         const container = document.getElementById(`progress-container-${index}`);
         if (container) container.style.display = 'block';
-        
+
         try {
             const hash = await calculateFileHash(fileItem.file);
             const checkRes = await fetch(`/api/upload/check?hash=${hash}`);
             const checkData = await checkRes.json();
-            
+
             if (checkData.exists) {
                 // Instant upload!
                 if (bar) bar.style.width = '100%';
@@ -1933,7 +1933,7 @@ function switchChannel(channelId) {
 
     unreadChannels.delete(channelId);
     localStorage.setItem('unreadChannels', JSON.stringify(Array.from(unreadChannels)));
-    
+
     localStorage.setItem('currentChannelId', channelId);
     window.location.reload();
 }
@@ -1948,22 +1948,22 @@ function openCreateChannelModal() {
     modal.classList.remove('hidden');
     modal.classList.add('visible');
     setTimeout(() => modal.classList.remove('visible'), 300);
-    
+
     // Remove any error states
     input.classList.remove('ring-2', 'ring-red-500');
     input.placeholder = 'e.g., general, random, announcements';
-    
+
     // Focus input after a brief delay to ensure modal is visible
     setTimeout(() => {
         input.focus();
         input.select();
     }, 100);
-    
+
     // Remove existing handler and add new one
     if (escapeHandler) {
         document.removeEventListener('keydown', escapeHandler);
     }
-    
+
     // Add escape key handler
     escapeHandler = (e) => {
         if (e.key === 'Escape') {
@@ -1976,11 +1976,11 @@ function openCreateChannelModal() {
 function closeCreateChannelModal() {
     const modal = document.getElementById('createChannelModal');
     const input = document.getElementById('newChannelName');
-    
+
     modal.classList.add('hidden');
     input.value = '';
     input.classList.remove('ring-2', 'ring-red-500');
-    
+
     // Remove escape key listener
     if (escapeHandler) {
         document.removeEventListener('keydown', escapeHandler);
@@ -2064,7 +2064,7 @@ async function deleteChannel(channelId) {
     const channel = channels.find(c => c.id === channelId);
     const dm = dms.find(d => d.id === channelId);
     const channelName = channel ? channel.name : (dm ? 'this DM' : 'this channel');
-    
+
     if (!confirm(`Are you sure you want to delete ${channel ? '#' + channelName : channelName}? All messages will be permanently deleted.`)) {
         return;
     }
@@ -2399,9 +2399,9 @@ function renderMembers() {
         const avatarUrl = user.avatar_key
             ? (isLocalDev ? `${apiBaseUrl}/api/file/${user.avatar_key}` : `/api/file/${user.avatar_key}`)
             : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
-        
+
         return `
-            <div class="flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group ${isOnline ? 'opacity-100' : 'opacity-40 hover:opacity-100'}" onclick="startDM('${escapeHtml(user.username)}', true)">
+            <div class="flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group ${isOnline ? 'opacity-100' : 'opacity-40 hover:opacity-100'}" onclick="openUserDetailModal('${escapeHtml(user.username)}')">
                 <div class="relative mr-3">
                     <img src="${avatarUrl}" alt="${escapeHtml(displayName)}" class="w-8 h-8 rounded-full object-cover">
                     <div class="absolute bottom-0 right-0 w-3.5 h-3.5 border-[3px] border-[#2B2D31] rounded-full ${isOnline ? 'bg-green-500' : 'bg-[#949BA4]'}"></div>
@@ -2412,7 +2412,7 @@ function renderMembers() {
                             ${escapeHtml(displayName)}
                         </div>
                         ${user.username !== username ? `
-                        <button class="opacity-0 group-hover:opacity-100 text-[#B5BAC1] hover:text-[#dbdee1] p-1 rounded transition-opacity" title="Message">
+                        <button class="opacity-0 group-hover:opacity-100 text-[#B5BAC1] hover:text-[#dbdee1] p-1 rounded transition-opacity" title="Message" onclick="event.stopPropagation(); startDM('${escapeHtml(user.username)}', true)">
                             <i data-lucide="message-square" class="w-4 h-4"></i>
                         </button>
                         ` : ''}
@@ -2543,7 +2543,7 @@ function openProfileModal() {
     const preview = document.getElementById('profilePreview');
 
     nameInput.value = displayName;
-    preview.src = avatarKey 
+    preview.src = avatarKey
         ? (isLocalDev ? `${apiBaseUrl}/api/file/${avatarKey}` : `/api/file/${avatarKey}`)
         : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
 
@@ -2559,6 +2559,65 @@ function openProfileModal() {
 
 function closeProfileModal() {
     document.getElementById('profileModal').classList.add('hidden');
+}
+
+let userDetailModalUsername = null;
+
+function openUserDetailModal(targetUsername) {
+    if (!targetUsername) return;
+
+    const user = allUsers.find(u => u.username === targetUsername);
+    if (!user) return;
+
+    userDetailModalUsername = targetUsername;
+    const modal = document.getElementById('userDetailModal');
+    const avatar = document.getElementById('userDetailAvatar');
+    const displayNameEl = document.getElementById('userDetailDisplayName');
+    const usernameEl = document.getElementById('userDetailUsername');
+    const statusDot = document.getElementById('userDetailStatusDot');
+    const statusText = document.getElementById('userDetailStatusText');
+    const dmBtn = document.getElementById('userDetailDMBtn');
+
+    const dName = user.display_name || user.username;
+    displayNameEl.textContent = dName;
+    usernameEl.textContent = `@${user.username}`;
+
+    avatar.src = user.avatar_key
+        ? (isLocalDev ? `${apiBaseUrl}/api/file/${user.avatar_key}` : `/api/file/${user.avatar_key}`)
+        : `https://ui-avatars.com/api/?name=${encodeURIComponent(dName)}&background=random`;
+
+    const isOnline = onlineUsernames.has(targetUsername);
+    statusDot.style.backgroundColor = isOnline ? '#23a55a' : '#80848e';
+    statusText.textContent = isOnline ? 'Online' : 'Offline';
+
+    // Hide DM button if it's the current user
+    if (targetUsername === username) {
+        dmBtn.classList.add('hidden');
+    } else {
+        dmBtn.classList.remove('hidden');
+    }
+
+    modal.classList.remove('hidden');
+    lucide.createIcons();
+}
+
+function closeUserDetailModal() {
+    document.getElementById('userDetailModal').classList.add('hidden');
+    userDetailModalUsername = null;
+}
+
+function handleUserDetailDM() {
+    if (userDetailModalUsername) {
+        startDM(userDetailModalUsername, true);
+        closeUserDetailModal();
+    }
+}
+
+function viewUserDetailAvatar() {
+    const avatar = document.getElementById('userDetailAvatar');
+    if (avatar && avatar.src) {
+        openImageModal(avatar.src);
+    }
 }
 
 function previewAvatar(event) {
@@ -2597,10 +2656,10 @@ async function updateProfile() {
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                username, 
-                displayName: newDisplayName, 
-                avatarImage 
+            body: JSON.stringify({
+                username,
+                displayName: newDisplayName,
+                avatarImage
             })
         });
 
@@ -2612,14 +2671,14 @@ async function updateProfile() {
                 avatarKey = result.avatarKey;
                 localStorage.setItem('avatarKey', avatarKey);
             }
-            
+
             // Update local UI
             document.getElementById('display-username').textContent = displayName;
             const avatarInitial = document.getElementById('user-avatar-initial');
             if (avatarInitial) {
                 avatarInitial.textContent = displayName.charAt(0).toUpperCase();
             }
-            
+
             alert('Profile updated! Refresh to see changes in old messages.');
             closeProfileModal();
             window.location.reload(); // Reload to update WebSocket connection with new info
@@ -2635,11 +2694,11 @@ function handleMentionAutocomplete(e) {
     const input = e.target;
     const value = input.value;
     const selectionStart = input.selectionStart;
-    
+
     // Find the word before the cursor
     const beforeCursor = value.slice(0, selectionStart);
     const lastAt = beforeCursor.lastIndexOf('@');
-    
+
     if (lastAt !== -1) {
         const query = beforeCursor.slice(lastAt + 1);
         // Only trigger if @ is at start of word or start of input
@@ -2649,14 +2708,14 @@ function handleMentionAutocomplete(e) {
             return;
         }
     }
-    
+
     hideAutocomplete();
 }
 
 function showAutocomplete(query, atIndex) {
     const autocomplete = document.getElementById('mentionAutocomplete');
-    filteredUsers = allUsers.filter(u => 
-        u.username.toLowerCase().includes(query.toLowerCase()) || 
+    filteredUsers = allUsers.filter(u =>
+        u.username.toLowerCase().includes(query.toLowerCase()) ||
         (u.display_name && u.display_name.toLowerCase().includes(query.toLowerCase()))
     ).slice(0, 8); // Limit to 8 results
 
@@ -2677,7 +2736,7 @@ function renderAutocomplete(users, atIndex) {
         const avatarUrl = user.avatar_key
             ? (isLocalDev ? `${apiBaseUrl}/api/file/${user.avatar_key}` : `/api/file/${user.avatar_key}`)
             : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
-            
+
         return `
             <div class="autocomplete-item ${index === selectedAutocompleteIndex ? 'selected' : ''}" onclick="selectMention(${JSON.stringify(user).replace(/"/g, '&quot;')}, ${atIndex})">
                 <img src="${avatarUrl}" class="w-6 h-6 rounded-full mr-2 object-cover">
@@ -2701,15 +2760,15 @@ function selectMention(user, atIndex) {
     const value = input.value;
     const selectionStart = input.selectionStart;
     const beforeCursor = value.slice(0, selectionStart);
-    
+
     // If atIndex not provided, find it again
     if (atIndex === undefined) {
         atIndex = beforeCursor.lastIndexOf('@');
     }
-    
+
     const afterMention = value.slice(selectionStart);
     const newValue = value.slice(0, atIndex) + '@' + user.username + ' ' + afterMention;
-    
+
     input.value = newValue;
     const newCursorPos = atIndex + user.username.length + 2;
     input.setSelectionRange(newCursorPos, newCursorPos);
@@ -2745,10 +2804,10 @@ async function regenerateRecoveryKey() {
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                username, 
-                displayName, 
-                generateNewRecoveryKey: true 
+            body: JSON.stringify({
+                username,
+                displayName,
+                generateNewRecoveryKey: true
             })
         });
 
@@ -2777,7 +2836,7 @@ function toggleReactionPicker(event, messageId) {
     event.stopPropagation();
     const picker = document.getElementById('reactionPicker');
     const isHidden = picker.classList.contains('hidden');
-    
+
     if (!isHidden && reactionPickerMessageId === messageId) {
         picker.classList.add('hidden');
         return;
@@ -2803,15 +2862,15 @@ function toggleReactionPicker(event, messageId) {
             `).join('');
         }
     }
-    
+
     // Position picker
     const rect = event.currentTarget.getBoundingClientRect();
     const pickerHeight = picker.offsetHeight;
     const pickerWidth = picker.offsetWidth;
-    
+
     let top = rect.top - pickerHeight - 10;
     let left = rect.left - pickerWidth / 2 + rect.width / 2;
-    
+
     // Keep in viewport
     if (top < 10) top = rect.bottom + 10;
     if (left < 10) left = 10;
@@ -2819,12 +2878,12 @@ function toggleReactionPicker(event, messageId) {
 
     picker.style.top = `${top}px`;
     picker.style.left = `${left}px`;
-    
+
     // Keep focus on input if we are using the picker for the main message input
     if (messageId === null) {
         document.getElementById('message-input').focus();
     }
-    
+
     lucide.createIcons();
 }
 
@@ -2967,7 +3026,7 @@ function toggleSidebar(id) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log(`Connecting as: ${username} to channel ${currentChannelId}`);
-    
+
     // Clear unread for current channel
     if (unreadChannels.has(currentChannelId)) {
         unreadChannels.delete(currentChannelId);
@@ -2984,7 +3043,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     fetchCustomEmojis();
-    
+
     // Initial placeholder
     const membersSidebar = document.getElementById('members-sidebar');
     if (membersSidebar) {
@@ -3181,20 +3240,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             lastResizeTime = Date.now();
             const app = document.getElementById('app');
             if (!app) return;
-            
+
             const height = window.visualViewport.height;
             const offsetTop = window.visualViewport.offsetTop;
-            
+
             // Adjust app height to match visual viewport
             app.style.height = `${height}px`;
-            
+
             // On iOS, the viewport can be scrolled/offset when the keyboard is open.
             // We use transform to pin the app to the current visible top.
             if (isIOS) {
                 app.style.transform = `translateY(${offsetTop}px)`;
                 window.scrollTo(0, 0);
             }
-            
+
             // Update lastScrollTop after resize to prevent large scrollDistance
             // when the keyboard opens and shifts the container
             if (container) {
@@ -3204,7 +3263,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 container.scrollTop = oldScrollTop + (oldHeight - newHeight);
                 lastScrollTop = container.scrollTop;
             }
-            
+
             // On resize (keyboard opening), ensure the active element is visible
             // but use a slight delay and only if needed to avoid focus loss
             if (document.activeElement && document.activeElement.id === 'message-input') {
@@ -3251,7 +3310,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (app) {
         app.addEventListener('touchstart', (e) => {
             if (window.innerWidth >= 1024) return;
-            
+
             messageSwiped = false;
             touchStartX = e.touches[0].clientX;
             touchStartY = e.touches[0].clientY;
@@ -3259,7 +3318,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const channelSidebar = document.getElementById('channel-sidebar');
             const membersSidebar = document.getElementById('members-sidebar');
             const overlay = document.getElementById('sidebar-overlay');
-            
+
             const isChannelOpen = channelSidebar.classList.contains('active');
             const isMembersOpen = membersSidebar.classList.contains('active');
 
@@ -3293,7 +3352,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const currentX = e.touches[0].clientX;
             const currentY = e.touches[0].clientY;
-            
+
             // Prevent dragging if user is scrolling vertically
             if (Math.abs(currentY - touchStartY) > 50 && Math.abs(currentX - touchStartX) < 20) {
                 isDraggingSidebar = false;
@@ -3310,8 +3369,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // If opening: currentX is the edge of the sidebar
                 // If closing: sidebar starts at 240, currentX - touchStartX is the movement
                 let offset = isAlreadyOpen ? (240 + (currentX - touchStartX)) : currentX;
-                offset = Math.min(Math.max(offset, 0), sidebarWidth); 
-                
+                offset = Math.min(Math.max(offset, 0), sidebarWidth);
+
                 const percent = offset / sidebarWidth;
                 activeDraggingSidebar.style.transform = `translateX(${offset - sidebarWidth}px)`;
                 activeDraggingSidebar.style.opacity = '1'; // Keep sidebar opaque
@@ -3351,8 +3410,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Threshold logic: Open if dragged > 30% or fast swipe
             let shouldBeOpen = false;
-            const dragDistance = isChannel ? 
-                (isAlreadyOpen ? 240 + diffX : diffX) : 
+            const dragDistance = isChannel ?
+                (isAlreadyOpen ? 240 + diffX : diffX) :
                 (isAlreadyOpen ? 240 - diffX : -diffX);
 
             if (dragDistance > 80) {
@@ -3362,7 +3421,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Apply state
             activeDraggingSidebar.classList.remove('dragging');
             overlay.classList.remove('dragging');
-            
+
             // Important: Clear inline styles so CSS transitions can take over
             activeDraggingSidebar.style.transform = '';
             activeDraggingSidebar.style.opacity = '';
@@ -3507,7 +3566,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
             }
-            
+
             isHorizontalSwipe = false;
             isVerticalScroll = false;
             hasDeterminedDirection = false;
@@ -3617,18 +3676,18 @@ function openStartDMModal() {
     const modal = document.getElementById('startDMModal');
     const input = document.getElementById('dmSearchInput');
     const list = document.getElementById('dmUserList');
-    
+
     input.value = '';
-    
+
     // Render user list excluding self
     const users = allUsers.filter(u => u.username !== username);
-    
+
     const renderList = (filter = '') => {
-        const filtered = users.filter(u => 
-            u.username.toLowerCase().includes(filter.toLowerCase()) || 
+        const filtered = users.filter(u =>
+            u.username.toLowerCase().includes(filter.toLowerCase()) ||
             (u.display_name && u.display_name.toLowerCase().includes(filter.toLowerCase()))
         );
-        
+
         if (filtered.length === 0) {
             list.innerHTML = '<div class="p-4 text-center text-[#949BA4]">No friends found</div>';
             return;
@@ -3639,7 +3698,7 @@ function openStartDMModal() {
             const avatarUrl = u.avatar_key
                 ? (isLocalDev ? `${apiBaseUrl}/api/file/${u.avatar_key}` : `/api/file/${u.avatar_key}`)
                 : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
-            
+
             return `
                 <div class="flex items-center p-2 hover:bg-[#35373C] rounded cursor-pointer transition-colors" onclick="startDM('${escapeHtml(u.username)}', true)">
                     <img src="${avatarUrl}" class="w-8 h-8 rounded-full mr-3 object-cover">
@@ -3651,9 +3710,9 @@ function openStartDMModal() {
             `;
         }).join('');
     };
-    
+
     renderList();
-    
+
     input.oninput = (e) => renderList(e.target.value);
 
     modal.classList.remove('hidden');

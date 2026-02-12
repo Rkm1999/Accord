@@ -947,7 +947,7 @@
     </div>
 
     <!-- Image Modal -->
-    <div id="imageModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50 hidden" onclick="closeImageModal()">
+    <div id="imageModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-[200] hidden" onclick="closeImageModal()">
         <button class="absolute top-4 right-4 text-white hover:text-[#B5BAC1] transition-colors">
             <i data-lucide="x" class="w-8 h-8"></i>
         </button>
@@ -1067,6 +1067,39 @@
                         </button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Detail Modal -->
+    <div id="userDetailModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] hidden" onclick="if(event.target.id === 'userDetailModal') closeUserDetailModal()">
+        <div class="bg-[#1E1F22] rounded-lg max-w-sm w-full shadow-2xl overflow-hidden border border-[#2B2D31]" onclick="event.stopPropagation()">
+            <!-- Header Section: Avatar Left, Name Right -->
+            <div class="p-6 flex items-center gap-4">
+                <div class="relative flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity" onclick="viewUserDetailAvatar()">
+                    <div class="w-20 h-20 rounded-full border-2 border-[#2B2D31] bg-[#313338] relative overflow-hidden">
+                        <img id="userDetailAvatar" src="" class="w-full h-full object-cover">
+                        <div id="userDetailStatusDot" class="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-[3px] border-[#1E1F22]"></div>
+                    </div>
+                </div>
+
+                <div class="min-w-0">
+                    <h2 id="userDetailDisplayName" class="text-xl font-bold text-white truncate"></h2>
+                    <div id="userDetailUsername" class="text-[#B5BAC1] text-sm truncate"></div>
+                </div>
+            </div>
+
+            <!-- Body Section -->
+            <div class="px-4 pb-6">
+                <div class="bg-[#2B2D31] rounded-lg p-3 mb-4">
+                    <div class="text-[10px] font-bold uppercase text-[#949BA4] mb-1">Status</div>
+                    <div id="userDetailStatusText" class="text-sm text-[#dbdee1]"></div>
+                </div>
+
+                <button id="userDetailDMBtn" onclick="handleUserDetailDM()" class="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-semibold py-2 rounded transition-colors flex items-center justify-center gap-2">
+                    <i data-lucide="message-square" class="w-4 h-4"></i>
+                    Send Message
+                </button>
             </div>
         </div>
     </div>
