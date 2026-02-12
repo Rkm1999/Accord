@@ -709,7 +709,7 @@
             <header class="h-12 px-4 flex items-center shadow-sm border-b border-[#26272D] flex-shrink-0 justify-between relative z-50 bg-[#313338]">
                 <div class="flex items-center overflow-hidden">
                     <!-- Toggle Channel Button (Mobile) -->
-                    <button id="toggle-channels-btn" class="mr-2 hover:text-[#dbdee1] cursor-pointer text-[#B5BAC1] lg:hidden flex items-center justify-center">
+                    <button id="toggle-channels-btn" class="mr-2 hover:text-[#dbdee1] cursor-pointer text-[#B5BAC1] lg:hidden flex items-center justify-center" onmousedown="event.preventDefault()">
                         <i data-lucide="menu" class="w-6 h-6"></i>
                     </button>
                     
@@ -722,7 +722,7 @@
                     <button class="hover:text-[#dbdee1] cursor-pointer text-[#B5BAC1] flex items-center justify-center" onclick="openSearchModal()" title="Search">
                         <i data-lucide="search" class="w-6 h-6"></i>
                     </button>
-                    <button id="toggle-members-btn" class="hover:text-[#dbdee1] cursor-pointer text-[#B5BAC1] lg:hidden flex items-center justify-center">
+                    <button id="toggle-members-btn" class="hover:text-[#dbdee1] cursor-pointer text-[#B5BAC1] lg:hidden flex items-center justify-center" onmousedown="event.preventDefault()">
                         <i data-lucide="users" class="w-6 h-6"></i>
                     </button>
                 </div>
@@ -774,7 +774,8 @@
 
                 <div id="message-input-area" class="bg-[#383A40] rounded-lg px-4 py-2.5 flex items-center relative transition-all">
                     <div id="mentionAutocomplete" class="hidden custom-scrollbar"></div>
-                    <button type="button" class="bg-[#B5BAC1] text-[#313338] rounded-full p-0.5 mr-3 hover:text-white transition-colors flex items-center justify-center" onclick="toggleReactionPicker(event, null)">
+                    <button type="button" id="emoji-trigger-btn" class="bg-[#B5BAC1] text-[#313338] rounded-full p-0.5 mr-3 hover:text-white transition-colors flex items-center justify-center" 
+                        onmousedown="event.preventDefault()" onclick="toggleReactionPicker(event, null)">
                         <i data-lucide="smile" class="w-4 h-4 font-bold"></i>
                     </button>
                     <input type="file" id="fileInput" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar" multiple class="hidden">

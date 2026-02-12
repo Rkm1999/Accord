@@ -649,17 +649,6 @@ messagesContainer.addEventListener('scroll', () => {
     wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
     distanceToBottom = container.scrollHeight - container.scrollTop;
 
-    // Close keyboard on mobile when scrolling messages
-    // But ignore if a resize just happened (e.g. keyboard opening)
-    // OR if a message was just sent (to allow auto-scroll to bottom)
-    const now = Date.now();
-    if (window.innerWidth < 1024 && messageInput && document.activeElement === messageInput && (now - lastResizeTime > 500) && (now - lastSendMessageTime > 1000)) {
-        const scrollDistance = Math.abs(container.scrollTop - lastScrollTop);
-        if (scrollDistance > 5) {
-            messageInput.blur();
-        }
-    }
-
     // Unread banner logic
     if (banner && !banner.classList.contains('hidden')) {
         const divider = document.getElementById('unread-divider');
@@ -2452,7 +2441,6 @@ async function togglePushNotifications(enabled) {
 }
 
 function openEmojiModal() {
-    dismissKeyboard();
     const modal = document.getElementById('emojiUploadModal');
     modal.classList.remove('hidden');
     modal.classList.add('visible');
@@ -2788,6 +2776,11 @@ function toggleReactionPicker(event, messageId) {
     picker.style.top = `${top}px`;
     picker.style.left = `${left}px`;
     
+    // Keep focus on input if we are using the picker for the main message input
+    if (messageId === null) {
+        document.getElementById('message-input').focus();
+    }
+    
     lucide.createIcons();
 }
 
@@ -2804,13 +2797,14 @@ function toggleReaction(messageId, emoji) {
 function sendReaction(emoji) {
     if (reactionPickerMessageId !== null) {
         toggleReaction(reactionPickerMessageId, emoji);
+        document.getElementById('reactionPicker').classList.add('hidden');
     } else {
         const input = document.getElementById('message-input');
         const space = (input.value.length > 0 && !input.value.endsWith(' ')) ? ' ' : '';
         input.value += space + emoji + ' ';
         input.focus();
+        // Do NOT hide the picker here so user can add multiple emojis
     }
-    document.getElementById('reactionPicker').classList.add('hidden');
 }
 
 function updateMessageReactions(messageId, reactions) {
@@ -2864,7 +2858,8 @@ function updateMessageReactions(messageId, reactions) {
 // Close picker when clicking outside
 document.addEventListener('click', (e) => {
     const picker = document.getElementById('reactionPicker');
-    if (picker && !picker.contains(e.target)) {
+    const emojiBtn = document.getElementById('emoji-trigger-btn');
+    if (picker && !picker.contains(e.target) && (!emojiBtn || !emojiBtn.contains(e.target))) {
         picker.classList.add('hidden');
     }
 });
@@ -3006,6 +3001,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    const emojiBtn = document.getElementById('emoji-trigger-btn');
+    if (emojiBtn) {
+        emojiBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+        });
+    }
+
     const messageFormEl = document.getElementById('message-form');
     if (messageFormEl) {
         messageFormEl.addEventListener('submit', async (e) => {
@@ -3033,6 +3035,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         replyTo: replyingTo?.messageId,
                     }));
                     input.value = '';
+                    // Close emoji picker after sending
+                    document.getElementById('reactionPicker').classList.add('hidden');
                 }
 
                 for (const file of filesToSend) {
