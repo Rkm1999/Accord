@@ -2933,6 +2933,11 @@ function selectMention(user, atIndex) {
     input.value = newValue;
     const newCursorPos = atIndex + user.username.length + 2;
     input.setSelectionRange(newCursorPos, newCursorPos);
+    
+    // Auto-expand after insertion
+    input.style.height = 'auto';
+    input.style.height = (input.scrollHeight) + 'px';
+    
     input.focus();
     hideAutocomplete();
 }
@@ -3321,6 +3326,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             replyTo: replyingTo?.messageId,
                         }));
                         input.value = '';
+                        input.style.height = 'auto'; // Reset height
                         document.getElementById('reactionPicker').classList.add('hidden');
                     }
 
@@ -3366,6 +3372,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (messageInputEl) {
         messageInputEl.addEventListener('paste', handlePaste);
         messageInputEl.addEventListener('input', (e) => {
+            // Auto-expand height
+            messageInputEl.style.height = 'auto';
+            messageInputEl.style.height = (messageInputEl.scrollHeight) + 'px';
+            
             handleTyping();
             handleMentionAutocomplete(e);
             updateSendButtonVisibility();
@@ -3374,14 +3384,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         messageInputEl.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 const autocomplete = document.getElementById('mentionAutocomplete');
-                if (!autocomplete.classList.contains('hidden')) {
+                if (autocomplete && !autocomplete.classList.contains('hidden')) {
                     e.preventDefault();
                     selectMention(filteredUsers[selectedAutocompleteIndex]);
                     return;
                 }
                 e.preventDefault();
                 const form = document.getElementById('message-form');
-                if (form) form.dispatchEvent(new Event('submit'));
+                if (form) {
+                    // Manual dispatch instead of click to ensure it triggers correctly
+                    form.dispatchEvent(new Event('submit'));
+                }
             }
         });
 

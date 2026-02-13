@@ -797,7 +797,8 @@
                     </button>
                     <input type="file" id="fileInput" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar" multiple class="hidden">
                     <form id="message-form" class="flex-1 flex items-center">
-                        <input type="text" id="message-input" placeholder="Message #general" class="bg-transparent text-[#dbdee1] w-full focus:outline-none placeholder-[#949BA4]" autocomplete="off">
+                        <textarea id="message-input" placeholder="Message #general" rows="1" 
+                            class="bg-transparent text-[#dbdee1] w-full focus:outline-none placeholder-[#949BA4] resize-none py-1 leading-[1.375rem] max-h-[50vh] custom-scrollbar"></textarea>
                         <div class="flex items-center text-[#B5BAC1]">
                             <button type="button" class="p-1.5 hover:bg-[#404249] rounded transition-colors" onclick="document.getElementById('fileInput').click()">
                                 <i data-lucide="paperclip" class="w-5 h-5"></i>
