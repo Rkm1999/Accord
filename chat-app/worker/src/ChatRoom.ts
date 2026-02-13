@@ -322,6 +322,17 @@ export class ChatRoom extends DurableObject {
         `SELECT username, level FROM notification_settings WHERE channel_id = ? AND username IN (${placeholders})`
       ).bind(channelId, ...usersToNotify).all();
 
+      // Get last read status to support "Once" notification level
+      const { results: lastRead }: any = await this.env.DB.prepare(
+        `SELECT username, message_id FROM channel_last_read WHERE channel_id = ? AND username IN (${placeholders})`
+      ).bind(channelId, ...usersToNotify).all();
+
+      // Get the latest message ID in this channel (the one we just inserted is the highest)
+      const latestMsg: any = await this.env.DB.prepare(
+        "SELECT MAX(id) as id FROM messages WHERE channel_id = ?"
+      ).bind(channelId).first();
+      const currentMsgId = latestMsg?.id || 0;
+
       if (!tokens || tokens.length === 0) return;
 
       // Identify which platforms for which users are CURRENTLY looking at this channel
@@ -343,17 +354,39 @@ export class ChatRoom extends DurableObject {
           continue;
         }
 
-        const userSetting = settings.find((s: any) => s.username === recipientUsername)?.level || 'all';
+        const recipientSettings = settings.find((s: any) => s.username === recipientUsername);
+        const userSetting = recipientSettings?.level || 'simple'; // Default to simple
         const isMentioned = mentions.includes(recipientUsername) || message.includes("@everyone");
 
         // Filter based on settings
         if (userSetting === 'none') continue;
         if (userSetting === 'mentions' && !isMentioned) continue;
+        
+        // Handle "Simple" level: Only notify if channel was fully read before this message
+        if (userSetting === 'simple' && !isMentioned) {
+            const userLastReadId = lastRead.find((lr: any) => lr.username === recipientUsername)?.message_id || 0;
+            const alreadyUnread = await this.env.DB.prepare(
+                "SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND id < ? LIMIT 1"
+            ).bind(channelId, userLastReadId, currentMsgId).first();
+            
+            if (alreadyUnread) continue;
+        }
+
+        // Prepare notification content
+        let notifTitle = isDm ? `Message from ${senderUsername}` : `#${channelName}`;
+        let notifBody = `${senderUsername}: ${message.substring(0, 100)}${message.length > 100 ? "..." : ""}`;
+
+        // Apply simple format for "simple" level or if explicitly requested (and NOT a mention)
+        const useSimple = userSetting === 'simple' || recipientSettings?.use_simple === 1;
+        if (useSimple && !isMentioned) {
+            notifTitle = "New Message";
+            notifBody = isDm ? "You have a new direct message" : `You have unread messages in #${channelName}`;
+        }
 
         const result = await firebase.sendNotification(
           token,
-          isDm ? `Message from ${senderUsername}` : `#${channelName}`,
-          `${senderUsername}: ${message.substring(0, 100)}${message.length > 100 ? "..." : ""}`,
+          notifTitle,
+          notifBody,
           {
             link: `/chat`,
             channelId: channelId.toString(),

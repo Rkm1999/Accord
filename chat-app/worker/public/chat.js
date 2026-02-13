@@ -1986,7 +1986,8 @@ function renderChannelNotificationSettings() {
     if (!list) return;
     
     list.innerHTML = channels.map(channel => {
-        const setting = notificationSettings.find(s => s.channel_id === channel.id)?.level || 'all';
+        const setting = notificationSettings.find(s => s.channel_id === channel.id);
+        const level = setting?.level || 'simple'; // Default to simple
         
         return `
             <div class="p-3 bg-[#2B2D31] rounded-lg border border-[#404249]">
@@ -1999,15 +2000,19 @@ function renderChannelNotificationSettings() {
                 
                 <div class="flex gap-1 bg-[#1E1F22] p-1 rounded-md">
                     <button onclick="updateChannelNotificationLevel(${channel.id}, 'all')" 
-                        class="flex-1 text-[10px] font-bold py-1.5 rounded transition-all ${setting === 'all' ? 'bg-[#5865F2] text-white' : 'text-[#949BA4] hover:bg-[#35373C]'}">
+                        class="flex-1 text-[10px] font-bold py-1.5 rounded transition-all ${level === 'all' ? 'bg-[#5865F2] text-white' : 'text-[#949BA4] hover:bg-[#35373C]'}">
                         ALL
                     </button>
+                    <button onclick="updateChannelNotificationLevel(${channel.id}, 'simple')" 
+                        class="flex-1 text-[10px] font-bold py-1.5 rounded transition-all ${level === 'simple' ? 'bg-[#5865F2] text-white' : 'text-[#949BA4] hover:bg-[#35373C]'}">
+                        SIMPLE
+                    </button>
                     <button onclick="updateChannelNotificationLevel(${channel.id}, 'mentions')" 
-                        class="flex-1 text-[10px] font-bold py-1.5 rounded transition-all ${setting === 'mentions' ? 'bg-[#5865F2] text-white' : 'text-[#949BA4] hover:bg-[#35373C]'}">
+                        class="flex-1 text-[10px] font-bold py-1.5 rounded transition-all ${level === 'mentions' ? 'bg-[#5865F2] text-white' : 'text-[#949BA4] hover:bg-[#35373C]'}">
                         MENTIONS
                     </button>
                     <button onclick="updateChannelNotificationLevel(${channel.id}, 'none')" 
-                        class="flex-1 text-[10px] font-bold py-1.5 rounded transition-all ${setting === 'none' ? 'bg-[#5865F2] text-white' : 'text-[#949BA4] hover:bg-[#35373C]'}">
+                        class="flex-1 text-[10px] font-bold py-1.5 rounded transition-all ${level === 'none' ? 'bg-[#5865F2] text-white' : 'text-[#949BA4] hover:bg-[#35373C]'}">
                         NOTHING
                     </button>
                 </div>
@@ -2016,6 +2021,17 @@ function renderChannelNotificationSettings() {
     }).join('');
     
     lucide.createIcons();
+}
+
+function showNotificationHelp() {
+    alert(
+        "Notification Levels:\\n\\n" +
+        "• SIMPLE (Default): A single generic alert (\\\"New Message\\\") per channel until you read it. Best for low noise!\\n\\n" +
+        "• ALL: Detailed alerts for every single message.\\n\\n" +
+        "• MENTIONS: Only notify if you are specifically tagged.\\n\\n" +
+        "• NOTHING: Mute all push notifications.\\n\\n" +
+        "* Mentions always show full details even in SIMPLE mode."
+    );
 }
 
 async function fetchRegisteredUsers() {

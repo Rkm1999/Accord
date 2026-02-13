@@ -13,22 +13,28 @@ const CRITICAL_ASSETS = [
 ];
 
 // Initialize Firebase in Service Worker
+let firebaseApp = null;
 let messaging = null;
 
-async function initFirebaseInSW() {
+async function getFirebaseMessaging() {
+    if (messaging) return messaging;
+    
     try {
         const response = await fetch('/api/config');
         const config = await response.json();
-        firebase.initializeApp(config.firebaseConfig);
+        firebaseApp = firebase.initializeApp(config.firebaseConfig);
         messaging = firebase.messaging();
-
-        // Background message handler
+        
+        // Handle background messages via the SDK once it's ready
         messaging.onBackgroundMessage((payload) => {
             console.log('[firebase-messaging-sw.js] Received background message ', payload);
             showNotification(payload);
         });
+        
+        return messaging;
     } catch (err) {
         console.error('Failed to initialize Firebase in Service Worker:', err);
+        return null;
     }
 }
 
@@ -101,33 +107,37 @@ async function showNotification(payload) {
         self.registration.showNotification(notificationTitle, notificationOptions)
     ];
 
-    // Set app badge based on shared state
+    // Set app badge if supported
     if ('setAppBadge' in navigator) {
-        const count = await getAndIncrementBadgeCount(payload);
-        promises.push(navigator.setAppBadge(count).catch(err => console.error('Error setting badge:', err)));
+        promises.push(getAndIncrementBadgeCount(payload).then(count => {
+            return navigator.setAppBadge(count);
+        }).catch(() => {}));
     }
 
     return Promise.all(promises);
 }
 
-// Background message handler for the compat SDK (sometimes needed as fallback)
+// Background message handler - MUST be registered at top level synchronously
 self.addEventListener('push', (event) => {
+    // Start initializing Firebase immediately
+    const initPromise = getFirebaseMessaging();
+    
     if (event.data) {
         try {
             const data = event.data.json();
-            if (data.notification) {
-                event.waitUntil(showNotification(data));
-            }
+            // Show notification immediately while SDK initializes
+            event.waitUntil(Promise.all([initPromise, showNotification(data)]));
         } catch (e) {
-            // If it's not JSON, we still want to increment the badge if possible
+            console.error('Error handling push event:', e);
             if ('setAppBadge' in navigator) {
-                event.waitUntil(getAndIncrementBadgeCount().then(c => navigator.setAppBadge(c)));
+                event.waitUntil(getAndIncrementBadgeCount({}).then(c => navigator.setAppBadge(c)));
             }
         }
     }
 });
 
-initFirebaseInSW();
+// Start initialization on SW load
+getFirebaseMessaging();
 
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {

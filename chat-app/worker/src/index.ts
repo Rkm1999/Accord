@@ -469,11 +469,13 @@ export default {
 
     if (url.pathname === "/api/notifications/settings" && request.method === "POST") {
       const { username, channelId, level } = await request.json() as any;
-      if (!username || !channelId || !level) return corsResponse("Missing fields", 400, corsHeaders);
+      if (!username || !channelId) return corsResponse("Missing fields", 400, corsHeaders);
       
-      await env.DB.prepare(
-        "INSERT INTO notification_settings (username, channel_id, level, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(username, channel_id) DO UPDATE SET level = ?, updated_at = ?"
-      ).bind(username, channelId, level, Date.now(), level, Date.now()).run();
+      if (level !== undefined) {
+        await env.DB.prepare(
+          "INSERT INTO notification_settings (username, channel_id, level, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(username, channel_id) DO UPDATE SET level = ?, updated_at = ?"
+        ).bind(username, channelId, level, Date.now(), level, Date.now()).run();
+      }
       
       return corsResponse({ success: true }, 200, corsHeaders);
     }

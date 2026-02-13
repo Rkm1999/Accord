@@ -7,3 +7,4 @@
 .read 0006_channel_last_read.sql
 .read 0007_dm_schema.sql
 .read 0008_push_tokens.sql
+.read 0009_notification_settings.sql
