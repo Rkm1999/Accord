@@ -278,6 +278,27 @@ function escapeHtml(text) {
 }
 
 
+function isEmojiOnly(text) {
+    if (!text) return false;
+    
+    // 1. Remove custom emoji tokens :name:
+    let remaining = text;
+    customEmojis.forEach(emoji => {
+        const regex = new RegExp(`:${emoji.name}:`, 'g');
+        remaining = remaining.replace(regex, '');
+    });
+    
+    // 2. Check if we have standard emojis or if it's just whitespace now
+    // We want to remove standard emojis but NOT plain numbers or letters.
+    // \p{Extended_Pictographic} is the safest for actual "icons"
+    // We also remove Variation Selectors and Skin Tone modifiers
+    remaining = remaining.replace(/[\s\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u{FE0E}\u{FE0F}]/gu, '');
+    
+    // 3. If nothing left, it was emoji-only.
+    // Also ensure the original text wasn't just whitespace.
+    return remaining.length === 0 && text.trim().length > 0;
+}
+
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -894,7 +915,8 @@ function createMessageElement(data, shouldGroup = false) {
     `;
 
     if (data.message) {
-        messageHtml += `<p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">${escapeHtml(data.message)}${data.is_edited ? '<span class="edited-text">(edited)</span>' : ''}</p>`;
+        const emojiOnlyClass = isEmojiOnly(data.message) ? 'jumbo-emoji-message' : '';
+        messageHtml += `<p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem] ${emojiOnlyClass}">${escapeHtml(data.message)}${data.is_edited ? '<span class="edited-text">(edited)</span>' : ''}</p>`;
     }
 
     if (linkMetadata && linkMetadata.url) {
