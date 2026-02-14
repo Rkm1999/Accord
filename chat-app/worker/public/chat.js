@@ -225,7 +225,7 @@ let filteredUsers = [];
 let unreadChannels = new Set(JSON.parse(localStorage.getItem('unreadChannels') || '[]'));
 
 // Chat history pagination variables
-let currentOffset = 0;
+let oldestMessageTimestamp = null;
 let hasMoreMessages = false;
 let isLoadingMore = false;
 let isAutoLoading = false;
@@ -351,10 +351,10 @@ function connect() {
 
         switch (data.type) {
             case 'history':
-                if (data.offset && data.offset > 0) {
-                    displayMoreMessages(data.messages, data.offset, data.hasMore);
+                if (data.before) {
+                    displayMoreMessages(data.messages, data.before, data.hasMore);
                 } else {
-                    displayHistory(data.messages, data.lastReadMessageId, data.offset || 0, data.hasMore || false);
+                    displayHistory(data.messages, data.lastReadMessageId, data.before || null, data.hasMore || false);
                 }
                 break;
             case 'chat':
@@ -436,11 +436,12 @@ function showSystemMessage(message) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-function displayHistory(messages, lastReadMessageId = 0, offset = 0, hasMore = false) {
+function displayHistory(messages, lastReadMessageId = 0, before = null, hasMore = false) {
     const messagesContainer = document.getElementById('messages-container');
     messagesContainer.innerHTML = '';
 
-    currentOffset = offset;
+    // Set cursor to the timestamp of the oldest message received
+    oldestMessageTimestamp = (messages.length > 0) ? messages[0].timestamp : null;
     hasMoreMessages = hasMore;
     isLoadingMore = false;
     isAutoLoading = false;
@@ -752,7 +753,7 @@ messagesContainer.addEventListener('scroll', () => {
     const scrollDistance = Math.abs(container.scrollTop - lastScrollTop);
     const isScrollingUp = lastScrollTop > container.scrollTop && scrollDistance > 10;
 
-    if (isNearTop && hasMoreMessages && !isLoadingMore && currentOffset >= 0 && !isAutoLoading && isScrollingUp) {
+    if (isNearTop && hasMoreMessages && !isLoadingMore && !isAutoLoading && isScrollingUp) {
         if (loadMoreMessages(false)) {
             isAutoLoading = true;
             const distanceFromBottom = container.scrollHeight - container.scrollTop;
@@ -1045,19 +1046,22 @@ function loadMoreMessages(showButtonLoading = true) {
 
     ws.send(JSON.stringify({
         type: 'load_history',
-        offset: currentOffset + 25, // History uses 25 messages per page in ChatRoom.ts
+        before: oldestMessageTimestamp,
         limit: 25
     }));
     return true;
 }
 
-function displayMoreMessages(messages, newOffset, hasMore) {
+function displayMoreMessages(messages, before, hasMore) {
     try {
         const messagesContainer = document.getElementById('messages-container');
         const loadMoreBtn = document.getElementById('load-more-button');
         const loadingIndicator = document.getElementById('auto-loading-indicator');
 
-        currentOffset = newOffset;
+        // Update cursor to the new oldest message timestamp
+        if (messages.length > 0) {
+            oldestMessageTimestamp = messages[0].timestamp;
+        }
         hasMoreMessages = hasMore;
 
         // Get current scroll position relative to bottom before any changes
@@ -3334,26 +3338,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     sendBtn.innerHTML = '<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>';
 
-                    // 2. Send message over WebSocket
-                    if (message) {
+                    // 2. Send messages over WebSocket
+                    if (uploadedFiles.length > 0) {
+                        // Send the first file combined with the text message
+                        ws.send(JSON.stringify({
+                            type: 'chat',
+                            message: message, // Can be empty or text
+                            file: uploadedFiles[0],
+                            replyTo: replyingTo?.messageId,
+                        }));
+
+                        // Send any additional files as separate messages
+                        for (let i = 1; i < uploadedFiles.length; i++) {
+                            ws.send(JSON.stringify({
+                                type: 'chat',
+                                message: '',
+                                file: uploadedFiles[i],
+                                replyTo: replyingTo?.messageId,
+                            }));
+                        }
+                    } else if (message) {
+                        // No files, just send text
                         ws.send(JSON.stringify({
                             type: 'chat',
                             message,
                             replyTo: replyingTo?.messageId,
                         }));
+                    }
+
+                    if (message || uploadedFiles.length > 0) {
                         input.value = '';
                         input.style.height = 'auto'; // Reset height
                         document.getElementById('reactionPicker').classList.add('hidden');
-                    }
-
-                    // 3. Send file messages over WebSocket (only metadata)
-                    for (const uploadedFile of uploadedFiles) {
-                        ws.send(JSON.stringify({
-                            type: 'chat',
-                            message: '',
-                            file: uploadedFile,
-                            replyTo: replyingTo?.messageId,
-                        }));
                     }
 
                     // Cleanup

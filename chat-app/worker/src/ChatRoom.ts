@@ -180,7 +180,7 @@ export class ChatRoom extends DurableObject {
     }
 
     if (data.type === "load_more" || data.type === "load_history") {
-      await this.sendChatHistory(ws, channelId, data.offset || 0);
+      await this.sendChatHistory(ws, channelId, data.before);
       return;
     }
 
@@ -554,7 +554,7 @@ export class ChatRoom extends DurableObject {
     }
   }
 
-  private async sendChatHistory(ws: WebSocket, channelId: number, offset = 0) {
+  private async sendChatHistory(ws: WebSocket, channelId: number, before?: number) {
     const state = ws.deserializeAttachment() as any;
     const username = state.username;
 
@@ -562,37 +562,54 @@ export class ChatRoom extends DurableObject {
         "SELECT message_id FROM channel_last_read WHERE username = ? AND channel_id = ?"
     ).bind(username, channelId).first() as any;
 
-    const { results: messages }: any = await this.env.DB.prepare(
-      `SELECT m.*, u.display_name, u.avatar_key as user_avatar 
-       FROM messages m 
-       LEFT JOIN users u ON m.username = u.username 
-       WHERE m.channel_id = ? 
-       ORDER BY m.timestamp DESC LIMIT 25 OFFSET ?`
-    ).bind(channelId, offset).all();
+    // Use cursor-based pagination (before timestamp) instead of OFFSET
+    let query = `
+      SELECT m.*, u.display_name, u.avatar_key as user_avatar 
+      FROM messages m 
+      LEFT JOIN users u ON m.username = u.username 
+      WHERE m.channel_id = ?
+    `;
+    const params: any[] = [channelId];
+
+    if (before) {
+      query += ` AND m.timestamp < ? `;
+      params.push(before);
+    }
+
+    query += ` ORDER BY m.timestamp DESC LIMIT 26 `;
+
+    const result: any = await this.env.DB.prepare(query).bind(...params).all();
+
+    let messages = result.results;
+    const rowsRead = result.meta.rows_read || 0;
+    console.log(`[D1 READ] History: ${rowsRead} rows read for channel ${channelId} (cursor: ${before || 'start'})`);
+
+    const hasMore = messages.length > 25;
+    if (hasMore) {
+        messages = messages.slice(0, 25);
+    }
 
     if (messages.length > 0) {
-        const messageIds = messages.map((m: any) => m.id);
+      const messageIds = messages.map((m: any) => m.id);
       const placeholders = messageIds.map(() => '?').join(',');
-      const { results: reactions } = await this.env.DB.prepare(
+      const reactResult: any = await this.env.DB.prepare(
         `SELECT message_id, emoji, username FROM reactions WHERE message_id IN (${placeholders})`
-      ).bind(...messageIds).all() as { results: any[] };
+      ).bind(...messageIds).all();
+
+      console.log(`[D1 READ] Reactions: ${reactResult.meta.rows_read} rows read`);
 
       messages.forEach((m: any) => {
-        m.reactions = reactions.filter(r => r.message_id === m.id);
+        m.reactions = reactResult.results.filter((r: any) => r.message_id === m.id);
       });
     }
 
     const history = messages.reverse();
 
-    const totalCount = await this.env.DB.prepare(
-      "SELECT COUNT(*) as count FROM messages WHERE channel_id = ?"
-    ).bind(channelId).first() as any;
-
     ws.send(JSON.stringify({
       type: "history",
       messages: history,
-      offset: offset,
-      hasMore: offset + 25 < (totalCount?.count || 0),
+      before: before,
+      hasMore: hasMore,
       lastReadMessageId: lastRead?.message_id || 0
     }));
   }

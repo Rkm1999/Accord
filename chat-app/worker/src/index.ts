@@ -335,34 +335,50 @@ export default {
 
     if (url.pathname === "/api/history") {
       const channelId = url.searchParams.get("channelId") || "1";
-      const offset = parseInt(url.searchParams.get("offset") || "0");
-      const { results: messages } = await env.DB.prepare(
-        `SELECT m.*, u.display_name, u.avatar_key as user_avatar
-         FROM messages m
-         LEFT JOIN users u ON m.username = u.username
-         WHERE m.channel_id = ?
-         ORDER BY m.timestamp DESC LIMIT 25 OFFSET ?`
-      ).bind(channelId, offset).all() as { results: any[] };
+      const before = url.searchParams.get("before");
+      
+      let query = `
+        SELECT m.*, u.display_name, u.avatar_key as user_avatar
+        FROM messages m
+        LEFT JOIN users u ON m.username = u.username
+        WHERE m.channel_id = ?
+      `;
+      const params: any[] = [channelId];
 
-      const totalCount = await env.DB.prepare(
-        "SELECT COUNT(*) as count FROM messages WHERE channel_id = ?"
-      ).bind(channelId).first<{ count: number }>();
+      if (before) {
+        query += " AND m.timestamp < ? ";
+        params.push(parseInt(before));
+      }
+
+      query += " ORDER BY m.timestamp DESC LIMIT 26 ";
+
+      const result: any = await env.DB.prepare(query).bind(...params).all();
+
+      let messages = result.results;
+      console.log(`[D1 READ] History API: ${result.meta.rows_read || 0} rows read (cursor: ${before || 'start'})`);
+
+      const hasMore = messages.length > 25;
+      if (hasMore) {
+        messages = messages.slice(0, 25);
+      }
 
       if (messages.length > 0) {
         const messageIds = messages.map(m => m.id);
         const placeholders = messageIds.map(() => '?').join(',');
-        const { results: reactions } = await env.DB.prepare(
+        const reactResult: any = await env.DB.prepare(
           `SELECT message_id, emoji, username FROM reactions WHERE message_id IN (${placeholders})`
-        ).bind(...messageIds).all() as { results: any[] };
+        ).bind(...messageIds).all();
+        
+        console.log(`[D1 READ] Reactions API: ${reactResult.meta.rows_read || 0} rows read`);
+
         messages.forEach(m => {
-          m.reactions = reactions.filter(r => r.message_id === m.id);
+          m.reactions = reactResult.results.filter(r => r.message_id === m.id);
         });
       }
       return corsResponse({
         messages: messages.reverse(),
-        offset: offset,
-        hasMore: offset + 25 < (totalCount?.count || 0),
-        total: totalCount?.count || 0
+        before: before,
+        hasMore: hasMore
       }, 200, corsHeaders);
     }
 
