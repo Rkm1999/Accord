@@ -89,7 +89,9 @@ export default {
     }
 
     if (url.pathname.startsWith("/api/file/")) {
-      const key = decodeURIComponent(url.pathname.replace("/api/file/", ""));
+      const parts = url.pathname.split("/");
+      // Path format: /api/file/{key} or /api/file/{key}/{filename}
+      const key = decodeURIComponent(parts[3]); 
       if (!key) return corsResponse("File key required", 400, corsHeaders);
 
       const object = await env.BUCKET.get(key);
@@ -97,6 +99,14 @@ export default {
 
       const headers = new Headers(corsHeaders);
       object.writeHttpMetadata(headers);
+      
+      // Force download if filename is provided in query params or path
+      const filename = url.searchParams.get("filename") || (parts.length > 4 ? decodeURIComponent(parts[4]) : null);
+      if (filename) {
+        headers.set("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`);
+        headers.set("Content-Type", "application/octet-stream");
+      }
+      
       return new Response(object.body, { headers });
     }
 

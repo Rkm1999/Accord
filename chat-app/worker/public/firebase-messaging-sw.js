@@ -230,6 +230,13 @@ self.addEventListener('fetch', (event) => {
 
     const url = event.request.url;
 
+    // IMPORTANT: Ignore file download API. 
+    // If the Service Worker intercepts these, iOS PWAs will "lock up" in a preview 
+    // instead of showing the native download prompt.
+    if (url.includes('/api/file/')) {
+        return; // Let the browser handle it natively
+    }
+
     // Skip cross-origin requests
     if (!url.startsWith(self.location.origin)) return;
 
