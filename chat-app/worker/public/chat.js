@@ -1,5 +1,6 @@
 const username = localStorage.getItem('chatUsername');
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+let isAddingEmoji = false;
 
 // Register Service Worker for PWA & Handle Updates
 if ('serviceWorker' in navigator) {
@@ -248,6 +249,7 @@ let currentSearchParams = {};
 function dismissKeyboard() {
     const input = document.getElementById('message-input');
     if (input) input.blur();
+    closeMobileEmojiModal();
 }
 
 function escapeHtml(text) {
@@ -2038,6 +2040,7 @@ let escapeHandler = null;
 function openCreateChannelModal() {
     dismissKeyboard();
     const modal = document.getElementById('createChannelModal');
+    syncModalViewport(modal);
     const input = document.getElementById('newChannelName');
     input.value = '';
     modal.classList.remove('hidden');
@@ -2210,6 +2213,7 @@ function openSearchModal() {
     closeAllSidebars();
     dismissKeyboard();
     const modal = document.getElementById('searchModal');
+    syncModalViewport(modal);
     const channelIdSelect = document.getElementById('searchChannelId');
 
 
@@ -2539,6 +2543,16 @@ function renderMembers() {
 }
 
 
+function syncModalViewport(modal) {
+    if (!window.visualViewport) return;
+    const height = window.visualViewport.height;
+    const offsetTop = window.visualViewport.offsetTop;
+    modal.style.height = `${height}px`;
+    if (isIOS) {
+        modal.style.transform = `translateY(${offsetTop}px)`;
+    }
+}
+
 async function openUserSettings() {
     if (confirm('Do you want to logout?')) {
         const token = localStorage.getItem('fcmToken');
@@ -2583,6 +2597,7 @@ async function togglePushNotifications(enabled) {
 
 function openEmojiModal() {
     const modal = document.getElementById('emojiUploadModal');
+    syncModalViewport(modal);
     modal.classList.remove('hidden');
     modal.classList.add('visible');
     setTimeout(() => modal.classList.remove('visible'), 400);
@@ -2636,6 +2651,7 @@ function openProfileModal() {
     closeAllSidebars();
     dismissKeyboard();
     const modal = document.getElementById('profileModal');
+    syncModalViewport(modal);
     const nameInput = document.getElementById('displayNameInput');
     const preview = document.getElementById('profilePreview');
 
@@ -2943,7 +2959,26 @@ function toggleReactionPicker(event, messageId, isFromMobile = false) {
             messageId = parseInt(selectedMobileMessageId);
             closeMobileActionModal(true);
         }
-        openMobileEmojiModal(messageId);
+        
+        // If it's the main input (messageId === null), handle keyboard toggle
+        if (messageId === null) {
+            const modal = document.getElementById('mobileEmojiModal');
+            if (modal && !modal.classList.contains('hidden')) {
+                // Emoji picker is already open, close it and open keyboard
+                closeMobileEmojiModal(true);
+                document.getElementById('message-input').focus();
+                return;
+            }
+            
+            // If keyboard is open, blur it first to hide it
+            if (document.activeElement && document.activeElement.id === 'message-input') {
+                document.activeElement.blur();
+            }
+            
+            openMobileEmojiModal(null, true);
+        } else {
+            openMobileEmojiModal(messageId);
+        }
         return;
     }
 
@@ -3543,13 +3578,44 @@ function setupModalDrag() {
 }
 
 // Mobile Emoji Picker Functions
-function openMobileEmojiModal(messageId) {
+function openMobileEmojiModal(messageId, isKeyboardMode = false) {
     reactionPickerMessageId = messageId;
     const modal = document.getElementById('mobileEmojiModal');
     const content = document.getElementById('mobileEmojiContent');
     const customContainer = document.getElementById('mobileCustomEmojis');
+    const spacer = document.getElementById('mobile-emoji-spacer');
+    const handle = document.getElementById('mobile-emoji-handle');
     
     if (!modal || !content || !customContainer) return;
+
+    // Handle Keyboard Mode
+    if (isKeyboardMode && spacer) {
+        if (handle) handle.classList.add('hidden');
+        modal.style.backgroundColor = 'transparent';
+        modal.style.pointerEvents = 'none';
+        content.style.pointerEvents = 'auto';
+        
+        // Prevent native keyboard from popping up
+        const input = document.getElementById('message-input');
+        if (input) input.inputMode = 'none';
+
+        // Match a typical keyboard height
+        const keyboardHeight = 300;
+        spacer.style.height = `${keyboardHeight}px`;
+        spacer.classList.remove('hidden');
+        
+        // Ensure scroll to bottom
+        setTimeout(scrollToBottom, 100);
+    } else {
+        if (handle) handle.classList.remove('hidden');
+        modal.style.backgroundColor = '';
+        modal.style.pointerEvents = '';
+        content.style.pointerEvents = '';
+        if (spacer) spacer.classList.add('hidden');
+        
+        const input = document.getElementById('message-input');
+        if (input) input.inputMode = '';
+    }
 
     // Populate custom emojis
     if (customEmojis.length === 0) {
@@ -3557,6 +3623,7 @@ function openMobileEmojiModal(messageId) {
     } else {
         customContainer.innerHTML = customEmojis.map(emoji => `
             <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center p-2 active:scale-110 transition-transform" 
+                    style="touch-action: manipulation;"
                     onclick="sendEmojiFromMobile(':${emoji.name}:')" oncontextmenu="return false;">
                 <img src="${isLocalDev ? `${apiBaseUrl}/api/file/` : '/api/file/'}${emoji.file_key}" class="w-full h-full object-contain pointer-events-none" oncontextmenu="return false;">
             </button>
@@ -3574,31 +3641,63 @@ function openMobileEmojiModal(messageId) {
     lucide.createIcons();
 }
 
-function closeMobileEmojiModal() {
+function closeMobileEmojiModal(immediate = false) {
     const modal = document.getElementById('mobileEmojiModal');
     const content = document.getElementById('mobileEmojiContent');
+    const spacer = document.getElementById('mobile-emoji-spacer');
     
     if (!modal || !content) return;
 
+    if (immediate) {
+        modal.classList.add('hidden');
+        modal.style.opacity = '0';
+        content.style.transform = 'translateY(100%)';
+        if (spacer) spacer.classList.add('hidden');
+        modal.style.backgroundColor = '';
+        modal.style.pointerEvents = '';
+        content.style.pointerEvents = '';
+        reactionPickerMessageId = null;
+        const input = document.getElementById('message-input');
+        if (input) input.inputMode = '';
+        return;
+    }
+
     content.style.transform = 'translateY(100%)';
     modal.style.opacity = '0';
+    if (spacer) spacer.classList.add('hidden');
     
     setTimeout(() => {
         modal.classList.add('hidden');
+        modal.style.backgroundColor = '';
+        modal.style.pointerEvents = '';
+        content.style.pointerEvents = '';
         reactionPickerMessageId = null;
+        
+        const input = document.getElementById('message-input');
+        if (input) input.inputMode = '';
     }, 300);
 }
 
 function sendEmojiFromMobile(emoji) {
     if (reactionPickerMessageId !== null) {
         toggleReaction(reactionPickerMessageId, emoji);
+        closeMobileEmojiModal();
     } else {
         const input = document.getElementById('message-input');
         const space = (input.value.length > 0 && !input.value.endsWith(' ')) ? ' ' : '';
+        
+        isAddingEmoji = true;
         input.value += space + emoji + ' ';
         input.focus();
+        updateSendButtonVisibility();
+        
+        // Reset flag after a short delay to allow the focus event to fire and be ignored
+        setTimeout(() => {
+            isAddingEmoji = false;
+        }, 100);
+        // Do NOT close for main input so user can add multiple emojis, 
+        // similar to how the native keyboard works.
     }
-    closeMobileEmojiModal();
 }
 
 let emojiDragStartY = 0;
@@ -3611,6 +3710,9 @@ function setupEmojiModalDrag() {
     if (!content || !modal) return;
 
     content.addEventListener('touchstart', (e) => {
+        // Don't drag if it's the chat input emoji keyboard
+        if (reactionPickerMessageId === null) return;
+        
         // Don't drag if we're in the scrollable custom emoji area and it's scrolled down
         if (scrollArea.contains(e.target) && scrollArea.scrollTop > 0) return;
         if (e.target.closest('button')) return;
@@ -3870,6 +3972,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderMembers();
     connect();
 
+    // Set up mobile modal drag handlers
+    setupModalDrag();
+    setupEmojiModalDrag();
+    setupImageZoomHandlers();
+
 
 
     const messagesContainerEl = document.getElementById('messages-container');
@@ -3995,6 +4102,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         input.value = '';
                         input.style.height = 'auto'; // Reset height
                         document.getElementById('reactionPicker').classList.add('hidden');
+                        closeMobileEmojiModal(true);
                     }
 
                     // Cleanup
@@ -4057,8 +4165,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Fix for mobile keyboard covering input
         messageInputEl.addEventListener('focus', () => {
-            // Browser usually handles this better than manual scrollIntoView
-            // which can cause focus loss on some Android versions
+            // Close emoji picker if it was acting as a keyboard
+            // But NOT if we just programmatically focused it to keep the cursor active
+            if (!isAddingEmoji) {
+                messageInputEl.inputMode = '';
+                closeMobileEmojiModal(true);
+            }
+        });
+
+        // Ensure tap on input restores keyboard even if already "focused"
+        messageInputEl.addEventListener('touchstart', (e) => {
+            const spacer = document.getElementById('mobile-emoji-spacer');
+            const isEmojiKeyboardOpen = spacer && !spacer.classList.contains('hidden');
+            
+            if (isEmojiKeyboardOpen) {
+                // If we're in emoji mode, a tap on the input should switch to the native keyboard
+                messageInputEl.inputMode = 'text';
+                closeMobileEmojiModal(true);
+                
+                // On some browsers, we need to focus directly in the touch event to trigger the keyboard
+                messageInputEl.focus();
+                
+                // And again in a timeout just in case the focus was lost during the modal closing
+                setTimeout(() => {
+                    messageInputEl.focus();
+                }, 50);
+            } else {
+                messageInputEl.inputMode = 'text';
+            }
         });
     }
 
@@ -4085,6 +4219,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 app.style.transform = `translateY(${offsetTop}px)`;
                 window.scrollTo(0, 0);
             }
+
+            // Also adjust all full-screen modals to stay within visual viewport
+            const modals = document.querySelectorAll('.fixed.inset-0:not(#app)');
+            modals.forEach(modal => {
+                modal.style.height = `${height}px`;
+                if (isIOS) {
+                    modal.style.transform = `translateY(${offsetTop}px)`;
+                }
+            });
 
             // Update lastScrollTop after resize to prevent large scrollDistance
             // when the keyboard opens and shifts the container
