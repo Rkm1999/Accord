@@ -360,7 +360,7 @@ function connect() {
             case 'chat':
 
                 if (data.channelId === currentChannelId) {
-                    displayMessage(data);
+                    displayMessage(data, false);
                 } else {
                     markChannelUnread(data.channelId);
                 }
@@ -510,9 +510,10 @@ function displayHistory(messages, lastReadMessageId = 0, before = null, hasMore 
 
     let unreadDividerShown = false;
     let maxMessageId = 0;
+    let lastMsg = null;
+    let groupCount = 0;
 
     console.log('Displaying', messages.length, 'messages');
-    console.log('Message IDs:', messages.map(m => m.id));
 
     messages.forEach(msg => {
         if (msg.message || msg.file_name) {
@@ -530,9 +531,26 @@ function displayHistory(messages, lastReadMessageId = 0, before = null, hasMore 
                 `;
                 messagesContainer.appendChild(divider);
                 unreadDividerShown = true;
+                // Reset grouping when crossing unread divider
+                lastMsg = null;
+                groupCount = 0;
             }
 
-            displayMessage(msg, true);
+            // Grouping logic: Same user, max 10 in a group, no reply
+            let shouldGroup = false;
+            if (lastMsg && lastMsg.username === msg.username && !msg.reply_to) {
+                if (groupCount < 10) {
+                    shouldGroup = true;
+                    groupCount++;
+                } else {
+                    groupCount = 0;
+                }
+            } else {
+                groupCount = 0;
+            }
+
+            displayMessage(msg, true, shouldGroup);
+            lastMsg = msg;
         }
     });
 
@@ -796,7 +814,7 @@ const handleMediaLayoutChange = (e) => {
 messagesContainer.addEventListener('load', handleMediaLayoutChange, true);
 messagesContainer.addEventListener('error', handleMediaLayoutChange, true);
 
-function createMessageElement(data, isHistory = false) {
+function createMessageElement(data, shouldGroup = false) {
     const time = new Date(data.timestamp).toLocaleTimeString();
     const date = new Date(data.timestamp).toLocaleDateString();
     const isOwnMessage = data.username === username;
@@ -821,9 +839,6 @@ function createMessageElement(data, isHistory = false) {
         size: data.file_size,
         key: data.file_key
     };
-
-    // For history loading, we currently disable grouping to keep it simple and safe
-    const shouldGroup = false;
 
     // Persistent Highlight Check
     const isMentioned = (data.mentions && data.mentions.includes(username)) ||
@@ -852,31 +867,22 @@ function createMessageElement(data, isHistory = false) {
         `;
     }
 
-    let messageHtml = '';
-
-    if (!shouldGroup) {
-        messageHtml += `
-            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity" onclick="openUserDetailModal('${escapeHtml(data.username)}')">
-                <img src="${avatarUrl}" alt="${escapeHtml(display_name)}" class="w-10 h-10 rounded-full object-cover">
+    let messageHtml = `
+        <div class="avatar-col mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity ${shouldGroup ? 'hidden' : ''}" style="display: ${shouldGroup ? 'none' : 'block'}" onclick="openUserDetailModal('${escapeHtml(data.username)}')">
+            <img src="${avatarUrl}" alt="${escapeHtml(display_name)}" class="w-10 h-10 rounded-full object-cover">
+        </div>
+        <div class="time-col w-10 mr-4 text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100 flex items-center justify-end select-none ${shouldGroup ? '' : 'hidden'}" style="display: ${shouldGroup ? 'flex' : 'none'}">
+            ${time}
+        </div>
+        <div class="flex-1 min-w-0">
+            ${replyHtml}
+            <div class="user-info-col flex items-center ${shouldGroup ? 'hidden' : ''}" style="display: ${shouldGroup ? 'none' : 'flex'}">
+                <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]" onclick="openUserDetailModal('${escapeHtml(data.username)}')">
+                    ${escapeHtml(display_name)}
+                </span>
+                <span class="text-xs text-[#949BA4] ml-1">${date} - ${time}</span>
             </div>
-            <div class="flex-1 min-w-0">
-                ${replyHtml}
-                <div class="flex items-center">
-                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]" onclick="openUserDetailModal('${escapeHtml(data.username)}')">
-                        ${escapeHtml(display_name)}
-                    </span>
-                    <span class="text-xs text-[#949BA4] ml-1">${date} - ${time}</span>
-                </div>
-        `;
-
-    } else {
-        messageHtml += `
-            <div class="w-10 mr-4 text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100 flex items-center justify-end select-none">
-                ${time}
-            </div>
-            <div class="flex-1 min-w-0">
-        `;
-    }
+    `;
 
     if (data.message) {
         messageHtml += `<p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">${escapeHtml(data.message)}${data.is_edited ? '<span class="edited-text">(edited)</span>' : ''}</p>`;
@@ -1016,6 +1022,9 @@ function createMessageElement(data, isHistory = false) {
     msgEl.dataset.username = data.username;
     msgEl.dataset.timestamp = data.timestamp;
     msgEl.dataset.text = data.message || '';
+    if (data.reply_to) {
+        msgEl.dataset.replyTo = data.reply_to;
+    }
     if (fileAttachment && fileAttachment.key) {
         msgEl.dataset.fileKey = fileAttachment.key;
         msgEl.dataset.fileName = fileAttachment.name;
@@ -1073,15 +1082,44 @@ function displayMoreMessages(messages, before, hasMore) {
 
         const fragment = document.createDocumentFragment();
 
-        messages.forEach(msg => {
+        // For history loading, we need to track what was already on screen
+        // to decide if the NEWEST message in the batch should group with the OLDEST message already there.
+        let nextMessage = loadMoreBtn ? loadMoreBtn.nextSibling : messagesContainer.firstChild;
+        let lastMsg = null;
+        let groupCount = 0;
+
+        // Messages come in DESC order, we reverse them to render bottom-to-top relative to the batch
+        const batch = [...messages].reverse();
+
+        batch.forEach((msg, index) => {
             if (msg.message || msg.file_name) {
+                // Peek at the NEXT message in our batch (which is newer) to decide grouping
+                const newerMsg = batch[index + 1] || nextMessage;
+                
+                let shouldGroupWithNewer = false;
+                if (newerMsg) {
+                    const newerUsername = newerMsg.dataset ? newerMsg.dataset.username : newerMsg.username;
+                    const newerIsReply = newerMsg.dataset ? !!newerMsg.dataset.replyTo : !!newerMsg.reply_to;
+                    
+                    // Note: Since we are prepending, we check if the message ABOVE (newerMsg)
+                    // belongs to the same user.
+                    if (newerUsername === msg.username && !newerIsReply && groupCount < 10) {
+                        // This logic is slightly different because we are prepending.
+                        // We will update the NEWER message's grouping state later.
+                    }
+                }
+
                 const msgEl = createMessageElement(msg, true);
                 fragment.appendChild(msgEl);
             }
         });
 
-        // Insert new messages at top (above button or at container start)
-        messagesContainer.insertBefore(fragment, loadMoreBtn ? loadMoreBtn.nextSibling : messagesContainer.firstChild);
+        // Prepend to container
+        messagesContainer.insertBefore(fragment, nextMessage);
+
+        // RE-CALCULATE ALL GROUPING for the entire container to ensure consistency
+        // This is the safest way to fix grouping when prepending history
+        recalculateAllGrouping();
 
         lucide.createIcons();
 
@@ -1107,271 +1145,98 @@ function displayMoreMessages(messages, before, hasMore) {
     }
 }
 
-function displayMessage(data, isHistory = false) {
+function recalculateAllGrouping() {
+    const container = document.getElementById('messages-container');
+    const messages = Array.from(container.querySelectorAll('.message-group'));
+    
+    let lastMsg = null;
+    let groupCount = 0;
 
+    messages.forEach(msgEl => {
+        const username = msgEl.dataset.username;
+        const replyTo = msgEl.dataset.replyTo;
+        
+        let shouldGroup = false;
+        if (lastMsg && lastMsg.username === username && !replyTo) {
+            if (groupCount < 10) {
+                shouldGroup = true;
+                groupCount++;
+            } else {
+                groupCount = 0;
+            }
+        } else {
+            groupCount = 0;
+        }
+
+        // Apply visual grouping
+        const avatarCol = msgEl.querySelector('.avatar-col');
+        const userInfoCol = msgEl.querySelector('.user-info-col');
+        const timeCol = msgEl.querySelector('.time-col');
+
+        if (shouldGroup) {
+            msgEl.classList.add('mt-0');
+            msgEl.classList.remove('mt-[17px]');
+            if (avatarCol) {
+                avatarCol.style.display = 'none';
+                avatarCol.classList.add('hidden');
+            }
+            if (userInfoCol) {
+                userInfoCol.style.display = 'none';
+                userInfoCol.classList.add('hidden');
+            }
+            if (timeCol) {
+                timeCol.style.display = 'flex';
+                timeCol.classList.remove('hidden');
+            }
+        } else {
+            msgEl.classList.remove('mt-0');
+            msgEl.classList.add('mt-[17px]');
+            if (avatarCol) {
+                avatarCol.style.display = 'block';
+                avatarCol.classList.remove('hidden');
+            }
+            if (userInfoCol) {
+                userInfoCol.style.display = 'block';
+                userInfoCol.classList.remove('hidden');
+            }
+            if (timeCol) {
+                timeCol.style.display = 'none';
+                timeCol.classList.add('hidden');
+            }
+        }
+
+        lastMsg = { username };
+    });
+}
+
+function displayMessage(data, isHistory = false, passedShouldGroup = false) {
     const messagesContainer = document.getElementById('messages-container');
-    const time = new Date(data.timestamp).toLocaleTimeString();
-    const date = new Date(data.timestamp).toLocaleDateString();
     const isOwnMessage = data.username === username;
     const prevMessage = messagesContainer.lastElementChild;
 
-    const display_name = data.displayName || data.display_name || data.username;
-    const avatar_key = data.avatarKey || data.avatar_key || data.user_avatar;
-
-    const avatarUrl = avatar_key
-        ? (isLocalDev ? `${apiBaseUrl}/api/file/${avatar_key}` : `/api/file/${avatar_key}`)
-        : `https://ui-avatars.com/api/?name=${encodeURIComponent(display_name)}&background=random`;
-
-    const linkMetadata = data.linkMetadata || {
-        url: data.link_url,
-        title: data.link_title,
-        description: data.link_description,
-        image: data.link_image
-    };
-
-    const fileAttachment = data.fileAttachment || {
-        name: data.file_name,
-        type: data.file_type,
-        size: data.file_size,
-        key: data.file_key
-    };
-
-    let shouldGroup = false;
-    if (prevMessage && !isHistory) {
+    let shouldGroup = passedShouldGroup;
+    
+    // For live messages, calculate grouping if not passed
+    if (!isHistory && !passedShouldGroup && prevMessage) {
         const prevUsername = prevMessage.dataset.username;
-        const prevTimestamp = parseInt(prevMessage.dataset.timestamp);
-        const timeDiff = Date.now() - prevTimestamp;
-        shouldGroup = prevUsername === data.username && timeDiff < 60000 && !data.reply_to;
-    }
-
-    // Persistent Highlight Check
-    const isMentioned = (data.mentions && data.mentions.includes(username)) ||
-        (data.reply_username === username) ||
-        (data.message && (
-            data.message.includes(`@${username}`) ||
-            data.message.includes('@everyone') ||
-            data.message.includes('@here')
-        ));
-
-    const msgEl = document.createElement('div');
-    msgEl.className = `group flex pr-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5 ${shouldGroup ? 'mt-0' : 'mt-[17px]'} relative message-group ${isMentioned ? 'mention-highlight' : ''}`;
-    msgEl.dataset.messageId = data.id || '';
-    console.log('Created message element with ID:', data.id);
-
-
-
-    msgEl.dataset.username = data.username;
-    msgEl.dataset.timestamp = data.timestamp;
-    msgEl.dataset.text = data.message || '';
-    if (fileAttachment && fileAttachment.key) {
-        msgEl.dataset.fileKey = fileAttachment.key;
-        msgEl.dataset.fileName = fileAttachment.name;
-        msgEl.dataset.fileType = fileAttachment.type;
-    }
-
-    // Prepare Reply HTML (to show at top of content)
-    let replyHtml = '';
-    if (data.reply_to) {
-        const replyTime = new Date(data.reply_timestamp).toLocaleTimeString();
-        const replyFileUrl = data.reply_file_key
-            ? (isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`)
-            : null;
-
-        replyHtml = `
-            <div class="flex items-center gap-2 mb-1 opacity-80 hover:opacity-100 cursor-pointer transition-opacity group/reply select-none" onclick="event.stopPropagation(); jumpToReply(${data.reply_to})">
-                <div class="w-8 flex justify-end">
-                    <div class="w-6 h-3 border-l-2 border-t-2 border-[#949BA4] rounded-tl ml-auto mt-2"></div>
-                </div>
-                <div class="flex items-center gap-1 text-xs text-[#949BA4] flex-1 min-w-0">
-                    <img src="${isLocalDev ? `${apiBaseUrl}/api/file/${data.reply_file_key}` : `/api/file/${data.reply_file_key}`}" class="w-4 h-4 rounded-full object-cover hidden"> 
-                    <!-- We don't have author avatar in reply data easily available, so skip for now or use generic -->
-                    <span class="font-semibold text-[#b5bac1] whitespace-nowrap">@${escapeHtml(data.reply_username)}</span>
-                    <span class="truncate flex-1 hover:text-white transition-colors">${escapeHtml(data.reply_message || (data.reply_file_name ? 'Click to see attachment' : ''))}</span>
-                </div>
-            </div>
-        `;
-
-        // Use a simpler layout for inside-content reply
-        replyHtml = `
-            <div class="flex items-center gap-1 mb-0.5 opacity-60 hover:opacity-100 cursor-pointer transition-opacity select-none" onclick="event.stopPropagation(); jumpToReply(${data.reply_to})">
-                <i data-lucide="corner-up-left" class="w-3 h-3 text-[#949BA4] mr-1"></i>
-                <span class="text-xs font-semibold text-[#b5bac1] hover:underline">@${escapeHtml(data.reply_username)}</span>
-                <span class="text-xs text-[#949BA4] truncate max-w-[300px]">${escapeHtml(data.reply_message || (data.reply_file_name ? 'Attachment' : ''))}</span>
-            </div>
-        `;
-    }
-
-
-    let messageHtml = '';
-
-    if (!shouldGroup) {
-        messageHtml += `
-            <div class="mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity" onclick="openUserDetailModal('${escapeHtml(data.username)}')">
-                <img src="${avatarUrl}" alt="${escapeHtml(display_name)}" class="w-10 h-10 rounded-full object-cover">
-            </div>
-            <div class="flex-1 min-w-0">
-                ${replyHtml}
-                <div class="flex items-center">
-                    <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]" onclick="openUserDetailModal('${escapeHtml(data.username)}')">
-                        ${escapeHtml(display_name)}
-                    </span>
-                    <span class="text-xs text-[#949BA4] ml-1">${date} - ${time}</span>
-                </div>
-        `;
-
-    } else {
-        messageHtml += `
-            <div class="w-10 mr-4 text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100 flex items-center justify-end select-none">
-                ${time}
-            </div>
-            <div class="flex-1 min-w-0">
-        `;
-    }
-
-    if (data.message) {
-        messageHtml += `<p class="text-[#dbdee1] whitespace-pre-wrap leading-[1.375rem]">${escapeHtml(data.message)}${data.is_edited ? '<span class="edited-text">(edited)</span>' : ''}</p>`;
-    }
-
-    if (linkMetadata && linkMetadata.url) {
-        const hasImage = !!linkMetadata.image;
-        const ytVideoId = extractYouTubeVideoId(linkMetadata.url);
-
-        if (ytVideoId) {
-            const playerContainerId = `yt-player-${data.id || Math.random().toString(36).substr(2, 9)}`;
-            messageHtml += `
-                <div class="mt-2 max-w-full">
-                    <div id="${playerContainerId}">
-                        <div class="relative group/yt cursor-pointer rounded-lg overflow-hidden max-w-[400px]" onclick="playYouTube('${ytVideoId}', '${playerContainerId}')">
-                            <img src="${escapeHtml(linkMetadata.image || `https://img.youtube.com/vi/${ytVideoId}/hqdefault.jpg`)}" alt="YouTube thumbnail" class="w-full h-auto">
-                            <div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/yt:bg-black/40 transition-colors">
-                                <div class="w-16 h-11 bg-[#FF0000] rounded-lg flex items-center justify-center shadow-lg group-hover/yt:scale-110 transition-transform">
-                                    <div class="w-0 h-0 border-t-[8px] border-t-transparent border-l-[14px] border-l-white border-b-[8px] border-b-transparent ml-1"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="block mt-2">
-                        ${linkMetadata.title ? `<div class="text-[#00A8FC] hover:underline font-medium">${escapeHtml(linkMetadata.title)}</div>` : ''}
-                        ${linkMetadata.description ? `<div class="text-sm text-[#949BA4] mt-1">${escapeHtml(linkMetadata.description)}</div>` : ''}
-                    </a>
-                </div>
-            `;
-        } else {
-            messageHtml += `
-                <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="block mt-2 ${!hasImage ? 'border-l-2 border-[#5865F2] pl-3' : ''}">
-                    ${hasImage ? `<img src="${escapeHtml(linkMetadata.image)}" alt="Link preview" class="rounded-lg max-w-full mb-2">` : ''}
-                    ${linkMetadata.title ? `<div class="text-[#00A8FC] hover:underline font-medium">${escapeHtml(linkMetadata.title)}</div>` : ''}
-                    ${linkMetadata.description ? `<div class="text-sm text-[#949BA4] mt-1">${escapeHtml(linkMetadata.description)}</div>` : ''}
-                </a>
-            `;
+        
+        // Count existing group size
+        let groupSize = 0;
+        let current = prevMessage;
+        while (current && current.classList.contains('mt-0')) {
+            groupSize++;
+            current = current.previousElementSibling;
         }
+
+        shouldGroup = prevUsername === data.username && !data.replyTo && !data.reply_to && groupSize < 10;
     }
 
-    if (fileAttachment && fileAttachment.key) {
-        const fileUrl = isLocalDev
-            ? `${apiBaseUrl}/api/file/${fileAttachment.key}`
-            : `/api/file/${fileAttachment.key}`;
-
-        if (fileAttachment.type && fileAttachment.type.startsWith('image/')) {
-            messageHtml += `
-                <div class="mt-2 group/image relative">
-                    <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="rounded-lg max-w-[300px] cursor-pointer hover:opacity-90" onclick="openImageModal('${fileUrl}')" onerror="this.style.display='none'">
-                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute bottom-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-2 rounded-full shadow-lg opacity-0 group-hover/image:opacity-100 transition-opacity" title="Download">
-                        <i data-lucide="download" class="w-4 h-4"></i>
-                    </a>
-                </div>
-            `;
-        } else if (fileAttachment.type && fileAttachment.type.startsWith('video/')) {
-            messageHtml += `
-                <div class="mt-2 group/video relative max-w-[400px]">
-                    <video src="${fileUrl}" controls preload="metadata" class="w-full rounded-lg bg-black/20"></video>
-                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute top-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-1.5 rounded-full shadow-lg opacity-0 group-hover/video:opacity-100 transition-opacity" title="Download">
-                        <i data-lucide="download" class="w-3 h-3"></i>
-                    </a>
-                </div>
-            `;
-        } else {
-            messageHtml += `
-                <div class="flex items-center mt-2 bg-[#2B2D31] hover:bg-[#36383E] p-3 rounded-lg transition-colors">
-                    <div class="text-2xl mr-3">${getFileIcon(fileAttachment.type)}</div>
-                    <div class="flex-1 min-w-0">
-                        <div class="text-[#dbdee1] font-medium truncate">${escapeHtml(fileAttachment.name)}</div>
-                        <div class="text-xs text-[#949BA4]">${formatFileSize(fileAttachment.size)}</div>
-                    </div>
-                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="ml-2 p-2 hover:bg-[#404249] rounded transition-colors" title="Download">
-                        <i data-lucide="download" class="w-5 h-5 text-[#949BA4] hover:text-[#dbdee1]"></i>
-                    </a>
-                </div>
-            `;
-        }
-    }
-
-    // Reactions
-    let reactionsHtml = `<div class="reactions-container flex flex-wrap mt-1" id="reactions-${data.id}">`;
-    if (data.reactions && data.reactions.length > 0) {
-        const grouped = data.reactions.reduce((acc, r) => {
-            acc[r.emoji] = acc[r.emoji] || [];
-            acc[r.emoji].push(r.username);
-            return acc;
-        }, {});
-
-        Object.entries(grouped).forEach(([emoji, users]) => {
-            const hasReacted = users.includes(username);
-            const isCustom = emoji.startsWith(':') && emoji.endsWith(':');
-            let emojiDisplay = emoji;
-
-            if (isCustom) {
-                const name = emoji.slice(1, -1);
-                const customEmoji = customEmojis.find(e => e.name === name);
-                if (customEmoji) {
-                    emojiDisplay = `<img src="${isLocalDev ? `${apiBaseUrl}/api/file/` : '/api/file/'}${customEmoji.file_key}" class="w-4 h-4 inline-block">`;
-                }
-            }
-
-            reactionsHtml += `
-                <div class="reaction-badge ${hasReacted ? 'active' : ''}" onclick="event.stopPropagation(); toggleReaction(${data.id}, '${emoji}')" title="${users.join(', ')}">
-                    <span>${emojiDisplay}</span>
-                    <span class="reaction-count">${users.length}</span>
-                </div>
-            `;
-        });
-    }
-    reactionsHtml += '</div>';
-    messageHtml += reactionsHtml;
-
-    messageHtml += `
-            </div>
-            <div class="message-actions absolute right-4 -mt-2 bg-[#313338] shadow-sm border border-[#26272D] rounded flex items-center p-1 z-10">
-                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="toggleReactionPicker(event, ${data.id})" title="Add Reaction">
-                    <i data-lucide="smile" class="w-[18px] h-[18px]"></i>
-                </div>
-                <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="startReply(${data.id})" title="Reply">
-                    <i data-lucide="reply" class="w-[18px] h-[18px]"></i>
-                </div>
-                ${isOwnMessage ? `
-                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-[#B5BAC1] hover:text-[#dbdee1]" onclick="openEditModal(${data.id})" title="Edit">
-                        <i data-lucide="edit-2" class="w-[16px] h-[16px]"></i>
-                    </div>
-                    <div class="p-1 hover:bg-[#404249] rounded cursor-pointer text-red-400 hover:text-red-500" onclick="deleteMessage(${data.id})" title="Delete">
-                        <i data-lucide="trash-2" class="w-[16px] h-[16px]"></i>
-                    </div>
-                ` : ''}
-            </div>
-        `;
-
+    const msgEl = createMessageElement(data, shouldGroup);
 
     if (!isHistory) {
         // Preserve scroll position before appending new message
         const wasNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 100;
         const oldScrollTop = messagesContainer.scrollTop;
-
-        msgEl.innerHTML = messageHtml;
-
-        // Add swipe-to-reply indicator for mobile
-        const swipeIndicator = document.createElement('div');
-        swipeIndicator.className = 'reply-swipe-indicator';
-        swipeIndicator.innerHTML = '<i data-lucide="reply" class="w-5 h-5"></i>';
-        msgEl.appendChild(swipeIndicator);
 
         // Add animation class for new messages
         msgEl.classList.add('new-message');
@@ -1394,14 +1259,6 @@ function displayMessage(data, isHistory = false) {
             lastScrollTop = oldScrollTop;
         }
     } else {
-        msgEl.innerHTML = messageHtml;
-
-        // Add swipe-to-reply indicator for mobile
-        const swipeIndicator = document.createElement('div');
-        swipeIndicator.className = 'reply-swipe-indicator';
-        swipeIndicator.innerHTML = '<i data-lucide="reply" class="w-5 h-5"></i>';
-        msgEl.appendChild(swipeIndicator);
-
         messagesContainer.appendChild(msgEl);
         lucide.createIcons();
     }
