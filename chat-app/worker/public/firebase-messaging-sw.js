@@ -16,6 +16,38 @@ const CRITICAL_ASSETS = [
 let firebaseApp = null;
 let messaging = null;
 
+// Background message handler - MUST be registered at top level synchronously
+self.addEventListener('push', (event) => {
+    const initPromise = getFirebaseMessaging();
+    
+    if (event.data) {
+        try {
+            const data = event.data.json();
+            event.waitUntil(Promise.all([initPromise, showNotification(data)]));
+        } catch (e) {
+            console.error('Error handling push event:', e);
+        }
+    }
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.link) ? event.notification.data.link : '/chat';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(targetUrl) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+
 async function getFirebaseMessaging() {
     if (messaging) return messaging;
     
@@ -25,7 +57,6 @@ async function getFirebaseMessaging() {
         firebaseApp = firebase.initializeApp(config.firebaseConfig);
         messaging = firebase.messaging();
         
-        // Handle background messages via the SDK once it's ready
         messaging.onBackgroundMessage((payload) => {
             console.log('[firebase-messaging-sw.js] Received background message ', payload);
             showNotification(payload);
@@ -41,7 +72,7 @@ async function getFirebaseMessaging() {
 // Shared DB logic
 function openBadgeDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open('AccordBadgeDB', 2); // Version 2 for new store
+        const request = indexedDB.open('AccordBadgeDB', 2);
         request.onupgradeneeded = (e) => {
             const db = request.result;
             if (!db.objectStoreNames.contains('badge')) db.createObjectStore('badge');
@@ -60,7 +91,7 @@ async function getAndIncrementBadgeCount(payload) {
         const channelStore = tx.objectStore('unreadChannels');
         
         const channelId = payload.data?.channelId;
-        const type = payload.data?.notificationType; // 'mention' or 'regular'
+        const type = payload.data?.notificationType;
 
         return new Promise((resolve) => {
             const getBadgeReq = badgeStore.get('unreadCount');
@@ -68,22 +99,18 @@ async function getAndIncrementBadgeCount(payload) {
                 const currentCount = getBadgeReq.result || 0;
                 
                 if (type === 'mention') {
-                    // Mentions ALWAYS increment
                     const newCount = currentCount + 1;
                     badgeStore.put(newCount, 'unreadCount');
                     resolve(newCount);
                 } else {
-                    // Regular messages only increment if this channel isn't already unread
                     const getChannelReq = channelStore.get(channelId);
                     getChannelReq.onsuccess = () => {
                         if (!getChannelReq.result) {
-                            // First unread message for this channel
                             const newCount = currentCount + 1;
                             badgeStore.put(newCount, 'unreadCount');
                             channelStore.put(true, channelId);
                             resolve(newCount);
                         } else {
-                            // Channel already unread, don't increment badge
                             resolve(currentCount);
                         }
                     };
@@ -107,56 +134,14 @@ async function showNotification(payload) {
         self.registration.showNotification(notificationTitle, notificationOptions)
     ];
 
-    // Set app badge if supported
-    if ('setAppBadge' in navigator) {
+    if ('setAppBadge' in self.navigator) {
         promises.push(getAndIncrementBadgeCount(payload).then(count => {
-            return navigator.setAppBadge(count);
+            return self.navigator.setAppBadge(count);
         }).catch(() => {}));
     }
 
     return Promise.all(promises);
 }
-
-// Background message handler - MUST be registered at top level synchronously
-self.addEventListener('push', (event) => {
-    // Start initializing Firebase immediately
-    const initPromise = getFirebaseMessaging();
-    
-    if (event.data) {
-        try {
-            const data = event.data.json();
-            // Show notification immediately while SDK initializes
-            event.waitUntil(Promise.all([initPromise, showNotification(data)]));
-        } catch (e) {
-            console.error('Error handling push event:', e);
-            if ('setAppBadge' in navigator) {
-                event.waitUntil(getAndIncrementBadgeCount({}).then(c => navigator.setAppBadge(c)));
-            }
-        }
-    }
-});
-
-// Start initialization on SW load
-getFirebaseMessaging();
-
-// Handle notification click
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const targetUrl = event.notification.data.link || '/chat';
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if (client.url.includes(targetUrl) && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
-      }
-    })
-  );
-});
 
 // Check if URL is a critical asset that needs network-first
 function isCriticalAsset(url) {

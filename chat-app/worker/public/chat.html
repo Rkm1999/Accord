@@ -52,9 +52,15 @@
         .message-actions {
             opacity: 0;
             transition: opacity 0.2s;
+            display: none;
         }
-        .message-group:hover .message-actions {
-            opacity: 1;
+        @media (min-width: 1024px) {
+            .message-actions {
+                display: flex;
+            }
+            .message-group:hover .message-actions {
+                opacity: 1;
+            }
         }
         .typing-dot {
             animation: typing 1.4s infinite ease-in-out;
@@ -518,6 +524,13 @@
             overscroll-behavior: none;
         }
 
+        /* Prevent iOS native context menu on images */
+        img {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
         /* PWA Update Prompt */
         #pwaUpdatePrompt {
             position: fixed;
@@ -923,36 +936,23 @@
         </div>
     </div>
 
-    <!-- Edit Message Modal -->
-    <div id="editModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden" onclick="if(event.target.id === 'editModal') closeEditModal()">
-        <div class="bg-[#313338] rounded-lg max-w-md w-full mx-4 shadow-2xl" onclick="event.stopPropagation()">
-            <div class="flex items-center justify-between p-4 border-b border-[#26272D]">
-                <h3 class="font-bold text-lg">Edit Message</h3>
-                <button class="text-[#949BA4] hover:text-white transition-colors" onclick="closeEditModal()">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-            <div class="p-4">
-                <textarea id="editMessageInput" rows="4"
-                    class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all resize-none mb-4"></textarea>
-                <div class="flex space-x-2">
-                    <button type="button" class="flex-1 bg-transparent hover:underline text-[#949BA4] py-2 rounded" onclick="closeEditModal()">
-                        Cancel
-                    </button>
-                    <button type="button" class="btn-ripple flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2 rounded transition-colors" onclick="saveEdit()">
-                        Save
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Image Modal -->
-    <div id="imageModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-[200] hidden" onclick="closeImageModal()">
-        <button class="absolute top-4 right-4 text-white hover:text-[#B5BAC1] transition-colors">
+    <div id="imageModal" class="fixed inset-0 bg-black/95 flex items-center justify-center z-[200] hidden">
+        <!-- Overlay for closing when clicking background -->
+        <div class="absolute inset-0 z-0" onclick="closeImageModal()"></div>
+        
+        <!-- Persistent Close Button -->
+        <button class="absolute top-6 right-6 text-white/70 hover:text-white transition-colors z-[210] p-2 bg-black/20 rounded-full backdrop-blur-sm" onclick="closeImageModal()">
             <i data-lucide="x" class="w-8 h-8"></i>
         </button>
-        <img id="imageModalImg" src="" alt="Full size" class="max-w-[90vw] max-h-[90vh] object-contain">
+
+        <!-- Download Button -->
+        <a id="imageModalDownload" href="" download="" class="absolute top-6 left-6 text-white/70 hover:text-white transition-colors z-[210] p-2 bg-black/20 rounded-full backdrop-blur-sm">
+            <i data-lucide="download" class="w-8 h-8"></i>
+        </a>
+        
+        <!-- Image with stopPropagation to prevent closing when clicking/tapping the image itself -->
+        <img id="imageModalImg" src="" alt="Full size" class="max-w-[95vw] max-h-[95vh] object-contain relative z-[205] transition-transform duration-200 ease-out cursor-zoom-in" onclick="event.stopPropagation()" oncontextmenu="return false;">
     </div>
 
     <!-- Reaction Picker Popover (Hidden by default) -->
@@ -1187,6 +1187,85 @@
         <button id="pwaUpdateBtn" class="bg-white text-[#5865F2] px-4 py-1.5 rounded-lg text-sm font-bold shadow hover:bg-[#f0f0f0] transition-colors">
             Update
         </button>
+    </div>
+
+    <!-- Mobile Message Actions Modal (Long Press) -->
+    <div id="mobileActionModal" class="fixed inset-0 bg-black/60 z-[150] hidden flex flex-col justify-end transition-opacity duration-300 opacity-0" onclick="closeMobileActionModal()">
+        <div id="mobileActionContent" class="bg-[#2B2D31] rounded-t-2xl p-4 w-full shadow-2xl transform translate-y-full transition-transform duration-300 ease-out" onclick="event.stopPropagation()">
+            <!-- Drag Handle -->
+            <div class="w-12 h-1.5 bg-[#4E5058] rounded-full mx-auto mb-6 cursor-grab active:cursor-grabbing touch-none"></div>
+
+            <!-- Quick Reactions -->
+            <div class="flex justify-between mb-6 px-2 overflow-x-auto no-scrollbar gap-2">
+                <button class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform" onclick="sendMobileReaction('👍')">👍</button>
+                <button class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform" onclick="sendMobileReaction('❤️')">❤️</button>
+                <button class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform" onclick="sendMobileReaction('😂')">😂</button>
+                <button class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform" onclick="sendMobileReaction('😮')">😮</button>
+                <button class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform" onclick="sendMobileReaction('😢')">😢</button>
+                <button class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform" onclick="toggleReactionPicker(event, null, true)">
+                    <i data-lucide="plus" class="w-6 h-6 text-[#B5BAC1]"></i>
+                </button>
+            </div>
+
+            <!-- Actions List -->
+            <div class="space-y-1">
+                <button id="mobile-download-btn" class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-[#dbdee1] font-semibold transition-colors active:bg-[#404249] hidden" onclick="handleMobileAction('download')">
+                    <i data-lucide="download" class="w-6 h-6 text-[#B5BAC1]"></i>
+                    Download File
+                </button>
+                <button class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-[#dbdee1] font-semibold transition-colors active:bg-[#404249]" onclick="handleMobileAction('reply')">
+                    <i data-lucide="reply" class="w-6 h-6 text-[#B5BAC1]"></i>
+                    Reply
+                </button>
+                <button id="mobile-edit-btn" class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-[#dbdee1] font-semibold transition-colors active:bg-[#404249]" onclick="handleMobileAction('edit')">
+                    <i data-lucide="edit-2" class="w-6 h-6 text-[#B5BAC1]"></i>
+                    Edit Message
+                </button>
+                <button class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-[#dbdee1] font-semibold transition-colors active:bg-[#404249]" onclick="handleMobileAction('copy')">
+                    <i data-lucide="copy" class="w-6 h-6 text-[#B5BAC1]"></i>
+                    Copy Text
+                </button>
+                <button id="mobile-delete-btn" class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-red-400 font-semibold transition-colors active:bg-red-500/10" onclick="handleMobileAction('delete')">
+                    <i data-lucide="trash-2" class="w-6 h-6"></i>
+                    Delete Message
+                </button>
+            </div>
+
+            <!-- Safe Area Bottom -->
+            <div class="h-6"></div>
+        </div>
+    </div>
+
+    <!-- Mobile Emoji Picker Modal -->
+    <div id="mobileEmojiModal" class="fixed inset-0 bg-black/60 z-[160] hidden flex flex-col justify-end transition-opacity duration-300 opacity-0" onclick="closeMobileEmojiModal()">
+        <div id="mobileEmojiContent" class="bg-[#2B2D31] rounded-t-2xl p-4 w-full shadow-2xl transform translate-y-full transition-transform duration-300 ease-out flex flex-col max-h-[85vh]" onclick="event.stopPropagation()">
+            <!-- Drag Handle -->
+            <div class="w-12 h-1.5 bg-[#4E5058] rounded-full mx-auto mb-6 cursor-grab active:cursor-grabbing touch-none"></div>
+            
+            <div class="flex items-center justify-between mb-4 px-2">
+                <h3 class="text-lg font-bold text-white">Select Emoji</h3>
+                <button class="text-[#949BA4] hover:text-white p-2" onclick="openEmojiModal()">
+                    <i data-lucide="plus" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- Common Emojis -->
+            <div class="grid grid-cols-6 gap-2 mb-6 px-2">
+                <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" onclick="sendEmojiFromMobile('👍')">👍</button>
+                <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" onclick="sendEmojiFromMobile('❤️')">❤️</button>
+                <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" onclick="sendEmojiFromMobile('😂')">😂</button>
+                <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" onclick="sendEmojiFromMobile('😮')">😮</button>
+                <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" onclick="sendEmojiFromMobile('😢')">😢</button>
+                <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" onclick="sendEmojiFromMobile('🔥')">🔥</button>
+            </div>
+
+            <h4 class="text-[11px] font-bold uppercase text-[#949BA4] mb-3 px-2 tracking-wider">Custom Emojis</h4>
+            
+            <!-- Custom Emojis Scrollable Area -->
+            <div id="mobileCustomEmojis" class="grid grid-cols-4 sm:grid-cols-6 gap-3 overflow-y-auto custom-scrollbar px-2 pb-8">
+                <!-- Injected by JS -->
+            </div>
+        </div>
     </div>
 
     <script src="chat.js"></script>

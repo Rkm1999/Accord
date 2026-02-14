@@ -224,6 +224,12 @@ let selectedAutocompleteIndex = 0;
 let filteredUsers = [];
 let unreadChannels = new Set(JSON.parse(localStorage.getItem('unreadChannels') || '[]'));
 
+// Mobile long-press state
+let longPressTimer = null;
+let selectedMobileMessageId = null;
+let isMobileModalOpen = false;
+let isDraggingSidebar = false;
+
 // Chat history pagination variables
 let oldestMessageTimestamp = null;
 let hasMoreMessages = false;
@@ -252,7 +258,7 @@ function escapeHtml(text) {
 
     // Replace custom emojis :name:
     customEmojis.forEach(emoji => {
-        const emojiTag = `<img src="${isLocalDev ? `${apiBaseUrl}/api/file/` : '/api/file/'}${emoji.file_key}" alt=":${emoji.name}:" title=":${emoji.name}:" class="inline-block w-6 h-6 mx-0.5 align-bottom">`;
+        const emojiTag = `<img src="${isLocalDev ? `${apiBaseUrl}/api/file/` : '/api/file/'}${emoji.file_key}" alt=":${emoji.name}:" title=":${emoji.name}:" class="inline-block w-6 h-6 mx-0.5 align-bottom" oncontextmenu="return false;">`;
         const regex = new RegExp(`:${emoji.name}:`, 'g');
         html = html.replace(regex, emojiTag);
     });
@@ -868,16 +874,16 @@ function createMessageElement(data, shouldGroup = false) {
     }
 
     let messageHtml = `
-        <div class="avatar-col mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity ${shouldGroup ? 'hidden' : ''}" style="display: ${shouldGroup ? 'none' : 'block'}" onclick="openUserDetailModal('${escapeHtml(data.username)}')">
-            <img src="${avatarUrl}" alt="${escapeHtml(display_name)}" class="w-10 h-10 rounded-full object-cover">
+        <div class="avatar-col mt-0.5 mr-4 cursor-pointer hover:opacity-80 transition-opacity ${shouldGroup ? 'hidden' : ''}" style="display: ${shouldGroup ? 'none' : 'block'}" onclick="openUserDetailModal('${escapeHtml(data.username)}')" oncontextmenu="return false;">
+            <img src="${avatarUrl}" alt="${escapeHtml(display_name)}" class="w-10 h-10 rounded-full object-cover" oncontextmenu="return false;">
         </div>
-        <div class="time-col w-10 mr-4 text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100 flex items-center justify-end select-none ${shouldGroup ? '' : 'hidden'}" style="display: ${shouldGroup ? 'flex' : 'none'}">
+        <div class="time-col w-10 mr-4 text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100 flex items-center justify-end select-none ${shouldGroup ? '' : 'hidden'}" style="display: ${shouldGroup ? 'flex' : 'none'}" oncontextmenu="return false;">
             ${time}
         </div>
-        <div class="flex-1 min-w-0">
+        <div class="flex-1 min-w-0" oncontextmenu="return false;">
             ${replyHtml}
-            <div class="user-info-col flex items-center ${shouldGroup ? 'hidden' : ''}" style="display: ${shouldGroup ? 'none' : 'flex'}">
-                <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]" onclick="openUserDetailModal('${escapeHtml(data.username)}')">
+            <div class="user-info-col flex items-center ${shouldGroup ? 'hidden' : ''}" style="display: ${shouldGroup ? 'none' : 'flex'}" oncontextmenu="return false;">
+                <span class="font-medium mr-2 hover:underline cursor-pointer text-[#dbdee1]" onclick="openUserDetailModal('${escapeHtml(data.username)}')" oncontextmenu="return false;">
                     ${escapeHtml(display_name)}
                 </span>
                 <span class="text-xs text-[#949BA4] ml-1">${date} - ${time}</span>
@@ -897,8 +903,8 @@ function createMessageElement(data, shouldGroup = false) {
             messageHtml += `
                 <div class="mt-2 max-w-full">
                     <div id="${playerContainerId}">
-                        <div class="relative group/yt cursor-pointer rounded-lg overflow-hidden max-w-[400px]" onclick="playYouTube('${ytVideoId}', '${playerContainerId}')">
-                            <img src="${escapeHtml(linkMetadata.image || `https://img.youtube.com/vi/${ytVideoId}/hqdefault.jpg`)}" alt="YouTube thumbnail" class="w-full h-auto">
+                        <div class="relative group/yt cursor-pointer rounded-lg overflow-hidden max-w-[400px]" onclick="playYouTube('${ytVideoId}', '${playerContainerId}')" oncontextmenu="return false;">
+                            <img src="${escapeHtml(linkMetadata.image || `https://img.youtube.com/vi/${ytVideoId}/hqdefault.jpg`)}" alt="YouTube thumbnail" class="w-full h-auto" oncontextmenu="return false;">
                             <div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/yt:bg-black/40 transition-colors">
                                 <div class="w-16 h-11 bg-[#FF0000] rounded-lg flex items-center justify-center shadow-lg group-hover/yt:scale-110 transition-transform">
                                     <div class="w-0 h-0 border-t-[8px] border-t-transparent border-l-[14px] border-l-white border-b-[8px] border-b-transparent ml-1"></div>
@@ -930,9 +936,9 @@ function createMessageElement(data, shouldGroup = false) {
 
         if (fileAttachment.type && fileAttachment.type.startsWith('image/')) {
             messageHtml += `
-                <div class="mt-2 group/image relative">
-                    <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="rounded-lg max-w-[300px] cursor-pointer hover:opacity-90" onclick="openImageModal('${fileUrl}')" onerror="this.style.display='none'">
-                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute bottom-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-2 rounded-full shadow-lg opacity-0 group-hover/image:opacity-100 transition-opacity" title="Download">
+                <div class="mt-2 group/image relative" oncontextmenu="return false;">
+                    <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="rounded-lg max-w-[300px] cursor-pointer hover:opacity-90" onclick="event.stopPropagation(); openImageModal('${fileUrl}', '${escapeHtml(fileAttachment.name)}')" onerror="this.style.display='none'" oncontextmenu="return false;">
+                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute bottom-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-2 rounded-full shadow-lg opacity-0 lg:group-hover/image:opacity-100 transition-opacity hidden lg:flex" title="Download" oncontextmenu="return false;">
                         <i data-lucide="download" class="w-4 h-4"></i>
                     </a>
                 </div>
@@ -1335,31 +1341,78 @@ function cancelReply() {
 
 
 function openEditModal(messageId) {
+    // If we're already editing a message, cancel that one first
+    if (editingMessageId !== null) {
+        closeEditModal();
+    }
+
     const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!msgEl) return;
 
-    const currentMessage = msgEl.querySelector('p');
+    const contentEl = msgEl.querySelector('p');
+    if (!contentEl) return;
+
     editingMessageId = messageId;
+    const originalText = msgEl.dataset.text || '';
 
-    const editModal = document.getElementById('editModal');
-    const editInput = document.getElementById('editMessageInput');
+    // Create inline editor UI
+    const editorHtml = `
+        <div class="inline-edit-container mt-2">
+            <textarea id="inline-edit-input" class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#5865F2] transition-all resize-none min-h-[44px] mb-2 leading-[1.375rem]">${escapeHtml(originalText)}</textarea>
+            <div class="flex gap-2 text-[12px]">
+                <span class="text-[#949BA4]">escape to <button onclick="closeEditModal()" class="text-[#00A8FC] hover:underline">cancel</button></span>
+                <span class="text-[#949BA4]">•</span>
+                <span class="text-[#949BA4]">enter to <button onclick="saveEdit()" class="text-[#00A8FC] hover:underline font-bold">save</button></span>
+            </div>
+        </div>
+    `;
 
-    editInput.value = currentMessage ? currentMessage.textContent.replace('(edited)', '').trim() : '';
-    editModal.classList.remove('hidden');
-    editModal.classList.add('visible');
-    setTimeout(() => editModal.classList.remove('visible'), 300);
-    editInput.focus();
+    // Hide original content and show editor
+    contentEl.style.display = 'none';
+    contentEl.insertAdjacentHTML('afterend', editorHtml);
+
+    const input = document.getElementById('inline-edit-input');
+    input.focus();
+    // Put cursor at end
+    input.setSelectionRange(input.value.length, input.value.length);
+    // Auto-resize
+    input.style.height = 'auto';
+    input.style.height = input.scrollHeight + 'px';
+
+    input.oninput = () => {
+        input.style.height = 'auto';
+        input.style.height = input.scrollHeight + 'px';
+    };
+
+    input.onkeydown = (e) => {
+        if (e.key === 'Escape') {
+            closeEditModal();
+        } else if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            saveEdit();
+        }
+    };
 }
 
 function closeEditModal() {
+    if (editingMessageId === null) return;
+
+    const msgEl = document.querySelector(`[data-message-id="${editingMessageId}"]`);
+    if (msgEl) {
+        const contentEl = msgEl.querySelector('p');
+        const editor = msgEl.querySelector('.inline-edit-container');
+        if (contentEl) contentEl.style.display = 'block';
+        if (editor) editor.remove();
+    }
+
     editingMessageId = null;
-    const editModal = document.getElementById('editModal');
-    editModal.classList.add('hidden');
 }
 
 function saveEdit() {
-    const editInput = document.getElementById('editMessageInput');
-    const newMessage = editInput.value.trim();
+    if (editingMessageId === null) return;
+
+    const input = document.getElementById('inline-edit-input');
+    const newMessage = input ? input.value.trim() : '';
 
     if (!newMessage) {
         alert('Message cannot be empty');
@@ -1372,6 +1425,11 @@ function saveEdit() {
             messageId: editingMessageId,
             newMessage
         }));
+        
+        // Optimistically update local data-text
+        const msgEl = document.querySelector(`[data-message-id="${editingMessageId}"]`);
+        if (msgEl) msgEl.dataset.text = newMessage;
+        
         closeEditModal();
     }
 }
@@ -1393,6 +1451,7 @@ function updateMessageEdit(messageId, newMessage) {
     const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!msgEl) return;
 
+    msgEl.dataset.text = newMessage;
     const contentEl = msgEl.querySelector('p');
     if (contentEl) {
         contentEl.innerHTML = `${escapeHtml(newMessage)} <span class="edited-text">(edited)</span>`;
@@ -2437,9 +2496,9 @@ function renderMembers() {
             : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
 
         return `
-            <div class="flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group ${isOnline ? 'opacity-100' : 'opacity-40 hover:opacity-100'}" onclick="openUserDetailModal('${escapeHtml(user.username)}')">
-                <div class="relative mr-3">
-                    <img src="${avatarUrl}" alt="${escapeHtml(displayName)}" class="w-8 h-8 rounded-full object-cover">
+            <div class="flex items-center px-2 py-1.5 rounded hover:bg-[#35373C] cursor-pointer group member-item ${isOnline ? '' : 'grayscale-[0.8] contrast-[0.8]'}" onclick="openUserDetailModal('${escapeHtml(user.username)}')" oncontextmenu="return false;">
+                <div class="relative mr-3" oncontextmenu="return false;">
+                    <img src="${avatarUrl}" alt="${escapeHtml(displayName)}" class="w-8 h-8 rounded-full object-cover" oncontextmenu="return false;">
                     <div class="absolute bottom-0 right-0 w-3.5 h-3.5 border-[3px] border-[#2B2D31] rounded-full ${isOnline ? 'bg-green-500' : 'bg-[#949BA4]'}"></div>
                 </div>
                 <div class="flex-1 min-w-0">
@@ -2448,7 +2507,7 @@ function renderMembers() {
                             ${escapeHtml(displayName)}
                         </div>
                         ${user.username !== username ? `
-                        <button class="opacity-0 group-hover:opacity-100 text-[#B5BAC1] hover:text-[#dbdee1] p-1 rounded transition-opacity" title="Message" onclick="event.stopPropagation(); startDM('${escapeHtml(user.username)}', true)">
+                        <button class="hidden group-hover:flex text-[#B5BAC1] hover:text-[#dbdee1] p-1 rounded transition-all" title="Message" onclick="event.stopPropagation(); startDM('${escapeHtml(user.username)}', true)">
                             <i data-lucide="message-square" class="w-4 h-4"></i>
                         </button>
                         ` : ''}
@@ -2874,18 +2933,22 @@ function copyNewRecoveryKey() {
     alert('Copied to clipboard!');
 }
 
-function toggleReactionPicker(event, messageId) {
+function toggleReactionPicker(event, messageId, isFromMobile = false) {
     event.preventDefault();
     event.stopPropagation();
-    const picker = document.getElementById('reactionPicker');
-    const isHidden = picker.classList.contains('hidden');
-
-    if (!isHidden && reactionPickerMessageId === messageId) {
-        picker.classList.add('hidden');
+    
+    // Check if we should use the mobile bottom sheet
+    if (isFromMobile || window.innerWidth < 768) {
+        if (isFromMobile && selectedMobileMessageId) {
+            messageId = parseInt(selectedMobileMessageId);
+            closeMobileActionModal(true);
+        }
+        openMobileEmojiModal(messageId);
         return;
     }
 
-    reactionPickerMessageId = messageId;
+    const picker = document.getElementById('reactionPicker');
+    const isHidden = picker.classList.contains('hidden');
 
     // Show picker first to get dimensions
     picker.classList.remove('hidden');
@@ -2899,7 +2962,7 @@ function toggleReactionPicker(event, messageId) {
             customSection.innerHTML = '<div class="text-[10px] text-[#949BA4] w-full text-center py-2">No custom emojis</div>';
         } else {
             customSection.innerHTML = customEmojis.map(emoji => `
-                <button class="hover:bg-[#35373C] p-1 rounded transition-colors" onclick="sendReaction(':${emoji.name}:')" title=":${emoji.name}:">
+                <button class="hover:bg-[#35373C] p-1 rounded transition-colors" onclick="sendReaction(':${emoji.name}:')">
                     <img src="${isLocalDev ? `${apiBaseUrl}/api/file/` : '/api/file/'}${emoji.file_key}" class="w-6 h-6 object-contain pointer-events-none">
                 </button>
             `).join('');
@@ -2907,20 +2970,30 @@ function toggleReactionPicker(event, messageId) {
     }
 
     // Position picker
-    const rect = event.currentTarget.getBoundingClientRect();
-    const pickerHeight = picker.offsetHeight;
-    const pickerWidth = picker.offsetWidth;
+    if (isFromMobile || window.innerWidth < 768) {
+        // Center on screen for mobile
+        picker.style.top = '50%';
+        picker.style.left = '50%';
+        picker.style.transform = 'translate(-50%, -50%)';
+        picker.style.position = 'fixed';
+    } else {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const pickerHeight = picker.offsetHeight;
+        const pickerWidth = picker.offsetWidth;
 
-    let top = rect.top - pickerHeight - 10;
-    let left = rect.left - pickerWidth / 2 + rect.width / 2;
+        let top = rect.top - pickerHeight - 10;
+        let left = rect.left - pickerWidth / 2 + rect.width / 2;
 
-    // Keep in viewport
-    if (top < 10) top = rect.bottom + 10;
-    if (left < 10) left = 10;
-    if (left + pickerWidth > window.innerWidth - 10) left = window.innerWidth - pickerWidth - 10;
+        // Keep in viewport
+        if (top < 10) top = rect.bottom + 10;
+        if (left < 10) left = 10;
+        if (left + pickerWidth > window.innerWidth - 10) left = window.innerWidth - pickerWidth - 10;
 
-    picker.style.top = `${top}px`;
-    picker.style.left = `${left}px`;
+        picker.style.top = `${top}px`;
+        picker.style.left = `${left}px`;
+        picker.style.transform = '';
+        picker.style.position = 'fixed';
+    }
 
     // Keep focus on input if we are using the picker for the main message input
     if (messageId === null) {
@@ -3010,14 +3083,139 @@ document.addEventListener('click', (e) => {
     }
 });
 
-function openImageModal(imageUrl) {
-
+function openImageModal(imageUrl, fileName = 'image.png') {
     const modal = document.getElementById('imageModal');
     const modalImg = document.getElementById('imageModalImg');
+    const downloadBtn = document.getElementById('imageModalDownload');
     if (modal && modalImg) {
         modalImg.src = imageUrl;
+        if (downloadBtn) {
+            downloadBtn.href = imageUrl;
+            downloadBtn.download = fileName;
+        }
         modal.classList.remove('hidden');
+        
+        // Reset zoom state using the handler's reset function
+        if (window.resetImageZoom) {
+            window.resetImageZoom();
+        } else {
+            modalImg.style.transform = 'scale(1) translate(0px, 0px)';
+        }
     }
+}
+
+window.openImageModal = openImageModal;
+window.closeImageModal = closeImageModal;
+
+function setupImageZoomHandlers() {
+    const modal = document.getElementById('imageModal');
+    const img = document.getElementById('imageModalImg');
+    if (!modal || !img) return;
+
+    let scale = 1;
+    let lastScale = 1;
+    let translateX = 0;
+    let translateY = 0;
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    let initialPinchDistance = 0;
+    let isDragging = false;
+    let lastTapTime = 0;
+
+    // We use the image itself for most events to prevent background interference
+    img.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            initialPinchDistance = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            isDragging = false;
+        } else if (e.touches.length === 1) {
+            isDragging = scale > 1; // Only pan if zoomed in
+            lastTouchX = e.touches[0].clientX;
+            lastTouchY = e.touches[0].clientY;
+
+            // Double tap detection
+            const currentTime = Date.now();
+            const tapDiff = currentTime - lastTapTime;
+            if (tapDiff < 300 && tapDiff > 0) {
+                e.preventDefault();
+                toggleZoom(e.touches[0].clientX, e.touches[0].clientY);
+            }
+            lastTapTime = currentTime;
+        }
+    }, { passive: false });
+
+    img.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const currentDistance = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            
+            if (initialPinchDistance > 0) {
+                const zoomFactor = currentDistance / initialPinchDistance;
+                scale = Math.min(Math.max(lastScale * zoomFactor, 1), 6);
+                updateImageTransform();
+            }
+        } else if (e.touches.length === 1 && isDragging) {
+            e.preventDefault();
+            const deltaX = e.touches[0].clientX - lastTouchX;
+            const deltaY = e.touches[0].clientY - lastTouchY;
+            
+            translateX += deltaX;
+            translateY += deltaY;
+            
+            lastTouchX = e.touches[0].clientX;
+            lastTouchY = e.touches[0].clientY;
+            updateImageTransform();
+        }
+    }, { passive: false });
+
+    img.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) {
+            lastScale = scale;
+            initialPinchDistance = 0;
+        }
+        if (e.touches.length === 0) {
+            isDragging = false;
+            // Bound checking: if zoomed out or near 1, reset completely
+            if (scale < 1.1) {
+                resetZoom();
+            }
+        }
+    });
+
+    function toggleZoom(touchX, touchY) {
+        if (scale > 1.1) {
+            resetZoom();
+        } else {
+            scale = 3;
+            lastScale = 3;
+            // Optionally: center zoom on tap location
+            updateImageTransform();
+        }
+    }
+
+    function resetZoom() {
+        scale = 1;
+        lastScale = 1;
+        translateX = 0;
+        translateY = 0;
+        img.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        updateImageTransform();
+        setTimeout(() => {
+            img.style.transition = '';
+        }, 300);
+    }
+
+    function updateImageTransform() {
+        img.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+    }
+
+    // Expose reset to window so it can be called from openImageModal
+    window.resetImageZoom = resetZoom;
 }
 
 function closeImageModal() {
@@ -3065,6 +3263,493 @@ function toggleSidebar(id) {
         sidebar.classList.remove('active');
         overlay.classList.remove('visible');
     }
+}
+
+// Mobile Action Modal Functions
+function openMobileActionModal(messageId) {
+    selectedMobileMessageId = messageId;
+    const modal = document.getElementById('mobileActionModal');
+    const content = document.getElementById('mobileActionContent');
+    const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    
+    if (!modal || !content || !msgEl) return;
+
+    // Vibrate if supported
+    if ('vibrate' in navigator) {
+        try {
+            navigator.vibrate(50);
+        } catch (e) {
+            // Silently fail if blocked by browser policy
+        }
+    }
+
+    // Highlight the message
+    msgEl.style.backgroundColor = 'rgba(88, 101, 242, 0.15)';
+    msgEl.style.transition = 'background-color 0.2s ease';
+
+    // Check if it's our own message for edit/delete permissions
+    const isOwn = msgEl.dataset.username === username;
+    const editBtn = document.getElementById('mobile-edit-btn');
+    const deleteBtn = document.getElementById('mobile-delete-btn');
+    const downloadBtn = document.getElementById('mobile-download-btn');
+    
+    if (editBtn) editBtn.style.display = isOwn ? 'flex' : 'none';
+    if (deleteBtn) deleteBtn.style.display = isOwn ? 'flex' : 'none';
+    
+    // Show download button only if message has a file
+    if (downloadBtn) {
+        if (msgEl.dataset.fileKey) {
+            downloadBtn.classList.remove('hidden');
+            downloadBtn.style.display = 'flex';
+        } else {
+            downloadBtn.classList.add('hidden');
+            downloadBtn.style.display = 'none';
+        }
+    }
+
+    isMobileModalOpen = true;
+    modal.classList.remove('hidden');
+    
+    // Trigger animations
+    setTimeout(() => {
+        modal.style.opacity = '1';
+        content.style.transform = 'translateY(0)';
+    }, 10);
+
+    lucide.createIcons();
+}
+
+function closeMobileActionModal(immediate = false) {
+    const modal = document.getElementById('mobileActionModal');
+    const content = document.getElementById('mobileActionContent');
+    
+    if (!modal || !content) return;
+
+    // Remove highlight from message
+    if (selectedMobileMessageId) {
+        const msgEl = document.querySelector(`[data-message-id="${selectedMobileMessageId}"]`);
+        if (msgEl) {
+            msgEl.style.backgroundColor = '';
+        }
+    }
+
+    if (immediate) {
+        modal.classList.add('hidden');
+        modal.style.opacity = '0';
+        content.style.transform = 'translateY(100%)';
+        isMobileModalOpen = false;
+        // Only clear if not being used by reaction picker
+        if (reactionPickerMessageId !== selectedMobileMessageId) {
+            selectedMobileMessageId = null;
+        }
+        return;
+    }
+
+    content.style.transform = 'translateY(100%)';
+    modal.style.opacity = '0';
+    
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        isMobileModalOpen = false;
+        if (reactionPickerMessageId !== selectedMobileMessageId) {
+            selectedMobileMessageId = null;
+        }
+    }, 300);
+}
+
+function handleMobileAction(action) {
+    const messageId = parseInt(selectedMobileMessageId);
+    if (!messageId) return;
+
+    const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    closeMobileActionModal();
+
+    switch(action) {
+        case 'download':
+            if (msgEl && msgEl.dataset.fileKey) {
+                const fileUrl = isLocalDev
+                    ? `${apiBaseUrl}/api/file/${msgEl.dataset.fileKey}`
+                    : `/api/file/${msgEl.dataset.fileKey}`;
+                const fileName = msgEl.dataset.fileName || 'download';
+                
+                const a = document.createElement('a');
+                a.href = fileUrl;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+            break;
+        case 'reply':
+            startReply(messageId);
+            break;
+        case 'edit':
+            openEditModal(messageId);
+            break;
+        case 'copy':
+            const text = msgEl ? msgEl.dataset.text : '';
+            if (text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    // Optional: Show a small toast
+                });
+            }
+            break;
+        case 'delete':
+            deleteMessage(messageId);
+            break;
+    }
+}
+
+function sendMobileReaction(emoji) {
+    const messageId = parseInt(selectedMobileMessageId);
+    if (!messageId) return;
+
+    toggleReaction(messageId, emoji);
+    closeMobileActionModal();
+}
+
+// Drag-to-close for mobile modal
+let modalDragStartY = 0;
+let modalIsDragging = false;
+
+function setupModalDrag() {
+    const modal = document.getElementById('mobileActionModal');
+    const content = document.getElementById('mobileActionContent');
+    if (!content || !modal) return;
+
+    // Start drag on the content area
+    content.addEventListener('touchstart', (e) => {
+        // If we are touching a button, don't start dragging
+        if (e.target.closest('button')) return;
+        
+        modalDragStartY = e.touches[0].clientY;
+        modalIsDragging = true;
+        content.style.transition = 'none';
+    }, { passive: true });
+
+    modal.addEventListener('touchmove', (e) => {
+        if (!modalIsDragging) return;
+        const currentY = e.touches[0].clientY;
+        const diffY = currentY - modalDragStartY;
+
+        // Only allow dragging down
+        if (diffY > 0) {
+            content.style.transform = `translateY(${diffY}px)`;
+            // Dim the background more as we drag down
+            const opacity = 0.6 * (1 - diffY / window.innerHeight);
+            modal.style.backgroundColor = `rgba(0, 0, 0, ${opacity})`;
+        }
+    }, { passive: true });
+
+    modal.addEventListener('touchend', (e) => {
+        if (!modalIsDragging) return;
+        modalIsDragging = false;
+        content.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        modal.style.backgroundColor = ''; // Reset to CSS value
+        
+        const currentY = e.changedTouches[0].clientY;
+        const diffY = currentY - modalDragStartY;
+
+        // If dragged more than 25% of screen height or fast swipe
+        if (diffY > window.innerHeight * 0.2) {
+            closeMobileActionModal();
+        } else {
+            content.style.transform = 'translateY(0)';
+        }
+    }, { passive: true });
+}
+
+// Mobile Emoji Picker Functions
+function openMobileEmojiModal(messageId) {
+    reactionPickerMessageId = messageId;
+    const modal = document.getElementById('mobileEmojiModal');
+    const content = document.getElementById('mobileEmojiContent');
+    const customContainer = document.getElementById('mobileCustomEmojis');
+    
+    if (!modal || !content || !customContainer) return;
+
+    // Populate custom emojis
+    if (customEmojis.length === 0) {
+        customContainer.innerHTML = '<div class="col-span-full text-center py-4 text-[#949BA4] text-sm">No custom emojis yet</div>';
+    } else {
+        customContainer.innerHTML = customEmojis.map(emoji => `
+            <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center p-2 active:scale-110 transition-transform" 
+                    onclick="sendEmojiFromMobile(':${emoji.name}:')" oncontextmenu="return false;">
+                <img src="${isLocalDev ? `${apiBaseUrl}/api/file/` : '/api/file/'}${emoji.file_key}" class="w-full h-full object-contain pointer-events-none" oncontextmenu="return false;">
+            </button>
+        `).join('');
+    }
+
+    modal.classList.remove('hidden');
+    
+    // Trigger animations
+    setTimeout(() => {
+        modal.style.opacity = '1';
+        content.style.transform = 'translateY(0)';
+    }, 10);
+
+    lucide.createIcons();
+}
+
+function closeMobileEmojiModal() {
+    const modal = document.getElementById('mobileEmojiModal');
+    const content = document.getElementById('mobileEmojiContent');
+    
+    if (!modal || !content) return;
+
+    content.style.transform = 'translateY(100%)';
+    modal.style.opacity = '0';
+    
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        reactionPickerMessageId = null;
+    }, 300);
+}
+
+function sendEmojiFromMobile(emoji) {
+    if (reactionPickerMessageId !== null) {
+        toggleReaction(reactionPickerMessageId, emoji);
+    } else {
+        const input = document.getElementById('message-input');
+        const space = (input.value.length > 0 && !input.value.endsWith(' ')) ? ' ' : '';
+        input.value += space + emoji + ' ';
+        input.focus();
+    }
+    closeMobileEmojiModal();
+}
+
+let emojiDragStartY = 0;
+let emojiIsDragging = false;
+
+function setupEmojiModalDrag() {
+    const modal = document.getElementById('mobileEmojiModal');
+    const content = document.getElementById('mobileEmojiContent');
+    const scrollArea = document.getElementById('mobileCustomEmojis');
+    if (!content || !modal) return;
+
+    content.addEventListener('touchstart', (e) => {
+        // Don't drag if we're in the scrollable custom emoji area and it's scrolled down
+        if (scrollArea.contains(e.target) && scrollArea.scrollTop > 0) return;
+        if (e.target.closest('button')) return;
+        
+        emojiDragStartY = e.touches[0].clientY;
+        emojiIsDragging = true;
+        content.style.transition = 'none';
+    }, { passive: true });
+
+    modal.addEventListener('touchmove', (e) => {
+        if (!emojiIsDragging) return;
+        const currentY = e.touches[0].clientY;
+        const diffY = currentY - emojiDragStartY;
+
+        if (diffY > 0) {
+            content.style.transform = `translateY(${diffY}px)`;
+            const opacity = 0.6 * (1 - diffY / window.innerHeight);
+            modal.style.backgroundColor = `rgba(0, 0, 0, ${opacity})`;
+        }
+    }, { passive: true });
+
+    modal.addEventListener('touchend', (e) => {
+        if (!emojiIsDragging) return;
+        emojiIsDragging = false;
+        content.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        modal.style.backgroundColor = '';
+        
+        const currentY = e.changedTouches[0].clientY;
+        const diffY = currentY - emojiDragStartY;
+
+        if (diffY > window.innerHeight * 0.2) {
+            closeMobileEmojiModal();
+        } else {
+            content.style.transform = 'translateY(0)';
+        }
+    }, { passive: true });
+}
+
+// Swipe-to-reply functionality for messages
+const messageSwipeThreshold = 100;
+const messageSwipeVelocity = 0.3;
+
+function setupMessageSwipeHandlers() {
+    const messagesContainer = document.getElementById('messages-container');
+    if (!messagesContainer) return;
+
+    // Use MutationObserver to attach handlers to new messages
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node.nodeType === 1 && node.classList && node.classList.contains('message-group')) {
+                    attachSwipeHandler(node);
+                }
+            });
+        });
+    });
+
+    observer.observe(messagesContainer, { childList: true });
+
+    // Also attach to existing messages
+    messagesContainer.querySelectorAll('.message-group').forEach((msg) => {
+        attachSwipeHandler(msg);
+    });
+}
+
+function attachSwipeHandler(messageEl) {
+    let msgTouchStartX = 0;
+    let msgTouchStartY = 0;
+    let msgCurrentX = 0;
+    let msgCurrentY = 0;
+    let msgTouchStartTime = 0;
+    let isHorizontalSwipe = false;
+    let isVerticalScroll = false;
+    let hasDeterminedDirection = false;
+
+    // Check if mobile view
+    if (window.innerWidth >= 1024) return;
+
+            messageEl.addEventListener('touchstart', (e) => {
+
+                msgTouchStartX = e.touches[0].clientX;
+
+                msgTouchStartY = e.touches[0].clientY;
+
+                msgCurrentX = msgTouchStartX;
+
+                msgCurrentY = msgTouchStartY;
+
+                msgTouchStartTime = Date.now();
+
+                isHorizontalSwipe = false;
+
+                isVerticalScroll = false;
+
+                hasDeterminedDirection = false;
+
+    
+
+                // Signal user interaction to the browser to allow vibration in the timer
+
+                if ('vibrate' in navigator) {
+
+                    try { navigator.vibrate(0); } catch(e) {}
+
+                }
+
+    
+
+                // Long press logic
+
+    
+        if (longPressTimer) clearTimeout(longPressTimer);
+        longPressTimer = setTimeout(() => {
+            // Only trigger if we haven't started swiping or scrolling
+            if (!hasDeterminedDirection && !isDraggingSidebar) {
+                const messageId = messageEl.dataset.messageId;
+                if (messageId) {
+                    openMobileActionModal(messageId);
+                }
+            }
+        }, 500);
+    }, { passive: true });
+
+    messageEl.addEventListener('touchmove', (e) => {
+        const currentX = e.touches[0].clientX;
+        const currentY = e.touches[0].clientY;
+        const deltaX = currentX - msgTouchStartX;
+        const deltaY = currentY - msgTouchStartY;
+        const absX = Math.abs(deltaX);
+        const absY = Math.abs(deltaY);
+
+        // If we moved significantly, cancel the long press
+        if (absX > 10 || absY > 10) {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        }
+
+        // 1. Determine direction once
+        if (!hasDeterminedDirection) {
+            if (absX > 10 || absY > 10) {
+                hasDeterminedDirection = true;
+                if (absX > absY * 1.5 && deltaX < 0) {
+                    isHorizontalSwipe = true;
+                } else {
+                    isVerticalScroll = true;
+                }
+            }
+            return;
+        }
+
+        // 2. Only proceed if we're sure it's a horizontal swipe to the left
+        if (isHorizontalSwipe) {
+            msgCurrentX = currentX;
+            const swipeDistance = msgTouchStartX - msgCurrentX;
+
+            // Apply visual feedback
+            const clampedSwipe = Math.min(swipeDistance, messageSwipeThreshold);
+            messageEl.style.transform = `translateX(-${clampedSwipe}px)`;
+            messageEl.classList.add('swiping');
+
+            // Show/hide reply indicator
+            const indicator = messageEl.querySelector('.reply-swipe-indicator');
+            if (indicator) {
+                const opacity = Math.min(clampedSwipe / 50, 1);
+                const translate = Math.max(0, messageSwipeThreshold - clampedSwipe);
+                indicator.style.opacity = opacity;
+                indicator.style.transform = `translateY(-50%) translateX(${translate}px)`;
+            }
+        }
+    }, { passive: true });
+
+    messageEl.addEventListener('touchend', (e) => {
+        const currentX = e.changedTouches[0].clientX;
+        const deltaX = currentX - msgTouchStartX;
+        const deltaTime = Date.now() - msgTouchStartTime;
+        const velocity = Math.abs(deltaX) / deltaTime;
+
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+
+        messageEl.style.transform = '';
+        messageEl.classList.remove('swiping');
+
+        // Reset indicator
+        const indicator = messageEl.querySelector('.reply-swipe-indicator');
+        if (indicator) {
+            indicator.style.opacity = '0';
+            indicator.style.transform = 'translateY(-50%) translateX(100%)';
+        }
+
+        // Trigger reply if swipe is complete AND it was recognized as horizontal
+        if (isHorizontalSwipe) {
+            const swipeDistance = Math.abs(deltaX);
+            // Trigger if dragged far enough OR fast swipe (with minimum distance)
+            if (swipeDistance > messageSwipeThreshold || (velocity > messageSwipeVelocity && swipeDistance > 30)) {
+                const messageId = messageEl.dataset.messageId;
+                if (messageId) {
+                    messageSwiped = true;
+                    startReply(parseInt(messageId));
+                }
+            }
+        }
+
+        isHorizontalSwipe = false;
+        isVerticalScroll = false;
+        hasDeterminedDirection = false;
+    }, { passive: true });
+
+    messageEl.addEventListener('touchcancel', () => {
+        messageEl.style.transform = '';
+        messageEl.classList.remove('swiping');
+
+        const indicator = messageEl.querySelector('.reply-swipe-indicator');
+        if (indicator) {
+            indicator.style.opacity = '0';
+            indicator.style.transform = 'translateY(-50%) translateX(100%)';
+        }
+    }, { passive: true });
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -3367,7 +4052,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const edgeThreshold = 40;
     const swipeThreshold = 60;
     let sidebarDragStartX = 0;
-    let isDraggingSidebar = false;
     let activeDraggingSidebar = null;
 
     const app = document.getElementById('app');
@@ -3511,154 +4195,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, { passive: true });
     }
 
-    // Swipe-to-reply functionality for messages
-    const messageSwipeThreshold = 100;
-    const messageSwipeVelocity = 0.3;
-
-    function setupMessageSwipeHandlers() {
-        const messagesContainer = document.getElementById('messages-container');
-        if (!messagesContainer) return;
-
-        // Use MutationObserver to attach handlers to new messages
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === 1 && node.classList && node.classList.contains('message-group')) {
-                        attachSwipeHandler(node);
-                    }
-                });
-            });
-        });
-
-        observer.observe(messagesContainer, { childList: true });
-
-        // Also attach to existing messages
-        messagesContainer.querySelectorAll('.message-group').forEach((msg) => {
-            attachSwipeHandler(msg);
-        });
-    }
-
-    function attachSwipeHandler(messageEl) {
-        let msgTouchStartX = 0;
-        let msgTouchStartY = 0;
-        let msgCurrentX = 0;
-        let msgTouchStartTime = 0;
-        let isHorizontalSwipe = false;
-        let isVerticalScroll = false;
-        let hasDeterminedDirection = false;
-
-        // Check if mobile view
-        if (window.innerWidth >= 1024) return;
-
-        messageEl.addEventListener('touchstart', (e) => {
-            msgTouchStartX = e.touches[0].clientX;
-            msgTouchStartY = e.touches[0].clientY;
-            msgCurrentX = msgTouchStartX;
-            msgTouchStartTime = Date.now();
-            isHorizontalSwipe = false;
-            isVerticalScroll = false;
-            hasDeterminedDirection = false;
-        }, { passive: true });
-
-        messageEl.addEventListener('touchmove', (e) => {
-            const currentX = e.touches[0].clientX;
-            const currentY = e.touches[0].clientY;
-            const deltaX = currentX - msgTouchStartX;
-            const deltaY = currentY - msgTouchStartY;
-            const absX = Math.abs(deltaX);
-            const absY = Math.abs(deltaY);
-
-            // 1. Determine direction once
-            if (!hasDeterminedDirection) {
-                if (absX > 10 || absY > 10) {
-                    hasDeterminedDirection = true;
-                    if (absX > absY * 1.5 && deltaX < 0) {
-                        isHorizontalSwipe = true;
-                    } else {
-                        isVerticalScroll = true;
-                    }
-                }
-                return;
-            }
-
-            // 2. Only proceed if we're sure it's a horizontal swipe to the left
-            if (isHorizontalSwipe) {
-                msgCurrentX = currentX;
-                const swipeDistance = msgTouchStartX - msgCurrentX;
-
-                // Apply visual feedback
-                const clampedSwipe = Math.min(swipeDistance, messageSwipeThreshold);
-                messageEl.style.transform = `translateX(-${clampedSwipe}px)`;
-                messageEl.classList.add('swiping');
-
-                // Show/hide reply indicator
-                const indicator = messageEl.querySelector('.reply-swipe-indicator');
-                if (indicator) {
-                    const opacity = Math.min(clampedSwipe / 50, 1);
-                    const translate = Math.max(0, messageSwipeThreshold - clampedSwipe);
-                    indicator.style.opacity = opacity;
-                    indicator.style.transform = `translateY(-50%) translateX(${translate}px)`;
-                }
-            }
-        }, { passive: true });
-
-        messageEl.addEventListener('touchend', (e) => {
-            const currentX = e.changedTouches[0].clientX;
-            const deltaX = currentX - msgTouchStartX;
-            const deltaTime = Date.now() - msgTouchStartTime;
-            const velocity = Math.abs(deltaX) / deltaTime;
-
-            messageEl.style.transform = '';
-            messageEl.classList.remove('swiping');
-
-            // Reset indicator
-            const indicator = messageEl.querySelector('.reply-swipe-indicator');
-            if (indicator) {
-                indicator.style.opacity = '0';
-                indicator.style.transform = 'translateY(-50%) translateX(100%)';
-            }
-
-            // Trigger reply if swipe is complete AND it was recognized as horizontal
-            if (isHorizontalSwipe) {
-                const swipeDistance = Math.abs(deltaX);
-                // Trigger if dragged far enough OR fast swipe (with minimum distance)
-                if (swipeDistance > messageSwipeThreshold || (velocity > messageSwipeVelocity && swipeDistance > 30)) {
-                    const messageId = messageEl.dataset.messageId;
-                    if (messageId) {
-                        messageSwiped = true;
-                        startReply(parseInt(messageId));
-                    }
-                }
-            }
-
-            isHorizontalSwipe = false;
-            isVerticalScroll = false;
-            hasDeterminedDirection = false;
-        }, { passive: true });
-
-        messageEl.addEventListener('touchcancel', () => {
-            messageEl.style.transform = '';
-            messageEl.classList.remove('swiping');
-
-            const indicator = messageEl.querySelector('.reply-swipe-indicator');
-            if (indicator) {
-                indicator.style.opacity = '0';
-                indicator.style.transform = 'translateY(-50%) translateX(100%)';
-            }
-        }, { passive: true });
-
-        messageEl.addEventListener('touchcancel', () => {
-            messageEl.style.transform = '';
-            messageEl.classList.remove('swiping');
-
-            const indicator = messageEl.querySelector('.reply-swipe-indicator');
-            if (indicator) {
-                indicator.style.opacity = '0';
-                indicator.style.transform = 'translateY(-50%) translateX(100%)';
-            }
-        }, { passive: true });
-    }
-
     // Initialize message swipe handlers
     setupMessageSwipeHandlers();
 
@@ -3716,7 +4252,7 @@ function displayDMs() {
             : `https://ui-avatars.com/api/?name=${encodeURIComponent(otherDisplayName)}&background=random`;
 
         dmEl.innerHTML = `
-            <img src="${avatarUrl}" class="w-6 h-6 rounded-full mr-2 object-cover">
+            <img src="${avatarUrl}" class="w-6 h-6 rounded-full mr-2 object-cover" oncontextmenu="return false;">
             <span class="font-medium truncate flex-1 ${isUnread ? 'text-white font-bold' : ''}">${escapeHtml(otherDisplayName)}</span>
             ${isUnread ? '<div class="unread-badge w-2 h-2 bg-white rounded-full ml-1"></div>' : ''}
             <button class="delete-btn ml-auto opacity-0 group-hover:opacity-100 hover:bg-red-500/20 hover:text-red-400 text-[#949BA4] p-1 rounded cursor-pointer"
@@ -3849,5 +4385,12 @@ window.copyNewRecoveryKey = copyNewRecoveryKey;
 window.openStartDMModal = openStartDMModal;
 window.closeStartDMModal = closeStartDMModal;
 window.startDM = startDM;
+window.openMobileEmojiModal = openMobileEmojiModal;
+window.closeMobileEmojiModal = closeMobileEmojiModal;
+window.sendEmojiFromMobile = sendEmojiFromMobile;
+window.openMobileActionModal = openMobileActionModal;
+window.closeMobileActionModal = closeMobileActionModal;
+window.handleMobileAction = handleMobileAction;
+window.sendMobileReaction = sendMobileReaction;
 
 
