@@ -24,6 +24,7 @@ interface LinkMetadata {
   title: string;
   description: string;
   image: string;
+  isSpoiler?: boolean;
 }
 
 interface FileAttachment {
@@ -31,6 +32,7 @@ interface FileAttachment {
   type: string;
   size: number;
   key: string;
+  isSpoiler?: boolean;
 }
 
 interface Reaction {
@@ -214,9 +216,9 @@ export class ChatRoom extends DurableObject {
       }
     }
 
-    let query = "INSERT INTO messages (username, message, timestamp, channel_id";
-    let values = [username, data.message, timestamp, channelId];
-    let placeholders = "?, ?, ?, ?";
+    let query = "INSERT INTO messages (username, message, timestamp, channel_id, is_spoiler";
+    let values: any[] = [username, data.message, timestamp, channelId, (fileAttachment?.isSpoiler || linkMetadata?.isSpoiler) ? 1 : 0];
+    let placeholders = "?, ?, ?, ?, ?";
 
     if (replyData) {
       query += ", reply_to, reply_username, reply_message, reply_timestamp, reply_file_name, reply_file_type, reply_file_size, reply_file_key";
@@ -456,7 +458,10 @@ export class ChatRoom extends DurableObject {
       message,
       timestamp: Date.now(),
       linkMetadata,
-      fileAttachment,
+      fileAttachment: fileAttachment ? {
+        ...fileAttachment,
+        isSpoiler: fileAttachment.isSpoiler
+      } : undefined,
       reply_to: replyData?.replyTo,
       reply_username: replyData?.replyUsername,
       reply_message: replyData?.replyMessage,
@@ -663,12 +668,15 @@ export class ChatRoom extends DurableObject {
   private async fetchLinkMetadata(message: string): Promise<LinkMetadata | null> {
     if (!message) return null;
 
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    // Support both direct URLs and URLs wrapped in pipes ||url||
+    const urlRegex = /(?:\|\|)?(https?:\/\/[^\s|]+)(?:\|\|)?/;
     const matches = message.match(urlRegex);
 
     if (!matches) return null;
 
-    const url = matches[0];
+    const fullMatch = matches[0];
+    const url = matches[1];
+    const isSpoiler = fullMatch.startsWith('||') && fullMatch.endsWith('||');
 
     try {
       const response = await fetch(url, {
@@ -781,6 +789,7 @@ export class ChatRoom extends DurableObject {
           title: decode(title),
           description: decode(description),
           image,
+          isSpoiler
         };
       }
 

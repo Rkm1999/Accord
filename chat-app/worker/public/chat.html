@@ -757,6 +757,103 @@
             width: 148px !important;
             height: 148px !important;
         }
+
+        /* Text Spoilers */
+        .spoiler-text {
+            background-color: #1e1f22;
+            color: #1e1f22;
+            border-radius: 3px;
+            padding: 0 2px;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+            position: relative;
+        }
+        .spoiler-text:hover {
+            background-color: #26272d;
+        }
+        .spoiler-text.revealed {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: inherit;
+            cursor: text;
+        }
+
+        /* File Spoilers */
+        .spoiler-file-container {
+            position: relative;
+            cursor: pointer;
+            overflow: hidden;
+            border-radius: 8px;
+            display: inline-block;
+        }
+        .spoiler-file-container .spoiler-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            transition: opacity 0.3s ease;
+        }
+        .spoiler-file-container.revealed .spoiler-overlay {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .spoiler-file-container img, 
+        .spoiler-file-container video {
+            filter: blur(5px);
+            transition: filter 0.3s ease;
+        }
+        .spoiler-file-container.revealed img,
+        .spoiler-file-container.revealed video {
+            filter: blur(0);
+        }
+
+        /* Selection Tooltip */
+        #selection-tooltip {
+            position: fixed;
+            background: #111214;
+            border: 1px solid #26272d;
+            border-radius: 8px;
+            padding: 2px;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            pointer-events: auto;
+        }
+        .tooltip-btn {
+            background: transparent;
+            color: #dbdee1;
+            border: none;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, color 0.2s;
+        }
+        .tooltip-btn:hover {
+            background: #35373c;
+            color: white;
+        }
+        .tooltip-btn i {
+            width: 16px;
+            height: 16px;
+        }
+        /* Specific label for spoiler */
+        .tooltip-btn-label {
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            gap: 6px;
+        }
     </style>
 </head>
 
@@ -923,11 +1020,23 @@
                 </div>
             </div>
 
-            <!-- Input Area -->
-            <div class="px-4 pb-6 bg-[#313338] pt-2 flex-shrink-0">
-                <!-- Reply Banner -->
-                <div id="replyBanner"
-                    class="hidden mb-2 bg-[#232428] rounded-lg px-3 py-2 flex items-center justify-between">
+                        <!-- Input Area -->
+
+                        <div class="px-4 pb-6 bg-[#313338] pt-2 flex-shrink-0">
+
+                            <!-- File Preview -->
+
+                            <div id="filePreview" class="hidden mb-2 flex flex-wrap gap-2">
+
+                                <!-- File previews injected by JS -->
+
+                            </div>
+
+            
+
+                            <!-- Reply Banner -->
+
+                            <div id="replyBanner" class="hidden mb-2 bg-[#232428] rounded-lg px-3 py-2 flex items-center justify-between">
                     <div class="flex items-center flex-1 overflow-hidden">
                         <span class="text-xs text-[#949BA4] mr-2">Replying to</span>
                         <div class="flex items-center gap-2 overflow-hidden">
@@ -984,9 +1093,6 @@
                 </div>
 
 
-                <div id="filePreview" class="hidden mt-2 flex flex-wrap gap-2">
-                    <!-- File previews injected by JS -->
-                </div>
                 <!-- Spacer for mobile emoji keyboard -->
                 <div id="mobile-emoji-spacer" class="hidden w-full transition-all duration-300"></div>
             </div>
@@ -1552,6 +1658,26 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <div id="selection-tooltip" class="hidden">
+        <button class="tooltip-btn" onclick="applyMarkdown('**')">
+            <i data-lucide="bold" class="w-4 h-4"></i>
+        </button>
+        <button class="tooltip-btn" onclick="applyMarkdown('*')">
+            <i data-lucide="italic" class="w-4 h-4"></i>
+        </button>
+        <button class="tooltip-btn" onclick="applyMarkdown('~~')">
+            <i data-lucide="strikethrough" class="w-4 h-4"></i>
+        </button>
+        <button class="tooltip-btn" onclick="applyMarkdown('`')">
+            <i data-lucide="code" class="w-4 h-4"></i>
+        </button>
+        <div class="w-[1px] bg-[#26272d] self-stretch mx-1"></div>
+        <button class="tooltip-btn tooltip-btn-label" onclick="wrapSelectionWithSpoiler()">
+            <i data-lucide="eye-off" class="w-4 h-4"></i>
+            Spoiler
+        </button>
     </div>
 
     <script src="chat.js"></script>

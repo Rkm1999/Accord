@@ -266,6 +266,24 @@ function escapeHtml(text) {
         html = html.replace(regex, emojiTag);
     });
 
+    // Handle Spoilers ||text||
+    const spoilerRegex = /\|\|(.*?)\|\|/g;
+    html = html.replace(spoilerRegex, (match, p1) => {
+        return `<span class="spoiler-text" onclick="this.classList.toggle('revealed'); event.stopPropagation();">${p1}</span>`;
+    });
+
+    // Handle Bold **text**
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // Handle Italic *text*
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    // Handle Strikethrough ~~text~~
+    html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
+
+    // Handle Inline Code `text`
+    html = html.replace(/`([^`]+)`/g, '<code class="bg-[#1e1f22] px-1 rounded text-[#e3e5e8] font-mono text-[0.9em]">$1</code>');
+
     // Highlight mentions @username
     const mentionRegex = /@([\p{L}\p{N}_]+)/gu;
     html = html.replace(mentionRegex, (match, p1) => {
@@ -860,14 +878,16 @@ function createMessageElement(data, shouldGroup = false) {
         url: data.link_url,
         title: data.link_title,
         description: data.link_description,
-        image: data.link_image
+        image: data.link_image,
+        isSpoiler: !!(data.is_spoiler || (data.linkMetadata && data.linkMetadata.isSpoiler))
     };
 
     const fileAttachment = data.fileAttachment || {
         name: data.file_name,
         type: data.file_type,
         size: data.file_size,
-        key: data.file_key
+        key: data.file_key,
+        isSpoiler: !!(data.is_spoiler || (data.fileAttachment && data.fileAttachment.isSpoiler))
     };
 
     // Persistent Highlight Check
@@ -924,11 +944,20 @@ function createMessageElement(data, shouldGroup = false) {
         const ytVideoId = extractYouTubeVideoId(linkMetadata.url);
 
         if (ytVideoId) {
+            const isSpoiler = linkMetadata.isSpoiler;
+            const containerClass = isSpoiler ? 'spoiler-file-container' : '';
+            const spoilerOverlay = isSpoiler ? `
+                <div class="spoiler-overlay" onclick="this.parentElement.classList.add('revealed'); event.stopPropagation();">
+                    <i data-lucide="eye-off" class="w-8 h-8 mb-2"></i>
+                    <span class="text-xs font-bold uppercase tracking-widest">Spoiler</span>
+                </div>` : '';
+
             const playerContainerId = `yt-player-${data.id || Math.random().toString(36).substr(2, 9)}`;
             messageHtml += `
-                <div class="mt-2 max-w-full">
+                <div class="mt-2 max-w-full ${containerClass}">
+                    ${spoilerOverlay}
                     <div id="${playerContainerId}">
-                        <div class="relative group/yt cursor-pointer rounded-lg overflow-hidden max-w-[400px]" onclick="playYouTube('${ytVideoId}', '${playerContainerId}')" oncontextmenu="return false;">
+                        <div class="relative group/yt cursor-pointer rounded-lg overflow-hidden max-w-[400px]" onclick="if(!this.closest('.spoiler-file-container') || this.closest('.spoiler-file-container').classList.contains('revealed')) playYouTube('${ytVideoId}', '${playerContainerId}');" oncontextmenu="return false;">
                             <img src="${escapeHtml(linkMetadata.image || `https://img.youtube.com/vi/${ytVideoId}/hqdefault.jpg`)}" alt="YouTube thumbnail" class="w-full h-auto" oncontextmenu="return false;">
                             <div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/yt:bg-black/40 transition-colors">
                                 <div class="w-16 h-11 bg-[#FF0000] rounded-lg flex items-center justify-center shadow-lg group-hover/yt:scale-110 transition-transform">
@@ -944,12 +973,23 @@ function createMessageElement(data, shouldGroup = false) {
                 </div>
             `;
         } else {
+            const isSpoiler = linkMetadata.isSpoiler;
+            const containerClass = isSpoiler ? 'spoiler-file-container' : '';
+            const spoilerOverlay = isSpoiler ? `
+                <div class="spoiler-overlay" onclick="this.parentElement.classList.add('revealed'); event.stopPropagation();">
+                    <i data-lucide="eye-off" class="w-8 h-8 mb-2"></i>
+                    <span class="text-xs font-bold uppercase tracking-widest">Spoiler</span>
+                </div>` : '';
+
             messageHtml += `
-                <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="block mt-2 ${!hasImage ? 'border-l-2 border-[#5865F2] pl-3' : ''}">
-                    ${hasImage ? `<img src="${escapeHtml(linkMetadata.image)}" alt="Link preview" class="rounded-lg max-w-full mb-2">` : ''}
-                    ${linkMetadata.title ? `<div class="text-[#00A8FC] hover:underline font-medium">${escapeHtml(linkMetadata.title)}</div>` : ''}
-                    ${linkMetadata.description ? `<div class="text-sm text-[#949BA4] mt-1">${escapeHtml(linkMetadata.description)}</div>` : ''}
-                </a>
+                <div class="${containerClass} mt-2">
+                    ${spoilerOverlay}
+                    <a href="${escapeHtml(linkMetadata.url)}" target="_blank" class="block ${!hasImage ? 'border-l-2 border-[#5865F2] pl-3' : ''}">
+                        ${hasImage ? `<img src="${escapeHtml(linkMetadata.image)}" alt="Link preview" class="rounded-lg max-w-full mb-2">` : ''}
+                        ${linkMetadata.title ? `<div class="text-[#00A8FC] hover:underline font-medium">${escapeHtml(linkMetadata.title)}</div>` : ''}
+                        ${linkMetadata.description ? `<div class="text-sm text-[#949BA4] mt-1">${escapeHtml(linkMetadata.description)}</div>` : ''}
+                    </a>
+                </div>
             `;
         }
     }
@@ -960,32 +1000,59 @@ function createMessageElement(data, shouldGroup = false) {
             : `/api/file/${fileAttachment.key}`;
 
         if (fileAttachment.type && fileAttachment.type.startsWith('image/')) {
+            const isSpoiler = fileAttachment.isSpoiler;
+            const containerClass = isSpoiler ? 'spoiler-file-container' : 'relative';
+            const spoilerOverlay = isSpoiler ? `
+                <div class="spoiler-overlay" onclick="this.parentElement.classList.add('revealed'); event.stopPropagation();">
+                    <i data-lucide="eye-off" class="w-8 h-8 mb-2"></i>
+                    <span class="text-xs font-bold uppercase tracking-widest">Spoiler</span>
+                </div>` : '';
+
             messageHtml += `
-                <div class="mt-2 group/image relative" oncontextmenu="return false;">
-                    <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="rounded-lg max-w-[300px] cursor-pointer hover:opacity-90" onclick="event.stopPropagation(); openImageModal('${fileUrl}', '${escapeHtml(fileAttachment.name)}')" onerror="this.style.display='none'" oncontextmenu="return false;">
-                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute bottom-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-2 rounded-full shadow-lg opacity-0 lg:group-hover/image:opacity-100 transition-opacity hidden lg:flex" title="Download" onclick="event.preventDefault(); event.stopPropagation(); downloadFile(this.href, this.getAttribute('download'))" oncontextmenu="return false;">
+                <div class="mt-2 group/image ${containerClass}" oncontextmenu="return false;">
+                    ${spoilerOverlay}
+                    <img src="${fileUrl}" alt="${escapeHtml(fileAttachment.name)}" class="rounded-lg max-w-[300px] cursor-pointer hover:opacity-90" onclick="if(!this.parentElement.classList.contains('spoiler-file-container') || this.parentElement.classList.contains('revealed')) { event.stopPropagation(); openImageModal('${fileUrl}', '${escapeHtml(fileAttachment.name)}'); }" onerror="this.style.display='none'" oncontextmenu="return false;">
+                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute bottom-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-2 rounded-full shadow-lg opacity-0 lg:group-hover/image:opacity-100 transition-opacity hidden lg:flex z-30" title="Download" onclick="event.preventDefault(); event.stopPropagation(); downloadFile(this.href, this.getAttribute('download'))" oncontextmenu="return false;">
                         <i data-lucide="download" class="w-4 h-4"></i>
                     </a>
                 </div>
             `;
         } else if (fileAttachment.type && fileAttachment.type.startsWith('video/')) {
+            const isSpoiler = fileAttachment.isSpoiler;
+            const containerClass = isSpoiler ? 'spoiler-file-container' : 'relative';
+            const spoilerOverlay = isSpoiler ? `
+                <div class="spoiler-overlay" onclick="this.parentElement.classList.add('revealed'); event.stopPropagation();">
+                    <i data-lucide="eye-off" class="w-8 h-8 mb-2"></i>
+                    <span class="text-xs font-bold uppercase tracking-widest">Spoiler</span>
+                </div>` : '';
+
             messageHtml += `
-                <div class="mt-2 group/video relative max-w-[400px]">
+                <div class="mt-2 group/video ${containerClass} max-w-[400px]">
+                    ${spoilerOverlay}
                     <video src="${fileUrl}" controls preload="metadata" class="w-full rounded-lg bg-black/20"></video>
-                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute top-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-1.5 rounded-full shadow-lg opacity-0 group-hover/video:opacity-100 transition-opacity" title="Download" onclick="event.preventDefault(); event.stopPropagation(); downloadFile(this.href, this.getAttribute('download'))">
+                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="absolute top-2 right-2 bg-[#5865F2] hover:bg-[#4752C4] text-white p-1.5 rounded-full shadow-lg opacity-0 group-hover/video:opacity-100 transition-opacity z-30" title="Download" onclick="event.preventDefault(); event.stopPropagation(); downloadFile(this.href, this.getAttribute('download'))">
                         <i data-lucide="download" class="w-3 h-3"></i>
                     </a>
                 </div>
             `;
         } else {
+            const isSpoiler = fileAttachment.isSpoiler;
+            const containerClass = isSpoiler ? 'spoiler-file-container' : '';
+            const spoilerOverlay = isSpoiler ? `
+                <div class="spoiler-overlay" onclick="this.parentElement.classList.add('revealed'); event.stopPropagation();">
+                    <i data-lucide="eye-off" class="w-6 h-6 mb-1"></i>
+                    <span class="text-[10px] font-bold uppercase tracking-wider">Spoiler</span>
+                </div>` : '';
+
             messageHtml += `
-                <div class="flex items-center mt-2 bg-[#2B2D31] hover:bg-[#36383E] p-3 rounded-lg transition-colors">
+                <div class="flex items-center mt-2 bg-[#2B2D31] hover:bg-[#36383E] p-3 rounded-lg transition-colors relative ${containerClass}">
+                    ${spoilerOverlay}
                     <div class="text-2xl mr-3">${getFileIcon(fileAttachment.type)}</div>
                     <div class="flex-1 min-w-0">
                         <div class="text-[#dbdee1] font-medium truncate">${escapeHtml(fileAttachment.name)}</div>
                         <div class="text-xs text-[#949BA4]">${formatFileSize(fileAttachment.size)}</div>
                     </div>
-                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="ml-2 p-2 hover:bg-[#404249] rounded transition-colors" title="Download" onclick="event.preventDefault(); event.stopPropagation(); downloadFile(this.href, this.getAttribute('download'))">
+                    <a href="${fileUrl}" download="${escapeHtml(fileAttachment.name)}" class="ml-2 p-2 hover:bg-[#404249] rounded transition-colors z-30" title="Download" onclick="event.preventDefault(); event.stopPropagation(); downloadFile(this.href, this.getAttribute('download'))">
                         <i data-lucide="download" class="w-5 h-5 text-[#949BA4] hover:text-[#dbdee1]"></i>
                     </a>
                 </div>
@@ -1641,6 +1708,7 @@ function processFile(file) {
         name: file.name,
         type: file.type,
         size: file.size,
+        isSpoiler: false,
         // Preview URL for UI
         previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
     });
@@ -1742,7 +1810,8 @@ function uploadFileWithProgress(fileItem, index) {
                         name: fileItem.name,
                         type: fileItem.type,
                         size: fileItem.size,
-                        key: checkData.key
+                        key: checkData.key,
+                        isSpoiler: fileItem.isSpoiler
                     });
                 }, 100);
                 return;
@@ -1766,11 +1835,14 @@ function uploadFileWithProgress(fileItem, index) {
             }
         };
 
-        xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                resolve(JSON.parse(xhr.responseText));
-            } else {
-                reject(new Error(`Upload failed: ${xhr.statusText}`));
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        const result = JSON.parse(xhr.responseText);
+                        resolve({
+                            ...result,
+                            isSpoiler: fileItem.isSpoiler
+                        });
+                    } else {                reject(new Error(`Upload failed: ${xhr.statusText}`));
             }
         };
 
@@ -1792,11 +1864,19 @@ function showFilePreview() {
         let previewHtml = '';
 
         selectedFiles.forEach((file, index) => {
+            const isSpoiler = file.isSpoiler;
+            const spoilerClass = isSpoiler ? 'border-[#faa61a] ring-2 ring-[#faa61a]/50' : 'border-[#404249]';
+            const spoilerIcon = isSpoiler ? 'eye' : 'eye-off';
+            const spoilerTitle = isSpoiler ? 'Remove Spoiler' : 'Mark as Spoiler';
+
             if (file.type.startsWith('image/')) {
                 previewHtml += `
                     <div class="relative group" id="preview-${index}">
-                        <img src="${file.previewUrl}" alt="Preview" class="w-16 h-16 rounded-lg object-cover border border-[#404249]">
-                        <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg transition-transform hover:scale-110" onclick="removeFile(${index})">✕</button>
+                        <img src="${file.previewUrl}" alt="Preview" class="w-16 h-16 rounded-lg object-cover border ${spoilerClass}">
+                        <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg transition-transform hover:scale-110 z-10" onclick="removeFile(${index})">✕</button>
+                        <button type="button" class="absolute -bottom-1 -right-1 ${isSpoiler ? 'bg-[#faa61a]' : 'bg-[#232428]'} hover:opacity-90 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg transition-all z-10 border border-[#404249]" onclick="toggleFileSpoiler(${index})" title="${spoilerTitle}">
+                            <i data-lucide="${spoilerIcon}" class="w-3.5 h-3.5"></i>
+                        </button>
                         <div class="upload-progress-container" id="progress-container-${index}">
                             <div class="upload-progress-bar" id="progress-bar-${index}"></div>
                         </div>
@@ -1804,10 +1884,13 @@ function showFilePreview() {
                 `;
             } else {
                 previewHtml += `
-                    <div class="relative group bg-[#2B2D31] p-3 rounded-lg border border-[#404249] flex items-center gap-2" id="preview-${index}">
+                    <div class="relative group bg-[#2B2D31] p-3 rounded-lg border ${spoilerClass} flex items-center gap-2" id="preview-${index}">
                         <div class="text-xl">${getFileIcon(file.type)}</div>
                         <div class="text-[10px] text-[#dbdee1] max-w-[60px] truncate">${escapeHtml(file.name)}</div>
-                        <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg transition-transform hover:scale-110" onclick="removeFile(${index})">✕</button>
+                        <button type="button" class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg transition-transform hover:scale-110 z-10" onclick="removeFile(${index})">✕</button>
+                        <button type="button" class="absolute -bottom-1 -right-1 ${isSpoiler ? 'bg-[#faa61a]' : 'bg-[#232428]'} hover:opacity-90 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg transition-all z-10 border border-[#404249]" onclick="toggleFileSpoiler(${index})" title="${spoilerTitle}">
+                            <i data-lucide="${spoilerIcon}" class="w-3.5 h-3.5"></i>
+                        </button>
                         <div class="upload-progress-container" id="progress-container-${index}">
                             <div class="upload-progress-bar" id="progress-bar-${index}"></div>
                         </div>
@@ -1817,6 +1900,7 @@ function showFilePreview() {
         });
 
         preview.innerHTML = previewHtml;
+        if (window.lucide) lucide.createIcons();
     });
 }
 
@@ -1826,6 +1910,13 @@ function hideFilePreview() {
         preview.classList.add('hidden');
         preview.innerHTML = '';
     });
+}
+
+function toggleFileSpoiler(index) {
+    if (selectedFiles[index]) {
+        selectedFiles[index].isSpoiler = !selectedFiles[index].isSpoiler;
+        showFilePreview();
+    }
 }
 
 function removeFile(index) {
@@ -4205,6 +4296,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
+        // Selection Tooltip Listeners
+        messageInputEl.addEventListener('select', handleTextSelection);
+        messageInputEl.addEventListener('mouseup', handleTextSelection);
+        messageInputEl.addEventListener('keyup', (e) => {
+            // Only handle selection if it's not a modifier key
+            if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) {
+                handleTextSelection();
+            }
+        });
+        messageInputEl.addEventListener('scroll', handleTextSelection);
+        
+        // Hide tooltip when clicking anywhere else
+        document.addEventListener('mousedown', (e) => {
+            const tooltip = document.getElementById('selection-tooltip');
+            const input = document.getElementById('message-input');
+            if (tooltip && !tooltip.contains(e.target) && e.target !== input) {
+                tooltip.classList.add('hidden');
+            }
+        });
+
         // Ensure tap on input restores keyboard even if already "focused"
         messageInputEl.addEventListener('touchstart', (e) => {
             const spacer = document.getElementById('mobile-emoji-spacer');
@@ -4659,5 +4770,122 @@ window.openMobileActionModal = openMobileActionModal;
 window.closeMobileActionModal = closeMobileActionModal;
 window.handleMobileAction = handleMobileAction;
 window.sendMobileReaction = sendMobileReaction;
+
+// Selection Tooltip Logic
+function handleTextSelection() {
+    const input = document.getElementById('message-input');
+    const tooltip = document.getElementById('selection-tooltip');
+    if (!input || !tooltip) return;
+
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+
+    if (start !== end) {
+        // Text is selected
+        tooltip.classList.remove('hidden');
+        
+        // Calculate coordinates of selection using a hidden ghost element
+        const coords = getCaretCoordinates(input, start);
+        const rect = input.getBoundingClientRect();
+        
+        const tooltipWidth = tooltip.offsetWidth;
+        const tooltipHeight = tooltip.offsetHeight;
+        
+        // Position relative to the viewport
+        // coords.top is relative to the textarea's content, so we subtract scroll
+        let top = rect.top + coords.top - input.scrollTop - tooltipHeight - 10;
+        let left = rect.left + coords.left - input.scrollLeft + (getCaretCoordinates(input, end).left - coords.left) / 2 - (tooltipWidth / 2);
+        
+        // Viewport constraints
+        if (top < 10) top = rect.top + coords.top - input.scrollTop + 30; // Show below selection if no space above
+        if (left < 10) left = 10;
+        if (left + tooltipWidth > window.innerWidth - 10) left = window.innerWidth - tooltipWidth - 10;
+        
+        tooltip.style.top = `${top}px`;
+        tooltip.style.left = `${left}px`;
+        
+        if (window.lucide) lucide.createIcons();
+    } else {
+        tooltip.classList.add('hidden');
+    }
+}
+
+function applyMarkdown(marker) {
+    const input = document.getElementById('message-input');
+    const tooltip = document.getElementById('selection-tooltip');
+    if (!input) return;
+
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const val = input.value;
+
+    if (start !== end) {
+        const selectedText = val.substring(start, end);
+        const markerLen = marker.length;
+        
+        // Toggle logic: if already wrapped, unwrap it
+        if (selectedText.startsWith(marker) && selectedText.endsWith(marker)) {
+            input.value = val.substring(0, start) + selectedText.substring(markerLen, selectedText.length - markerLen) + val.substring(end);
+            input.setSelectionRange(start, end - (markerLen * 2));
+        } else {
+            input.value = val.substring(0, start) + marker + selectedText + marker + val.substring(end);
+            input.setSelectionRange(start, end + (markerLen * 2));
+        }
+        
+        tooltip.classList.add('hidden');
+        input.focus();
+        // Trigger height adjustment
+        input.style.height = 'auto';
+        input.style.height = input.scrollHeight + 'px';
+        updateSendButtonVisibility();
+    }
+}
+
+function wrapSelectionWithSpoiler() {
+    applyMarkdown('||');
+}
+
+/**
+ * Get coordinates of a character in a textarea
+ * Based on: https://github.com/component/textarea-caret-position
+ */
+function getCaretCoordinates(element, position) {
+    const div = document.createElement('div');
+    const style = window.getComputedStyle(element);
+    
+    // Copy styles from textarea to ghost div
+    const properties = [
+        'direction', 'boxSizing', 'width', 'height', 'overflowX', 'overflowY',
+        'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderStyle',
+        'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+        'fontStyle', 'fontVariant', 'fontWeight', 'fontStretch', 'fontSize', 'fontSizeAdjust', 'lineHeight', 'fontFamily',
+        'textAlign', 'textTransform', 'textIndent', 'textDecoration', 'letterSpacing', 'wordSpacing', 'tabSize', 'MozTabSize'
+    ];
+
+    div.style.position = 'absolute';
+    div.style.visibility = 'hidden';
+    div.style.whiteSpace = 'pre-wrap';
+    div.style.wordBreak = 'break-word';
+
+    properties.forEach(prop => {
+        div.style[prop] = style[prop];
+    });
+
+    // Content before selection
+    div.textContent = element.value.substring(0, position);
+    
+    const span = document.createElement('span');
+    span.textContent = element.value.substring(position) || '.';
+    div.appendChild(span);
+
+    document.body.appendChild(div);
+    const { offsetTop: top, offsetLeft: left } = span;
+    document.body.removeChild(div);
+
+    return { top, left };
+}
+
+window.applyMarkdown = applyMarkdown;
+window.wrapSelectionWithSpoiler = wrapSelectionWithSpoiler;
 
 
