@@ -1250,21 +1250,24 @@
                 </button>
             </div>
 
-            <!-- Common Emojis -->
-            <div class="grid grid-cols-6 gap-2 mb-6 px-2">
-                <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" onclick="sendEmojiFromMobile('👍')">👍</button>
-                <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" onclick="sendEmojiFromMobile('❤️')">❤️</button>
-                <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" onclick="sendEmojiFromMobile('😂')">😂</button>
-                <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" onclick="sendEmojiFromMobile('😮')">😮</button>
-                <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" onclick="sendEmojiFromMobile('😢')">😢</button>
-                <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" onclick="sendEmojiFromMobile('🔥')">🔥</button>
-            </div>
+            <!-- Scrollable Emoji Body -->
+            <div id="mobileEmojiScrollArea" class="flex-1 overflow-y-auto custom-scrollbar px-2 pb-8">
+                <!-- Common Emojis -->
+                <div class="grid grid-cols-6 gap-2 mb-6">
+                    <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" onclick="sendEmojiFromMobile('👍')">👍</button>
+                    <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" onclick="sendEmojiFromMobile('❤️')">❤️</button>
+                    <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" onclick="sendEmojiFromMobile('😂')">😂</button>
+                    <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" onclick="sendEmojiFromMobile('😮')">😮</button>
+                    <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" onclick="sendEmojiFromMobile('😢')">😢</button>
+                    <button class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" onclick="sendEmojiFromMobile('🔥')">🔥</button>
+                </div>
 
-            <h4 class="text-[11px] font-bold uppercase text-[#949BA4] mb-3 px-2 tracking-wider">Custom Emojis</h4>
-            
-            <!-- Custom Emojis Scrollable Area -->
-            <div id="mobileCustomEmojis" class="grid grid-cols-4 sm:grid-cols-6 gap-3 overflow-y-auto custom-scrollbar px-2 pb-8">
-                <!-- Injected by JS -->
+                <h4 class="text-[11px] font-bold uppercase text-[#949BA4] mb-3 tracking-wider">Custom Emojis</h4>
+                
+                <!-- Custom Emojis Grid -->
+                <div id="mobileCustomEmojis" class="grid grid-cols-4 sm:grid-cols-6 gap-3">
+                    <!-- Injected by JS -->
+                </div>
             </div>
         </div>
     </div>

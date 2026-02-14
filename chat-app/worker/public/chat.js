@@ -1,6 +1,7 @@
 const username = localStorage.getItem('chatUsername');
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 let isAddingEmoji = false;
+let lastKnownKeyboardHeight = 300;
 
 // Register Service Worker for PWA & Handle Updates
 if ('serviceWorker' in navigator) {
@@ -3599,10 +3600,13 @@ function openMobileEmojiModal(messageId, isKeyboardMode = false) {
         const input = document.getElementById('message-input');
         if (input) input.inputMode = 'none';
 
-        // Match a typical keyboard height
-        const keyboardHeight = 300;
-        spacer.style.height = `${keyboardHeight}px`;
+        // Match the last known keyboard height
+        spacer.style.height = `${lastKnownKeyboardHeight}px`;
         spacer.classList.remove('hidden');
+        
+        // Lock the emoji picker content to the same height
+        content.style.height = `${lastKnownKeyboardHeight}px`;
+        content.style.maxHeight = `${lastKnownKeyboardHeight}px`;
         
         // Ensure scroll to bottom
         setTimeout(scrollToBottom, 100);
@@ -3611,6 +3615,8 @@ function openMobileEmojiModal(messageId, isKeyboardMode = false) {
         modal.style.backgroundColor = '';
         modal.style.pointerEvents = '';
         content.style.pointerEvents = '';
+        content.style.height = '';
+        content.style.maxHeight = '';
         if (spacer) spacer.classList.add('hidden');
         
         const input = document.getElementById('message-input');
@@ -3656,6 +3662,8 @@ function closeMobileEmojiModal(immediate = false) {
         modal.style.backgroundColor = '';
         modal.style.pointerEvents = '';
         content.style.pointerEvents = '';
+        content.style.height = '';
+        content.style.maxHeight = '';
         reactionPickerMessageId = null;
         const input = document.getElementById('message-input');
         if (input) input.inputMode = '';
@@ -3671,6 +3679,8 @@ function closeMobileEmojiModal(immediate = false) {
         modal.style.backgroundColor = '';
         modal.style.pointerEvents = '';
         content.style.pointerEvents = '';
+        content.style.height = '';
+        content.style.maxHeight = '';
         reactionPickerMessageId = null;
         
         const input = document.getElementById('message-input');
@@ -3706,14 +3716,14 @@ let emojiIsDragging = false;
 function setupEmojiModalDrag() {
     const modal = document.getElementById('mobileEmojiModal');
     const content = document.getElementById('mobileEmojiContent');
-    const scrollArea = document.getElementById('mobileCustomEmojis');
-    if (!content || !modal) return;
+    const scrollArea = document.getElementById('mobileEmojiScrollArea');
+    if (!content || !modal || !scrollArea) return;
 
     content.addEventListener('touchstart', (e) => {
         // Don't drag if it's the chat input emoji keyboard
         if (reactionPickerMessageId === null) return;
         
-        // Don't drag if we're in the scrollable custom emoji area and it's scrolled down
+        // Don't drag if we're in the scrollable emoji area and it's scrolled down
         if (scrollArea.contains(e.target) && scrollArea.scrollTop > 0) return;
         if (e.target.closest('button')) return;
         
@@ -4220,7 +4230,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 window.scrollTo(0, 0);
             }
 
-            // Also adjust all full-screen modals to stay within visual viewport
+            // Detect keyboard height
+            const isInputFocused = document.activeElement && (document.activeElement.id === 'message-input' || document.activeElement.tagName === 'INPUT');
+            if (isInputFocused && height < window.innerHeight * 0.9) {
+                const detectedHeight = window.innerHeight - height;
+                if (detectedHeight > 150) { // Reasonable keyboard height
+                    lastKnownKeyboardHeight = detectedHeight;
+                }
+            }
+
+            // Adjust all full-screen modals to stay within visual viewport
             const modals = document.querySelectorAll('.fixed.inset-0:not(#app)');
             modals.forEach(modal => {
                 modal.style.height = `${height}px`;
