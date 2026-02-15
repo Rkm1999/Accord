@@ -52,18 +52,20 @@ async function initApp() {
 
     // 2. Initial Data Load
     try {
-        const [users, channels, dms, notifications] = await Promise.all([
+        const [users, channels, dms, notifications, emojis] = await Promise.all([
             api.fetchRegisteredUsers(),
             api.fetchChannels(),
             api.fetchDMs(state.username),
-            api.fetchNotificationSettings(state.username)
+            api.fetchNotificationSettings(state.username),
+            api.fetchEmojis()
         ]);
 
         updateState({
             allUsers: users,
             channels: channels,
             dms: dms,
-            notificationSettings: notifications
+            notificationSettings: notifications,
+            customEmojis: emojis
         });
 
         displayChannels();
