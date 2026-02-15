@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Accord</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#313338">
@@ -63,6 +63,7 @@
             opacity: 0;
             transition: opacity 0.2s;
             display: none;
+            pointer-events: none;
         }
 
         @media (min-width: 1024px) {
@@ -72,6 +73,7 @@
 
             .message-group:hover .message-actions {
                 opacity: 1;
+                pointer-events: auto;
             }
         }
 
@@ -820,7 +822,6 @@
             border: 1px solid #26272d;
             border-radius: 8px;
             padding: 2px;
-            display: flex;
             align-items: center;
             gap: 0;
             z-index: 1000;
@@ -871,16 +872,14 @@
         </div>
 
         <!-- Sidebar Overlay (Mobile) -->
-        <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-[60] hidden lg:hidden"
-            onclick="closeAllSidebars()"></div>
+        <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-[60] hidden lg:hidden"></div>
 
         <!-- 1. Channel Sidebar -->
         <div id="channel-sidebar"
             class="w-60 bg-[#2B2D31] flex flex-col min-w-[240px] left-0 shadow-2xl lg:shadow-none">
 
             <!-- Server Header -->
-            <div class="h-12 px-4 flex items-center justify-between shadow-sm hover:bg-[#35373C] cursor-pointer transition-colors border-b border-[#1f2023]"
-                onclick="closeAllSidebars()">
+            <div id="server-header" class="h-12 px-4 flex items-center justify-between shadow-sm hover:bg-[#35373C] cursor-pointer transition-colors border-b border-[#1f2023]">
                 <h1 class="font-bold text-[15px] truncate">Accord</h1>
             </div>
 
@@ -895,9 +894,9 @@
                             <span
                                 class="text-[11px] font-bold uppercase text-[#949BA4] tracking-wide hover:text-[#dbdee1] cursor-pointer">Channels</span>
                         </div>
-                        <button
+                        <button id="openCreateChannelBtn"
                             class="text-[#949BA4] hover:text-[#dbdee1] hover:bg-[#35373C] rounded-sm p-0.5 transition-all"
-                            onclick="openCreateChannelModal()" title="Create Channel">
+                            title="Create Channel">
                             <i data-lucide="plus" class="w-4 h-4"></i>
                         </button>
                     </div>
@@ -916,9 +915,9 @@
                                 class="text-[11px] font-bold uppercase text-[#949BA4] tracking-wide hover:text-[#dbdee1] cursor-pointer">Direct
                                 Messages</span>
                         </div>
-                        <button
+                        <button id="openStartDMBtn"
                             class="text-[#949BA4] hover:text-[#dbdee1] hover:bg-[#35373C] rounded-sm p-0.5 transition-all"
-                            onclick="openStartDMModal()" title="Start DM">
+                            title="Start DM">
                             <i data-lucide="plus" class="w-4 h-4"></i>
                         </button>
                     </div>
@@ -931,8 +930,7 @@
 
             <!-- User Control Panel -->
             <div class="bg-[#232428] px-2 py-1.5 flex items-center">
-                <div class="flex items-center p-1 hover:bg-[#3F4147] rounded cursor-pointer mr-auto group flex-1"
-                    onclick="openProfileModal()">
+                <div id="user-profile-panel" class="flex items-center p-1 hover:bg-[#3F4147] rounded cursor-pointer mr-auto group flex-1">
                     <div class="relative mr-2">
                         <div
                             class="w-8 h-8 rounded-full bg-[#5865F2] flex items-center justify-center text-sm font-bold">
@@ -950,7 +948,7 @@
                     </div>
                 </div>
                 <div class="flex items-center">
-                    <button class="p-1.5 hover:bg-[#3F4147] rounded text-[#dbdee1]" onclick="openProfileModal()"
+                    <button id="open-settings-btn" class="p-1.5 hover:bg-[#3F4147] rounded text-[#dbdee1]"
                         title="User Settings">
                         <i data-lucide="settings" class="w-[19px] h-[19px]"></i>
                     </button>
@@ -962,8 +960,7 @@
         <div class="flex-1 flex flex-col min-w-0 bg-[#313338] relative">
             <!-- Unread Banner -->
             <div id="unread-banner"
-                class="absolute top-14 left-4 right-4 bg-[#5865F2]/90 backdrop-blur hover:bg-[#5865F2] text-white px-4 py-2 rounded-t-none rounded-b-md shadow-lg cursor-pointer flex items-center justify-between z-40 transition-all duration-300 transform -translate-y-full opacity-0 hidden"
-                onclick="jumpToUnread()">
+                class="absolute top-14 left-4 right-4 bg-[#5865F2]/90 backdrop-blur hover:bg-[#5865F2] text-white px-4 py-2 rounded-t-none rounded-b-md shadow-lg cursor-pointer flex items-center justify-between z-40 transition-all duration-300 transform -translate-y-full opacity-0 hidden">
                 <div class="flex items-center">
                     <i data-lucide="arrow-up" class="w-4 h-4 mr-2 animate-bounce"></i>
                     <span class="font-semibold text-sm">Unread Messages</span>
@@ -991,8 +988,8 @@
                 </div>
 
                 <div class="flex items-center space-x-3 text-[#B5BAC1]">
-                    <button class="hover:text-[#dbdee1] cursor-pointer text-[#B5BAC1] flex items-center justify-center"
-                        onclick="openSearchModal()" title="Search">
+                    <button id="open-search-btn" class="hover:text-[#dbdee1] cursor-pointer text-[#B5BAC1] flex items-center justify-center"
+                        title="Search">
                         <i data-lucide="search" class="w-6 h-6"></i>
                     </button>
                     <button id="toggle-members-btn"
@@ -1014,8 +1011,7 @@
 
                 <!-- Scroll to Bottom Button -->
                 <div id="scroll-bottom-btn"
-                    class="absolute bottom-4 right-6 bg-[#313338] hover:bg-[#35373C] text-[#B5BAC1] hover:text-[#dbdee1] p-2.5 rounded-full shadow-lg cursor-pointer border border-[#26272D] transition-all duration-200 opacity-0 pointer-events-none z-40 transform translate-y-2"
-                    onclick="scrollToBottom()">
+                    class="absolute bottom-4 right-6 bg-[#313338] hover:bg-[#35373C] text-[#B5BAC1] hover:text-[#dbdee1] p-2.5 rounded-full shadow-lg cursor-pointer border border-[#26272D] transition-all duration-200 opacity-0 pointer-events-none z-40 transform translate-y-2">
                     <i data-lucide="chevron-down" class="w-5 h-5"></i>
                 </div>
             </div>
@@ -1048,8 +1044,7 @@
                     <div id="reply-to-media" class="mx-2 hidden">
                         <!-- Media preview injected by JS -->
                     </div>
-                    <button type="button" class="text-[#949BA4] hover:text-white transition-colors flex-shrink-0"
-                        onclick="cancelReply()">
+                    <button id="cancel-reply-btn" type="button" class="text-[#949BA4] hover:text-white transition-colors flex-shrink-0">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
@@ -1070,7 +1065,7 @@
                     <div id="mentionAutocomplete" class="hidden custom-scrollbar"></div>
                     <button type="button" id="emoji-trigger-btn"
                         class="bg-[#B5BAC1] text-[#313338] rounded-full p-0.5 mr-3 hover:text-white transition-colors flex items-center justify-center"
-                        onmousedown="event.preventDefault()" onclick="toggleReactionPicker(event, null)">
+                        onmousedown="event.preventDefault()">
                         <i data-lucide="smile" class="w-4 h-4 font-bold"></i>
                     </button>
                     <input type="file" id="fileInput" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar"
@@ -1079,8 +1074,7 @@
                         <textarea id="message-input" placeholder="Message #general" rows="1"
                             class="bg-transparent text-[#dbdee1] w-full focus:outline-none placeholder-[#949BA4] resize-none py-1 leading-[1.375rem] max-h-[50vh] custom-scrollbar"></textarea>
                         <div class="flex items-center text-[#B5BAC1]">
-                            <button type="button" class="p-1.5 hover:bg-[#404249] rounded transition-colors"
-                                onclick="document.getElementById('fileInput').click()">
+                            <button id="attach-file-btn" type="button" class="p-1.5 hover:bg-[#404249] rounded transition-colors">
                                 <i data-lucide="paperclip" class="w-5 h-5"></i>
                             </button>
                             <!-- Send Button (Mobile) -->
@@ -1108,10 +1102,8 @@
     </div>
 
     <!-- Create Channel Modal -->
-    <div id="createChannelModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden"
-        onclick="if(event.target.id === 'createChannelModal') closeCreateChannelModal()">
-        <div class="modal-content bg-[#313338] rounded-lg max-w-md w-full mx-4 shadow-2xl border border-[#404249]"
-            onclick="event.stopPropagation()">
+    <div id="createChannelModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden">
+        <div class="modal-content bg-[#313338] rounded-lg max-w-md w-full mx-4 shadow-2xl border border-[#404249]">
             <div class="flex items-center justify-between p-6 border-b border-[#26272D]">
                 <div class="flex items-center">
                     <div class="w-12 h-12 bg-[#5865F2] rounded-full flex items-center justify-center mr-4">
@@ -1122,8 +1114,7 @@
                         <p class="text-sm text-[#949BA4]">Create a new channel to start conversations</p>
                     </div>
                 </div>
-                <button class="text-[#949BA4] hover:text-white transition-colors p-1 rounded hover:bg-[#404249]"
-                    onclick="closeCreateChannelModal()">
+                <button id="closeCreateChannelBtn1" class="text-[#949BA4] hover:text-white transition-colors p-1 rounded hover:bg-[#404249]">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -1132,18 +1123,15 @@
                     <label class="block text-xs font-semibold text-[#B5BAC1] uppercase mb-2">Channel Name</label>
                     <input type="text" id="newChannelName" placeholder="e.g., general, random, announcements"
                         maxlength="30"
-                        class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all border border-transparent focus:border-[#5865F2]"
-                        onkeypress="if(event.key === 'Enter') createChannel()">
+                        class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all border border-transparent focus:border-[#5865F2]">
                 </div>
                 <div class="flex space-x-3">
-                    <button type="button"
-                        class="flex-1 bg-transparent hover:bg-[#404249] text-[#949BA4] hover:text-[#dbdee1] py-2.5 rounded transition-colors font-medium"
-                        onclick="closeCreateChannelModal()">
+                    <button id="closeCreateChannelBtn2" type="button"
+                        class="flex-1 bg-transparent hover:bg-[#404249] text-[#949BA4] hover:text-[#dbdee1] py-2.5 rounded transition-colors font-medium">
                         Cancel
                     </button>
                     <button type="button" id="createChannelBtn"
-                        class="btn-ripple flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors flex items-center justify-center"
-                        onclick="createChannel()">
+                        class="btn-ripple flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors flex items-center justify-center">
                         <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
                         Create Channel
                     </button>
@@ -1153,14 +1141,11 @@
     </div>
 
     <!-- Start DM Modal -->
-    <div id="startDMModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden"
-        onclick="if(event.target.id === 'startDMModal') closeStartDMModal()">
-        <div class="modal-content bg-[#313338] rounded-lg max-w-md w-full mx-4 shadow-2xl border border-[#404249]"
-            onclick="event.stopPropagation()">
+    <div id="startDMModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden">
+        <div class="modal-content bg-[#313338] rounded-lg max-w-md w-full mx-4 shadow-2xl border border-[#404249]">
             <div class="flex items-center justify-between p-4 border-b border-[#26272D]">
                 <h3 class="font-bold text-lg text-white">Select a Friend</h3>
-                <button class="text-[#949BA4] hover:text-white transition-colors p-1 rounded hover:bg-[#404249]"
-                    onclick="closeStartDMModal()">
+                <button id="closeStartDMBtn1" class="text-[#949BA4] hover:text-white transition-colors p-1 rounded hover:bg-[#404249]">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -1172,20 +1157,17 @@
                 </div>
             </div>
             <div class="p-4 border-t border-[#26272D] flex justify-end">
-                <button type="button" class="bg-transparent hover:underline text-[#949BA4] mr-4"
-                    onclick="closeStartDMModal()">Cancel</button>
+                <button id="closeStartDMBtn2" type="button" class="bg-transparent hover:underline text-[#949BA4] mr-4">Cancel</button>
             </div>
         </div>
     </div>
 
     <!-- Search Modal -->
-    <div id="searchModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden"
-        onclick="if(event.target.id === 'searchModal') closeSearchModal()">
-        <div class="bg-[#313338] rounded-lg max-w-lg w-full mx-4 shadow-2xl max-h-[80vh] overflow-hidden flex flex-col"
-            onclick="event.stopPropagation()">
+    <div id="searchModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden">
+        <div class="bg-[#313338] rounded-lg max-w-lg w-full mx-4 shadow-2xl max-h-[80vh] overflow-hidden flex flex-col">
             <div class="flex items-center justify-between p-4 border-b border-[#26272D]">
                 <h3 class="font-bold text-lg">Search Messages</h3>
-                <button class="text-[#949BA4] hover:text-white transition-colors" onclick="closeSearchModal()">
+                <button id="closeSearchBtn" class="text-[#949BA4] hover:text-white transition-colors">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -1210,9 +1192,8 @@
                             class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2] transition-all">
                     </div>
                 </div>
-                <button type="button"
-                    class="btn-ripple w-full bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors"
-                    onclick="performSearch()">
+                <button id="performSearchBtn" type="button"
+                    class="btn-ripple w-full bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors">
                     Search
                 </button>
             </div>
@@ -1225,12 +1206,11 @@
     <!-- Image Modal -->
     <div id="imageModal" class="fixed inset-0 bg-black/95 flex items-center justify-center z-[200] hidden">
         <!-- Overlay for closing when clicking background -->
-        <div class="absolute inset-0 z-0" onclick="closeImageModal()"></div>
+        <div id="imageModalOverlay" class="absolute inset-0 z-0"></div>
 
         <!-- Persistent Close Button -->
-        <button
-            class="absolute top-6 right-6 text-white/70 hover:text-white transition-colors z-[210] p-2 bg-black/20 rounded-full backdrop-blur-sm"
-            onclick="closeImageModal()">
+        <button id="closeImageModalBtn"
+            class="absolute top-6 right-6 text-white/70 hover:text-white transition-colors z-[210] p-2 bg-black/20 rounded-full backdrop-blur-sm">
             <i data-lucide="x" class="w-8 h-8"></i>
         </button>
 
@@ -1243,34 +1223,26 @@
         <!-- Image with stopPropagation to prevent closing when clicking/tapping the image itself -->
         <img id="imageModalImg" src="" alt="Full size"
             class="max-w-[95vw] max-h-[95vh] object-contain relative z-[205] transition-transform duration-200 ease-out cursor-zoom-in"
-            onclick="event.stopPropagation()" oncontextmenu="return false;">
+            oncontextmenu="return false;">
     </div>
 
     <!-- Reaction Picker Popover (Hidden by default) -->
     <div id="reactionPicker"
         class="fixed z-[100] hidden bg-[#1E1F22] border border-[#26272D] rounded-lg shadow-xl p-2 flex flex-col w-[220px]">
         <div class="flex flex-wrap gap-1 mb-2 border-b border-[#26272D] pb-2">
-            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl"
-                onclick="sendReaction('👍')">👍</button>
-            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl"
-                onclick="sendReaction('❤️')">❤️</button>
-            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl"
-                onclick="sendReaction('😂')">😂</button>
-            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl"
-                onclick="sendReaction('😮')">😮</button>
-            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl"
-                onclick="sendReaction('😢')">😢</button>
-            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl"
-                onclick="sendReaction('🔥')">🔥</button>
-            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl"
-                onclick="sendReaction('🎉')">🎉</button>
-            <button class="hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl"
-                onclick="sendReaction('✅')">✅</button>
+            <button class="picker-emoji-btn hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" data-emoji="👍">👍</button>
+            <button class="picker-emoji-btn hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" data-emoji="❤️">❤️</button>
+            <button class="picker-emoji-btn hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" data-emoji="😂">😂</button>
+            <button class="picker-emoji-btn hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" data-emoji="😮">😮</button>
+            <button class="picker-emoji-btn hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" data-emoji="😢">😢</button>
+            <button class="picker-emoji-btn hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" data-emoji="🔥">🔥</button>
+            <button class="picker-emoji-btn hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" data-emoji="🎉">🎉</button>
+            <button class="picker-emoji-btn hover:bg-[#35373C] p-1.5 rounded transition-colors text-xl" data-emoji="✅">✅</button>
         </div>
         <div class="flex flex-col">
             <div class="flex items-center justify-between mb-1 px-1">
                 <span class="text-[10px] font-bold uppercase text-[#949BA4]">Custom Emojis</span>
-                <button class="text-[#949BA4] hover:text-white" onclick="openEmojiModal()" title="Upload Custom Emoji">
+                <button id="openEmojiModalBtn" class="text-[#949BA4] hover:text-white" title="Upload Custom Emoji">
                     <i data-lucide="plus" class="w-3 h-3"></i>
                 </button>
             </div>
@@ -1281,10 +1253,8 @@
     </div>
 
     <!-- Emoji Upload Modal -->
-    <div id="emojiUploadModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[170] hidden"
-        onclick="if(event.target.id === 'emojiUploadModal') closeEmojiModal()">
-        <div class="bg-[#313338] rounded-lg max-w-sm w-full mx-4 shadow-2xl border border-[#404249]"
-            onclick="event.stopPropagation()">
+    <div id="emojiUploadModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[170] hidden">
+        <div class="bg-[#313338] rounded-lg max-w-sm w-full mx-4 shadow-2xl border border-[#404249]">
             <div class="p-6">
                 <h3 class="font-bold text-lg mb-4">Upload Custom Emoji</h3>
                 <div class="space-y-4">
@@ -1299,11 +1269,9 @@
                             class="w-full text-sm text-[#949BA4] file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-[#5865F2] file:text-white hover:file:bg-[#4752C4]">
                     </div>
                     <div class="flex space-x-3 pt-2">
-                        <button type="button" class="flex-1 bg-transparent hover:underline text-[#949BA4]"
-                            onclick="closeEmojiModal()">Cancel</button>
-                        <button type="button"
-                            class="flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2 rounded transition-colors"
-                            onclick="uploadEmoji()">Upload</button>
+                        <button id="closeEmojiModalBtn1" type="button" class="flex-1 bg-transparent hover:underline text-[#949BA4]">Cancel</button>
+                        <button id="uploadEmojiBtn" type="button"
+                            class="flex-1 bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2 rounded transition-colors">Upload</button>
                     </div>
                 </div>
             </div>
@@ -1311,14 +1279,12 @@
     </div>
 
     <!-- Profile Modal -->
-    <div id="profileModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden"
-        onclick="if(event.target.id === 'profileModal') closeProfileModal()">
-        <div class="bg-[#313338] rounded-lg max-w-md w-full mx-4 shadow-2xl border border-[#404249]"
-            onclick="event.stopPropagation()">
+    <div id="profileModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden">
+        <div class="bg-[#313338] rounded-lg max-w-md w-full mx-4 shadow-2xl border border-[#404249]">
             <div class="p-6">
                 <div class="flex items-center justify-between mb-6">
                     <h3 class="font-bold text-xl">User Settings</h3>
-                    <button class="text-[#949BA4] hover:text-white" onclick="closeProfileModal()">
+                    <button id="closeProfileModalBtn" class="text-[#949BA4] hover:text-white">
                         <i data-lucide="x" class="w-6 h-6"></i>
                     </button>
                 </div>
@@ -1326,8 +1292,7 @@
                 <div class="space-y-6">
                     <!-- Avatar Upload -->
                     <div class="flex flex-col items-center">
-                        <div class="relative group cursor-pointer"
-                            onclick="document.getElementById('avatarInput').click()">
+                        <div id="avatarInputGroup" class="relative group cursor-pointer">
                             <img id="profilePreview" src="https://ui-avatars.com/api/?name=User"
                                 class="w-24 h-24 rounded-full object-cover border-4 border-[#1E1F22]">
                             <div
@@ -1335,8 +1300,7 @@
                                 <i data-lucide="camera" class="w-8 h-8 text-white"></i>
                             </div>
                         </div>
-                        <input type="file" id="avatarInput" accept="image/*" class="hidden"
-                            onchange="previewAvatar(event)">
+                        <input type="file" id="avatarInput" accept="image/*" class="hidden">
                         <p class="text-xs text-[#949BA4] mt-2">Click to change avatar</p>
                     </div>
 
@@ -1346,8 +1310,7 @@
                             class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2]">
                     </div>
 
-                    <div class="flex items-center justify-between p-3 bg-[#1E1F22] rounded cursor-pointer hover:bg-[#2B2D31] transition-colors"
-                        onclick="openNotificationSettingsModal()">
+                    <div id="openNotificationSettingsBtn" class="flex items-center justify-between p-3 bg-[#1E1F22] rounded cursor-pointer hover:bg-[#2B2D31] transition-colors">
                         <div class="flex items-center gap-3">
                             <i data-lucide="bell" class="w-5 h-5 text-[#B5BAC1]"></i>
                             <div class="flex flex-col">
@@ -1365,26 +1328,23 @@
                             <div class="flex items-center justify-between">
                                 <span id="newRecoveryKeyDisplay"
                                     class="font-mono font-bold text-white tracking-wider"></span>
-                                <button onclick="copyNewRecoveryKey()" class="text-[#B5BAC1] hover:text-white"><i
+                                <button id="copyNewRecoveryKeyBtn" class="text-[#B5BAC1] hover:text-white"><i
                                         data-lucide="copy" class="w-4 h-4"></i></button>
                             </div>
                         </div>
 
                         <div class="flex space-x-3">
-                            <button type="button"
-                                class="flex-1 bg-blue-500/10 hover:bg-blue-500/20 text-[#00A8FC] py-2 rounded transition-colors font-medium text-sm"
-                                onclick="regenerateRecoveryKey()">
+                            <button id="regenerateRecoveryKeyBtn" type="button"
+                                class="flex-1 bg-blue-500/10 hover:bg-blue-500/20 text-[#00A8FC] py-2 rounded transition-colors font-medium text-sm">
                                 Regenerate Key
                             </button>
-                            <button type="button"
-                                class="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-2 rounded transition-colors font-medium text-sm"
-                                onclick="openUserSettings()">
+                            <button id="logoutBtn" type="button"
+                                class="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-2 rounded transition-colors font-medium text-sm">
                                 Logout
                             </button>
                         </div>
-                        <button type="button"
-                            class="btn-ripple w-full bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors"
-                            onclick="updateProfile()">
+                        <button id="updateProfileBtn" type="button"
+                            class="btn-ripple w-full bg-[#5865F2] hover:bg-[#4752C4] font-semibold py-2.5 rounded transition-colors">
                             Save Changes
                         </button>
                     </div>
@@ -1394,14 +1354,11 @@
     </div>
 
     <!-- User Detail Modal -->
-    <div id="userDetailModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] hidden"
-        onclick="if(event.target.id === 'userDetailModal') closeUserDetailModal()">
-        <div class="bg-[#1E1F22] rounded-lg max-w-sm w-full shadow-2xl overflow-hidden border border-[#2B2D31]"
-            onclick="event.stopPropagation()">
+    <div id="userDetailModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] hidden">
+        <div class="bg-[#1E1F22] rounded-lg max-w-sm w-full shadow-2xl overflow-hidden border border-[#2B2D31]">
             <!-- Header Section: Avatar Left, Name Right -->
             <div class="p-6 flex items-center gap-4">
-                <div class="relative flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
-                    onclick="viewUserDetailAvatar()">
+                <div id="userDetailAvatarContainer" class="relative flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity">
                     <div class="w-20 h-20 rounded-full border-2 border-[#2B2D31] bg-[#313338] relative overflow-hidden">
                         <img id="userDetailAvatar" src="" class="w-full h-full object-cover">
                         <div id="userDetailStatusDot"
@@ -1423,7 +1380,7 @@
                     <div id="userDetailStatusText" class="text-sm text-[#dbdee1]"></div>
                 </div>
 
-                <button id="userDetailDMBtn" onclick="handleUserDetailDM()"
+                <button id="userDetailDMBtn"
                     class="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-semibold py-2 rounded transition-colors flex items-center justify-center gap-2">
                     <i data-lucide="message-square" class="w-4 h-4"></i>
                     Send Message
@@ -1434,21 +1391,19 @@
 
     <!-- Notification Settings Modal -->
     <div id="notificationSettingsModal"
-        class="fixed inset-0 bg-black/70 flex items-center justify-center z-[110] hidden"
-        onclick="if(event.target.id === 'notificationSettingsModal') closeNotificationSettingsModal()">
-        <div class="bg-[#313338] rounded-lg max-w-lg w-full mx-4 shadow-2xl border border-[#404249]"
-            onclick="event.stopPropagation()">
+        class="fixed inset-0 bg-black/70 flex items-center justify-center z-[110] hidden">
+        <div class="bg-[#313338] rounded-lg max-w-lg w-full mx-4 shadow-2xl border border-[#404249]">
             <div class="p-6">
                 <div class="flex items-center justify-between mb-6">
                     <div class="flex items-center gap-2">
                         <i data-lucide="bell" class="w-6 h-6 text-[#5865F2]"></i>
                         <h3 class="font-bold text-xl text-white">Notification Settings</h3>
-                        <button onclick="showNotificationHelp()"
+                        <button id="showNotificationHelpBtn"
                             class="text-[#949BA4] hover:text-white transition-colors ml-1" title="What do these mean?">
                             <i data-lucide="help-circle" class="w-4 h-4"></i>
                         </button>
                     </div>
-                    <button class="text-[#949BA4] hover:text-white" onclick="closeNotificationSettingsModal()">
+                    <button id="closeNotificationSettingsBtn1" class="text-[#949BA4] hover:text-white">
                         <i data-lucide="x" class="w-6 h-6"></i>
                     </button>
                 </div>
@@ -1466,8 +1421,7 @@
                                     device</span>
                             </div>
                             <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="globalPushToggle" class="sr-only peer"
-                                    onchange="togglePushNotifications(this.checked)">
+                                <input type="checkbox" id="globalPushToggle" class="sr-only peer">
                                 <div
                                     class="w-11 h-6 bg-[#404249] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#22C55E]">
                                 </div>
@@ -1486,7 +1440,7 @@
                 </div>
 
                 <div class="mt-6 flex justify-end">
-                    <button onclick="closeNotificationSettingsModal()"
+                    <button id="closeNotificationSettingsBtn2"
                         class="bg-[#5865F2] hover:bg-[#4752C4] text-white px-6 py-2 rounded font-semibold transition-colors">
                         Done
                     </button>
@@ -1506,7 +1460,7 @@
                 <p class="text-[#949BA4] text-xs leading-tight">Install our app for real-time notifications and a faster
                     experience.</p>
             </div>
-            <button onclick="closePwaPrompt()" class="text-[#949BA4] hover:text-[#dbdee1] p-1 transition-colors">
+            <button id="closePwaPromptBtn" class="text-[#949BA4] hover:text-[#dbdee1] p-1 transition-colors">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
         </div>
@@ -1534,11 +1488,9 @@
 
     <!-- Mobile Message Actions Modal (Long Press) -->
     <div id="mobileActionModal"
-        class="fixed inset-0 bg-black/60 z-[150] hidden flex flex-col justify-end transition-opacity duration-300 opacity-0"
-        onclick="closeMobileActionModal()">
+        class="fixed inset-0 bg-black/60 z-[150] hidden flex flex-col justify-end transition-opacity duration-300 opacity-0">
         <div id="mobileActionContent"
-            class="bg-[#2B2D31] rounded-t-2xl p-4 w-full shadow-2xl transform translate-y-full transition-transform duration-300 ease-out"
-            onclick="event.stopPropagation()">
+            class="bg-[#2B2D31] rounded-t-2xl p-4 w-full shadow-2xl transform translate-y-full transition-transform duration-300 ease-out">
             <!-- Drag Handle -->
             <div
                 class="w-12 h-1.5 bg-[#4E5058] rounded-full mx-auto mb-6 cursor-grab active:cursor-grabbing touch-none">
@@ -1546,24 +1498,13 @@
 
             <!-- Quick Reactions -->
             <div class="flex justify-between mb-6 px-2 overflow-x-auto no-scrollbar gap-2">
-                <button
-                    class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform"
-                    onclick="sendMobileReaction('👍')">👍</button>
-                <button
-                    class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform"
-                    onclick="sendMobileReaction('❤️')">❤️</button>
-                <button
-                    class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform"
-                    onclick="sendMobileReaction('😂')">😂</button>
-                <button
-                    class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform"
-                    onclick="sendMobileReaction('😮')">😮</button>
-                <button
-                    class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform"
-                    onclick="sendMobileReaction('😢')">😢</button>
-                <button
-                    class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform"
-                    onclick="toggleReactionPicker(event, null, true)">
+                <button class="mobile-picker-emoji-btn bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform" data-emoji="👍">👍</button>
+                <button class="mobile-picker-emoji-btn bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform" data-emoji="❤️">❤️</button>
+                <button class="mobile-picker-emoji-btn bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform" data-emoji="😂">😂</button>
+                <button class="mobile-picker-emoji-btn bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform" data-emoji="😮">😮</button>
+                <button class="mobile-picker-emoji-btn bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform" data-emoji="😢">😢</button>
+                <button id="mobileReactionPickerPlusBtn"
+                    class="bg-[#1E1F22] hover:bg-[#35373C] w-12 h-12 rounded-full flex items-center justify-center text-2xl active:scale-125 transition-transform">
                     <i data-lucide="plus" class="w-6 h-6 text-[#B5BAC1]"></i>
                 </button>
             </div>
@@ -1571,32 +1512,27 @@
             <!-- Actions List -->
             <div class="space-y-1">
                 <button id="mobile-download-btn"
-                    class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-[#dbdee1] font-semibold transition-colors active:bg-[#404249] hidden"
-                    onclick="handleMobileAction('download')">
+                    class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-[#dbdee1] font-semibold transition-colors active:bg-[#404249] hidden">
                     <i data-lucide="download" class="w-6 h-6 text-[#B5BAC1]"></i>
                     Download File
                 </button>
-                <button
-                    class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-[#dbdee1] font-semibold transition-colors active:bg-[#404249]"
-                    onclick="handleMobileAction('reply')">
+                <button id="mobile-reply-btn"
+                    class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-[#dbdee1] font-semibold transition-colors active:bg-[#404249]">
                     <i data-lucide="reply" class="w-6 h-6 text-[#B5BAC1]"></i>
                     Reply
                 </button>
                 <button id="mobile-edit-btn"
-                    class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-[#dbdee1] font-semibold transition-colors active:bg-[#404249]"
-                    onclick="handleMobileAction('edit')">
+                    class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-[#dbdee1] font-semibold transition-colors active:bg-[#404249]">
                     <i data-lucide="edit-2" class="w-6 h-6 text-[#B5BAC1]"></i>
                     Edit Message
                 </button>
-                <button
-                    class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-[#dbdee1] font-semibold transition-colors active:bg-[#404249]"
-                    onclick="handleMobileAction('copy')">
+                <button id="mobile-copy-btn"
+                    class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-[#dbdee1] font-semibold transition-colors active:bg-[#404249]">
                     <i data-lucide="copy" class="w-6 h-6 text-[#B5BAC1]"></i>
                     Copy Text
                 </button>
                 <button id="mobile-delete-btn"
-                    class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-red-400 font-semibold transition-colors active:bg-red-500/10"
-                    onclick="handleMobileAction('delete')">
+                    class="w-full flex items-center gap-3 p-4 hover:bg-[#35373C] rounded-xl text-red-400 font-semibold transition-colors active:bg-red-500/10">
                     <i data-lucide="trash-2" class="w-6 h-6"></i>
                     Delete Message
                 </button>
@@ -1609,11 +1545,9 @@
 
     <!-- Mobile Emoji Picker Modal -->
     <div id="mobileEmojiModal"
-        class="fixed inset-0 bg-black/60 z-[160] hidden flex flex-col justify-end transition-opacity duration-300 opacity-0"
-        onclick="closeMobileEmojiModal()">
+        class="fixed inset-0 bg-black/60 z-[160] hidden flex flex-col justify-end transition-opacity duration-300 opacity-0">
         <div id="mobileEmojiContent"
-            class="bg-[#2B2D31] rounded-t-2xl p-4 w-full shadow-2xl transform translate-y-full transition-transform duration-300 ease-out flex flex-col max-h-[85vh]"
-            onclick="event.stopPropagation()">
+            class="bg-[#2B2D31] rounded-t-2xl p-4 w-full shadow-2xl transform translate-y-full transition-transform duration-300 ease-out flex flex-col max-h-[85vh]">
             <!-- Drag Handle -->
             <div id="mobile-emoji-handle"
                 class="w-12 h-1.5 bg-[#4E5058] rounded-full mx-auto mb-6 cursor-grab active:cursor-grabbing touch-none">
@@ -1621,7 +1555,7 @@
 
             <div class="flex items-center justify-between mb-4 px-2">
                 <h3 class="text-lg font-bold text-white">Select Emoji</h3>
-                <button class="text-[#949BA4] hover:text-white p-2" onclick="openEmojiModal()">
+                <button id="mobileOpenEmojiModalBtn" class="text-[#949BA4] hover:text-white p-2">
                     <i data-lucide="plus" class="w-6 h-6"></i>
                 </button>
             </div>
@@ -1630,24 +1564,12 @@
             <div id="mobileEmojiScrollArea" class="flex-1 overflow-y-auto custom-scrollbar px-2 pb-8">
                 <!-- Common Emojis -->
                 <div class="grid grid-cols-6 gap-2 mb-6">
-                    <button
-                        class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform"
-                        style="touch-action: manipulation;" onclick="sendEmojiFromMobile('👍')">👍</button>
-                    <button
-                        class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform"
-                        style="touch-action: manipulation;" onclick="sendEmojiFromMobile('❤️')">❤️</button>
-                    <button
-                        class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform"
-                        style="touch-action: manipulation;" onclick="sendEmojiFromMobile('😂')">😂</button>
-                    <button
-                        class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform"
-                        style="touch-action: manipulation;" onclick="sendEmojiFromMobile('😮')">😮</button>
-                    <button
-                        class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform"
-                        style="touch-action: manipulation;" onclick="sendEmojiFromMobile('😢')">😢</button>
-                    <button
-                        class="bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform"
-                        style="touch-action: manipulation;" onclick="sendEmojiFromMobile('🔥')">🔥</button>
+                    <button class="mobile-send-emoji-btn bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" data-emoji="👍">👍</button>
+                    <button class="mobile-send-emoji-btn bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" data-emoji="❤️">❤️</button>
+                    <button class="mobile-send-emoji-btn bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" data-emoji="😂">😂</button>
+                    <button class="mobile-send-emoji-btn bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" data-emoji="😮">😮</button>
+                    <button class="mobile-send-emoji-btn bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" data-emoji="😢">😢</button>
+                    <button class="mobile-send-emoji-btn bg-[#1E1F22] hover:bg-[#35373C] aspect-square rounded-xl flex items-center justify-center text-2xl active:scale-125 transition-transform" style="touch-action: manipulation;" data-emoji="🔥">🔥</button>
                 </div>
 
                 <h4 class="text-[11px] font-bold uppercase text-[#949BA4] mb-3 tracking-wider">Custom Emojis</h4>
@@ -1661,26 +1583,26 @@
     </div>
 
     <div id="selection-tooltip" class="hidden">
-        <button class="tooltip-btn" onclick="applyMarkdown('**')">
+        <button class="tooltip-btn" data-marker="**">
             <i data-lucide="bold" class="w-4 h-4"></i>
         </button>
-        <button class="tooltip-btn" onclick="applyMarkdown('*')">
+        <button class="tooltip-btn" data-marker="*">
             <i data-lucide="italic" class="w-4 h-4"></i>
         </button>
-        <button class="tooltip-btn" onclick="applyMarkdown('~~')">
+        <button class="tooltip-btn" data-marker="~~">
             <i data-lucide="strikethrough" class="w-4 h-4"></i>
         </button>
-        <button class="tooltip-btn" onclick="applyMarkdown('`')">
+        <button class="tooltip-btn" data-marker="`">
             <i data-lucide="code" class="w-4 h-4"></i>
         </button>
         <div class="w-[1px] bg-[#26272d] self-stretch mx-1"></div>
-        <button class="tooltip-btn tooltip-btn-label" onclick="wrapSelectionWithSpoiler()">
+        <button id="tooltip-spoiler-btn" class="tooltip-btn tooltip-btn-label">
             <i data-lucide="eye-off" class="w-4 h-4"></i>
             Spoiler
         </button>
     </div>
 
-    <script src="chat.js"></script>
+    <script type="module" src="chat.js"></script>
     <script type="module" src="firebase-messaging.js"></script>
 
 </body>

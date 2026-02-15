@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Welcome - Accord</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#5865F2">
@@ -145,7 +145,7 @@
             </p>
 
             <p class="text-xs text-[#949BA4] mt-2 text-center" id="forgotPasswordContainer">
-                <button class="hover:underline text-[#B5BAC1]" onclick="openResetModal()">Forgot your password?</button>
+                <button class="hover:underline text-[#B5BAC1]" id="openResetBtn">Forgot your password?</button>
             </p>
         </div>
         <div class="bg-[#232428] px-4 py-3 text-center">
@@ -161,12 +161,12 @@
             
             <div class="bg-[#1E1F22] p-4 rounded border border-dashed border-[#5865F2] mb-6 flex items-center justify-between">
                 <span id="recoveryKeyDisplay" class="text-2xl font-mono font-bold tracking-widest text-white"></span>
-                <button onclick="copyRecoveryKey()" class="text-[#B5BAC1] hover:text-white p-2">
+                <button id="copyRecoveryKeyBtn" class="text-[#B5BAC1] hover:text-white p-2">
                     <i data-lucide="copy" class="w-5 h-5"></i>
                 </button>
             </div>
 
-            <button onclick="closeRecoveryModal()" 
+            <button id="closeRecoveryModalBtn" 
                 class="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-semibold py-2.5 rounded transition-colors">
                 I've saved it
             </button>
@@ -191,7 +191,7 @@
                     <input type="password" id="resetNewPassword" required class="w-full bg-[#1E1F22] text-[#dbdee1] rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5865F2]">
                 </div>
                 <div class="flex space-x-3 pt-2">
-                    <button type="button" onclick="closeResetModal()" class="flex-1 bg-transparent hover:underline text-[#949BA4]">Cancel</button>
+                    <button type="button" id="closeResetModalBtn" class="flex-1 bg-transparent hover:underline text-[#949BA4]">Cancel</button>
                     <button type="submit" class="btn-ripple flex-1 bg-[#5865F2] hover:bg-[#4752C4] text-white font-semibold py-2 rounded transition-colors">Reset</button>
                 </div>
             </form>
@@ -208,7 +208,7 @@
                 <h4 class="font-bold text-white text-[15px]">Accord Chat</h4>
                 <p class="text-[#949BA4] text-xs leading-tight">Install our app for real-time notifications and a faster experience.</p>
             </div>
-            <button onclick="closePwaPrompt()" class="text-[#949BA4] hover:text-[#dbdee1] p-1 transition-colors">
+            <button id="closePwaPromptBtn" class="text-[#949BA4] hover:text-[#dbdee1] p-1 transition-colors">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
         </div>
@@ -231,7 +231,7 @@
         </button>
     </div>
 
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
 
 </body>
 </html>
