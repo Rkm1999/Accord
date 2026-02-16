@@ -182,7 +182,11 @@ export class ChatRoom extends DurableObject {
     }
 
     if (data.type === "load_more" || data.type === "load_history") {
-      await this.sendChatHistory(ws, channelId, data.before);
+      if (data.aroundId) {
+        await this.sendChatContext(ws, channelId, data.aroundId);
+      } else {
+        await this.sendChatHistory(ws, channelId, data.before, data.after);
+      }
       return;
     }
 
@@ -559,7 +563,7 @@ export class ChatRoom extends DurableObject {
     }
   }
 
-  private async sendChatHistory(ws: WebSocket, channelId: number, before?: number) {
+  private async sendChatHistory(ws: WebSocket, channelId: number, before?: number, after?: number) {
     const state = ws.deserializeAttachment() as any;
     const username = state.username;
 
@@ -567,7 +571,6 @@ export class ChatRoom extends DurableObject {
         "SELECT message_id FROM channel_last_read WHERE username = ? AND channel_id = ?"
     ).bind(username, channelId).first() as any;
 
-    // Use cursor-based pagination (before timestamp) instead of OFFSET
     let query = `
       SELECT m.*, u.display_name, u.avatar_key as user_avatar 
       FROM messages m 
@@ -579,15 +582,25 @@ export class ChatRoom extends DurableObject {
     if (before) {
       query += ` AND m.timestamp < ? `;
       params.push(before);
+    } else if (after) {
+      query += ` AND m.timestamp > ? `;
+      params.push(after);
     }
 
-    query += ` ORDER BY m.timestamp DESC LIMIT 26 `;
+    if (after) {
+      query += ` ORDER BY m.timestamp ASC LIMIT 26 `;
+    } else {
+      query += ` ORDER BY m.timestamp DESC LIMIT 26 `;
+    }
 
     const result: any = await this.env.DB.prepare(query).bind(...params).all();
 
     let messages = result.results;
-    const rowsRead = result.meta.rows_read || 0;
-    console.log(`[D1 READ] History: ${rowsRead} rows read for channel ${channelId} (cursor: ${before || 'start'})`);
+    if (after) {
+      // If we fetched "after", the results are already in ASC order, but the frontend 
+      // expects DESC for pagination logic or we just need to be consistent.
+      // Actually history is reversed before sending.
+    }
 
     const hasMore = messages.length > 25;
     if (hasMore) {
@@ -601,21 +614,56 @@ export class ChatRoom extends DurableObject {
         `SELECT message_id, emoji, username FROM reactions WHERE message_id IN (${placeholders})`
       ).bind(...messageIds).all();
 
-      console.log(`[D1 READ] Reactions: ${reactResult.meta.rows_read} rows read`);
-
       messages.forEach((m: any) => {
         m.reactions = reactResult.results.filter((r: any) => r.message_id === m.id);
       });
     }
 
-    const history = messages.reverse();
+    // Front-end expects chronological order for display
+    const history = after ? messages : messages.reverse();
 
     ws.send(JSON.stringify({
       type: "history",
       messages: history,
       before: before,
-      hasMore: hasMore,
+      after: after,
+      hasMore: !after ? hasMore : undefined,
+      hasMoreAfter: after ? hasMore : undefined,
       lastReadMessageId: lastRead?.message_id || 0
+    }));
+  }
+
+  private async sendChatContext(ws: WebSocket, channelId: number, targetId: number) {
+    const target: any = await this.env.DB.prepare("SELECT timestamp FROM messages WHERE id = ?").bind(targetId).first();
+    if (!target) return;
+
+    const beforeResult: any = await this.env.DB.prepare(`
+      SELECT m.*, u.display_name, u.avatar_key as user_avatar 
+      FROM messages m 
+      LEFT JOIN users u ON m.username = u.username 
+      WHERE m.channel_id = ? AND m.timestamp <= ?
+      ORDER BY m.timestamp DESC LIMIT 25
+    `).bind(channelId, target.timestamp).all();
+
+    const afterResult: any = await this.env.DB.prepare(`
+      SELECT m.*, u.display_name, u.avatar_key as user_avatar 
+      FROM messages m 
+      LEFT JOIN users u ON m.username = u.username 
+      WHERE m.channel_id = ? AND m.timestamp > ?
+      ORDER BY m.timestamp ASC LIMIT 25
+    `).bind(channelId, target.timestamp).all();
+
+    const messages = [...beforeResult.results.reverse(), ...afterResult.results];
+    const hasMoreBefore = beforeResult.results.length >= 25;
+    const hasMoreAfter = afterResult.results.length >= 25;
+
+    ws.send(JSON.stringify({
+      type: "history",
+      messages,
+      isContext: true,
+      hasMore: hasMoreBefore,
+      hasMoreAfter: hasMoreAfter,
+      targetId
     }));
   }
 

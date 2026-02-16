@@ -566,13 +566,15 @@ export default {
       }
     }
 
-    if (url.pathname === "/chat") {
-      const chatUrl = new URL("/chat.html", url.origin);
-      return await env.ASSETS.fetch(new Request(chatUrl.toString(), request));
+    // React SPA Routing
+    if (url.pathname === "/chat" || (url.pathname === "/" && !url.pathname.includes("."))) {
+      const indexUrl = new URL("/index.html", url.origin);
+      return await env.ASSETS.fetch(new Request(indexUrl.toString(), request));
     }
 
     try {
       const response = await env.ASSETS.fetch(request);
+      // Fallback for sub-routes
       if (response.status === 404 && !url.pathname.startsWith("/api/") && !url.pathname.includes(".")) {
         const indexUrl = new URL("/index.html", url.origin);
         return await env.ASSETS.fetch(new Request(indexUrl.toString(), request));
@@ -581,6 +583,7 @@ export default {
     } catch {
       return corsResponse("Not Found", 404, corsHeaders);
     }
+
   },
 };
 
