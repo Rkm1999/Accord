@@ -131,9 +131,13 @@ export const ChatInput = () => {
 
     // Close emoji keyboard on send
     if (isEmojiKeyboardOpen) {
+      isFocusingProgrammatically.current = true;
       setIsEmojiKeyboardOpen(false);
       // Give it a moment to switch inputMode back to text before focusing
-      setTimeout(() => textareaRef.current?.focus(), 50);
+      setTimeout(() => {
+        textareaRef.current?.focus();
+        isFocusingProgrammatically.current = false;
+      }, 50);
     }
 
     try {
@@ -173,6 +177,11 @@ export const ChatInput = () => {
           channelId: currentChannelId,
           replyTo: currentReplyTo
         });
+      }
+      
+      // Always re-focus after successful send to keep keyboard open
+      if (!isEmojiKeyboardOpen) {
+        textareaRef.current?.focus();
       }
     } catch (err) {
       alert('Failed to send message or files.');
@@ -279,11 +288,26 @@ export const ChatInput = () => {
   const toggleEmojiPicker = (e: React.MouseEvent) => {
     if (window.innerWidth < 1024) {
       if (isEmojiKeyboardOpen) {
+        // Switch to native keyboard
+        isFocusingProgrammatically.current = true;
         setIsEmojiKeyboardOpen(false);
-        setTimeout(() => textareaRef.current?.focus(), 50);
+        // Short timeout to allow height adjustment
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+          }
+          setTimeout(() => {
+            isFocusingProgrammatically.current = false;
+          }, 100);
+        }, 10);
       } else {
+        // Switch to emoji keyboard
+        isFocusingProgrammatically.current = true;
         textareaRef.current?.blur();
         setIsEmojiKeyboardOpen(true);
+        setTimeout(() => {
+          isFocusingProgrammatically.current = false;
+        }, 100);
       }
     } else {
       if (activeModal === 'emojiPicker') {
@@ -455,6 +479,7 @@ export const ChatInput = () => {
             </button>
             <button 
               type="submit"
+              onMouseDown={(e) => e.preventDefault()}
               className={clsx(
                 "p-1.5 bg-accord-blurple text-white rounded-full transition-all ml-2 flex-shrink-0",
                 (text.trim() || stagedFiles.length > 0) ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"

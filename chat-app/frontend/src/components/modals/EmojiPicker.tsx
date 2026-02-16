@@ -4,6 +4,7 @@ import { socketClient } from '@/lib/socket';
 import { apiBaseUrl } from '@/lib/config';
 import { Plus, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { clsx } from 'clsx';
 
 const COMMON_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "✅"];
 
@@ -54,8 +55,14 @@ export const EmojiPicker = ({ inline = false }: { inline?: boolean }) => {
     return (
       <div 
         ref={pickerRef}
-        className="bg-accord-dark-400 border-t border-accord-dark-100 flex flex-col overflow-hidden transition-all duration-300 relative z-[50]"
-        style={{ height: keyboardHeight }}
+        className={clsx(
+          "bg-accord-dark-400 border-t border-accord-dark-100 flex flex-col overflow-hidden relative z-[50]",
+          isEmojiKeyboardOpen ? "visible h-auto" : "invisible h-0"
+        )}
+        style={{ 
+          height: isEmojiKeyboardOpen ? keyboardHeight : 0,
+          transition: 'height 0.1s ease-out, visibility 0.1s'
+        }}
       >
         <EmojiContent 
           customEmojis={customEmojis} 
