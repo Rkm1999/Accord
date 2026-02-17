@@ -10,7 +10,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "AGPL-3.0-only",
   "type": "commonjs",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260131.0",
