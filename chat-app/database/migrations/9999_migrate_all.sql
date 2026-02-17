@@ -9,3 +9,5 @@
 .read 0008_push_tokens.sql
 .read 0009_notification_settings.sql
 .read 0012_covering_index.sql
+.read 0013_is_spoiler.sql
+.read 0014_channel_type.sql

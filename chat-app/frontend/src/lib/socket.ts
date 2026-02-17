@@ -2,6 +2,7 @@ import { getWsUrl } from './config';
 import { useAuthStore } from '../store/useAuthStore';
 import { useChatStore } from '../store/useChatStore';
 import { useMessageStore } from '../store/useMessageStore';
+import { useVoiceStore } from '../store/useVoiceStore';
 
 class SocketClient {
   private ws: WebSocket | null = null;
@@ -85,6 +86,7 @@ class SocketClient {
     const chatStore = useChatStore.getState();
     const authStore = useAuthStore.getState();
     const messageStore = useMessageStore.getState();
+    const voiceStore = useVoiceStore.getState();
 
     switch (data.type) {
       case 'connected':
@@ -115,27 +117,24 @@ class SocketClient {
         break;
 
       case 'history':
+        const targetChannelId = data.channelId || chatStore.currentChannelId;
         if (data.isContext) {
-          // Context jump: overwrite current state for this channel
-          messageStore.setMessages(chatStore.currentChannelId, data.messages);
-          messageStore.prependMessages(chatStore.currentChannelId, [], data.hasMore); // Set hasMore older
-          messageStore.setHasMoreNewer(chatStore.currentChannelId, !!data.hasMoreAfter);
+          messageStore.setMessages(targetChannelId, data.messages);
+          messageStore.prependMessages(targetChannelId, [], data.hasMore);
+          messageStore.setHasMoreNewer(targetChannelId, !!data.hasMoreAfter);
         } else if (data.before) {
-          messageStore.prependMessages(chatStore.currentChannelId, data.messages, data.hasMore);
+          messageStore.prependMessages(targetChannelId, data.messages, data.hasMore);
         } else if (data.after) {
-          messageStore.appendMessages(chatStore.currentChannelId, data.messages, !!data.hasMoreAfter);
+          messageStore.appendMessages(targetChannelId, data.messages, !!data.hasMoreAfter);
         } else {
-          messageStore.setMessages(chatStore.currentChannelId, data.messages);
-          // Set initial hasMore
-          messageStore.prependMessages(chatStore.currentChannelId, [], data.hasMore);
-          // Store last read ID for unread logic
+          messageStore.setMessages(targetChannelId, data.messages);
+          messageStore.prependMessages(targetChannelId, [], data.hasMore);
           if (data.lastReadMessageId) {
-            messageStore.setLastReadMessageId(chatStore.currentChannelId, data.lastReadMessageId);
+            messageStore.setLastReadMessageId(targetChannelId, data.lastReadMessageId);
           }
         }
         messageStore.setLoadingMore(false);
         break;
-
 
       case 'chat':
         if (data.channelId !== chatStore.currentChannelId) {
@@ -159,6 +158,63 @@ class SocketClient {
         messageStore.updateMessage(chatStore.currentChannelId, data.messageId, { 
           reactions: data.reactions 
         });
+        break;
+
+      case 'user_joined_voice':
+        if (data.channelId === voiceStore.activeVoiceChannelId) {
+          voiceStore.setParticipants([...new Set([...voiceStore.participants, data.username])]);
+          window.dispatchEvent(new CustomEvent('rtc-user-joined', { detail: data.username }));
+        }
+        break;
+
+      case 'user_left_voice':
+        if (data.channelId === voiceStore.activeVoiceChannelId) {
+          voiceStore.setParticipants(voiceStore.participants.filter(u => u !== data.username));
+          window.dispatchEvent(new CustomEvent('rtc-user-left', { detail: data.username }));
+        }
+        break;
+
+      case 'user_speaking_update':
+        if (data.speaking) {
+          chatStore.setSpeakingUsernames([...new Set([...chatStore.speakingUsernames, data.username])]);
+        } else {
+          chatStore.setSpeakingUsernames(chatStore.speakingUsernames.filter(u => u !== data.username));
+        }
+
+        // Also sync video status
+        if (data.videoOn !== undefined) {
+          if (data.videoOn) {
+            chatStore.setVideoOffUsernames(chatStore.videoOffUsernames.filter(u => u !== data.username));
+          } else {
+            chatStore.setVideoOffUsernames([...new Set([...chatStore.videoOffUsernames, data.username])]);
+          }
+        }
+        break;
+
+      case 'user_video_update':
+        if (data.videoOn) {
+          chatStore.setVideoOffUsernames(chatStore.videoOffUsernames.filter(u => u !== data.username));
+        } else {
+          chatStore.setVideoOffUsernames([...new Set([...chatStore.videoOffUsernames, data.username])]);
+        }
+        break;
+
+      case 'voice_room_members':
+        if (data.channelId === voiceStore.activeVoiceChannelId) {
+          voiceStore.setParticipants(data.members);
+        }
+        // Also sync the global map for the sidebar
+        chatStore.updateVoiceOccupants(data.channelId, data.members);
+        break;
+
+      case 'rtc_signal':
+        window.dispatchEvent(new CustomEvent('rtc-signal', { 
+          detail: { from: data.fromUsername, signal: data.signalData } 
+        }));
+        break;
+
+      case 'voice_occupants_update':
+        chatStore.setVoiceChannelOccupants(data.occupants);
         break;
 
       case 'refresh_channels':

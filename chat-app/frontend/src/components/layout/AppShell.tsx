@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { useUIStore } from '@/store/useUIStore';
 import { clsx } from 'clsx';
+import { VoiceControlPanel } from '../chat/VoiceControlPanel';
 
 interface Props {
   children: ReactNode;
@@ -61,7 +62,14 @@ export const AppShell = ({ children, leftSidebar, rightSidebar }: Props) => {
 
       {/* 2. Main Chat Area */}
       <main className="flex-1 flex flex-col min-w-0 bg-accord-dark-300 relative" onClick={handleGlobalClick}>
-        {children}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          {children}
+        </div>
+        
+        {/* Mobile Voice Controls (Visible only on mobile main area) */}
+        <div className="lg:hidden">
+          <VoiceControlPanel />
+        </div>
       </main>
 
       {/* 3. Right Sidebar (Members) */}

@@ -234,7 +234,7 @@ export default {
     }
 
     if (url.pathname === "/api/channels" && request.method === "GET") {
-      const { results } = await env.DB.prepare("SELECT id, name, created_by, created_at FROM channels WHERE type = 'public' ORDER BY id ASC").all();
+      const { results } = await env.DB.prepare("SELECT id, name, created_by, created_at, kind FROM channels WHERE type = 'public' ORDER BY id ASC").all();
       return corsResponse(results, 200, corsHeaders);
     }
 
@@ -243,7 +243,7 @@ export default {
       if (!username) return corsResponse("Username required", 400, corsHeaders);
 
       const { results } = await env.DB.prepare(
-        `SELECT c.id, c.created_at, u.username as other_username, u.display_name as other_display_name, u.avatar_key as other_avatar_key
+        `SELECT c.id, c.created_at, c.kind, u.username as other_username, u.display_name as other_display_name, u.avatar_key as other_avatar_key
          FROM channels c
          JOIN channel_members cm_me ON c.id = cm_me.channel_id
          JOIN channel_members cm_other ON c.id = cm_other.channel_id
@@ -285,7 +285,7 @@ export default {
       try {
         // Create channel
         const result = await env.DB.prepare(
-          "INSERT INTO channels (name, created_by, created_at, type) VALUES (?, ?, ?, 'dm')"
+          "INSERT INTO channels (name, created_by, created_at, type, kind) VALUES (?, ?, ?, 'dm', 'text')"
         ).bind(dmName, username, timestamp).run();
         
         const channelId = result.meta.last_row_id;
@@ -309,14 +309,14 @@ export default {
     }
 
     if (url.pathname === "/api/channels" && request.method === "POST") {
-      const { name, createdBy } = await request.json() as any;
+      const { name, createdBy, kind = 'text' } = await request.json() as any;
       if (!name || !createdBy) return corsResponse("Name and createdBy are required", 400, corsHeaders);
 
       try {
         const result = await env.DB.prepare(
-          "INSERT INTO channels (name, created_by, created_at) VALUES (?, ?, ?)"
-        ).bind(name, createdBy, Date.now()).run();
-        const channel = await env.DB.prepare("SELECT id, name, created_by, created_at FROM channels WHERE id = ?")
+          "INSERT INTO channels (name, created_by, created_at, kind) VALUES (?, ?, ?, ?)"
+        ).bind(name, createdBy, Date.now(), kind).run();
+        const channel = await env.DB.prepare("SELECT id, name, created_by, created_at, kind FROM channels WHERE id = ?")
             .bind(result.meta.last_row_id).first();
         
         // Notify Durable Object to broadcast channel creation

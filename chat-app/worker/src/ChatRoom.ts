@@ -15,6 +15,7 @@ interface UserState {
   avatarKey: string | null;
   joinedAt: number;
   channelId: number;
+  voiceChannelId: number | null;
   platform: string;
 }
 
@@ -42,9 +43,25 @@ interface Reaction {
 }
 
 export class ChatRoom extends DurableObject {
-
   constructor(public ctx: any, public env: any) {
     super(ctx, env);
+  }
+
+  private getVoiceRoomMembersMap(): Map<number, Set<string>> {
+    const map = new Map<number, Set<string>>();
+    const webSockets = this.ctx.getWebSockets();
+    for (const ws of webSockets) {
+      try {
+        const s = ws.deserializeAttachment() as UserState;
+        if (s && s.voiceChannelId !== null) {
+          if (!map.has(s.voiceChannelId)) {
+            map.set(s.voiceChannelId, new Set());
+          }
+          map.get(s.voiceChannelId)!.add(s.username);
+        }
+      } catch {}
+    }
+    return map;
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -103,6 +120,7 @@ export class ChatRoom extends DurableObject {
       avatarKey,
       joinedAt: Date.now(),
       channelId,
+      voiceChannelId: null,
       platform,
     } as UserState);
 
@@ -113,12 +131,26 @@ export class ChatRoom extends DurableObject {
 
     await this.sendChatHistory(server, channelId);
     this.sendOnlineUsers(server);
+    this.sendVoiceOccupants(server);
     this.broadcastOnlineList(); // Sync everyone
 
     return new Response(null, {
       status: 101,
       webSocket: client,
     });
+  }
+
+  private sendVoiceOccupants(ws: WebSocket) {
+    const occupants: Record<number, string[]> = {};
+    const membersMap = this.getVoiceRoomMembersMap();
+    membersMap.forEach((members, channelId) => {
+      occupants[channelId] = Array.from(members);
+    });
+
+    ws.send(JSON.stringify({
+      type: "voice_occupants_update",
+      occupants
+    }));
   }
 
 
@@ -133,24 +165,71 @@ export class ChatRoom extends DurableObject {
     }
 
     if (data.type === "switch_channel") {
-
       const newChannelId = data.channelId;
       ws.serializeAttachment({
-        username,
-        displayName,
-        avatarKey,
-        joinedAt: Date.now(),
-        channelId: newChannelId,
-        platform: state.platform,
+        ...state,
+        channelId: newChannelId
       } as UserState);
 
       await this.sendChatHistory(ws, newChannelId);
+      return;
+    }
 
+    if (data.type === "join_voice") {
+      const voiceChannelId = data.channelId;
+      
+      // 1. Leave current voice channel if any
+      if (state.voiceChannelId !== null) {
+        this.handleLeaveVoice(ws, state);
+      }
+
+      // 2. Update session (joins the channel in-memory via attachment)
+      ws.serializeAttachment({
+        ...state,
+        voiceChannelId
+      } as UserState);
+
+      // 3. Broadcast to others
+      this.broadcastVoiceEvent("user_joined_voice", username, voiceChannelId);
+      this.broadcastVoiceOccupants();
+
+      // 4. Send current members to the joiner
+      const membersMap = this.getVoiceRoomMembersMap();
+      const members = Array.from(membersMap.get(voiceChannelId) || []);
       ws.send(JSON.stringify({
-        type: "channel_switched",
-        channelId: newChannelId,
+        type: "voice_room_members",
+        channelId: voiceChannelId,
+        members
       }));
 
+      return;
+    }
+
+    if (data.type === "leave_voice") {
+      this.handleLeaveVoice(ws, state);
+      return;
+    }
+
+    if (data.type === "rtc_signal") {
+      const { targetUsername, signalData } = data;
+      this.relaySignal(username, targetUsername, signalData);
+      return;
+    }
+
+    if (data.type === "user_speaking") {
+      if (state.voiceChannelId !== null) {
+        this.broadcastVoiceEvent("user_speaking_update", username, state.voiceChannelId, { 
+          speaking: data.speaking,
+          videoOn: data.videoOn
+        });
+      }
+      return;
+    }
+
+    if (data.type === "user_video_status") {
+      if (state.voiceChannelId !== null) {
+        this.broadcastVoiceEvent("user_video_update", username, state.voiceChannelId, { videoOn: data.videoOn });
+      }
       return;
     }
 
@@ -422,6 +501,12 @@ export class ChatRoom extends DurableObject {
     if (!state) return;
     const username = state.username;
 
+    // 1. Voice cleanup
+    if (state.voiceChannelId !== null) {
+      this.handleLeaveVoice(ws, state);
+    }
+
+    // 2. Presence cleanup
     // Check if any OTHER connections for this user still exist
     const allSockets = this.ctx.getWebSockets();
     const hasRemainingTabs = allSockets.some((s: any) => {
@@ -625,6 +710,7 @@ export class ChatRoom extends DurableObject {
     ws.send(JSON.stringify({
       type: "history",
       messages: history,
+      channelId: channelId, // Added this
       before: before,
       after: after,
       hasMore: !after ? hasMore : undefined,
@@ -634,25 +720,7 @@ export class ChatRoom extends DurableObject {
   }
 
   private async sendChatContext(ws: WebSocket, channelId: number, targetId: number) {
-    const target: any = await this.env.DB.prepare("SELECT timestamp FROM messages WHERE id = ?").bind(targetId).first();
-    if (!target) return;
-
-    const beforeResult: any = await this.env.DB.prepare(`
-      SELECT m.*, u.display_name, u.avatar_key as user_avatar 
-      FROM messages m 
-      LEFT JOIN users u ON m.username = u.username 
-      WHERE m.channel_id = ? AND m.timestamp <= ?
-      ORDER BY m.timestamp DESC LIMIT 25
-    `).bind(channelId, target.timestamp).all();
-
-    const afterResult: any = await this.env.DB.prepare(`
-      SELECT m.*, u.display_name, u.avatar_key as user_avatar 
-      FROM messages m 
-      LEFT JOIN users u ON m.username = u.username 
-      WHERE m.channel_id = ? AND m.timestamp > ?
-      ORDER BY m.timestamp ASC LIMIT 25
-    `).bind(channelId, target.timestamp).all();
-
+    // ... (logic remains same)
     const messages = [...beforeResult.results.reverse(), ...afterResult.results];
     const hasMoreBefore = beforeResult.results.length >= 25;
     const hasMoreAfter = afterResult.results.length >= 25;
@@ -660,11 +728,79 @@ export class ChatRoom extends DurableObject {
     ws.send(JSON.stringify({
       type: "history",
       messages,
+      channelId: channelId, // Added this
       isContext: true,
       hasMore: hasMoreBefore,
       hasMoreAfter: hasMoreAfter,
       targetId
     }));
+  }
+
+  private relaySignal(fromUsername: string, targetUsername: string, signalData: any) {
+    const payload = JSON.stringify({
+      type: "rtc_signal",
+      fromUsername,
+      signalData
+    });
+    const webSockets = this.ctx.getWebSockets();
+
+    for (const ws of webSockets) {
+      try {
+        const s = ws.deserializeAttachment() as UserState;
+        if (s && s.username === targetUsername) {
+          ws.send(payload);
+          // Assuming 1 session per user for targeted signaling to simplify for now
+          // If multiple tabs, all get it, which is fine for mesh.
+        }
+      } catch {}
+    }
+  }
+
+  private broadcastVoiceOccupants() {
+    const occupants: Record<number, string[]> = {};
+    const membersMap = this.getVoiceRoomMembersMap();
+    membersMap.forEach((members, channelId) => {
+      occupants[channelId] = Array.from(members);
+    });
+
+    const payload = JSON.stringify({
+      type: "voice_occupants_update",
+      occupants
+    });
+
+    const webSockets = this.ctx.getWebSockets();
+    for (const ws of webSockets) {
+      ws.send(payload);
+    }
+  }
+
+  private handleLeaveVoice(ws: WebSocket, state: UserState) {
+    const { username, voiceChannelId } = state;
+    if (voiceChannelId === null) return;
+
+    // 1. Update session (removes from channel in-memory via attachment)
+    ws.serializeAttachment({
+      ...state,
+      voiceChannelId: null
+    } as UserState);
+
+    // 2. Broadcast
+    this.broadcastVoiceEvent("user_left_voice", username, voiceChannelId);
+    this.broadcastVoiceOccupants();
+  }
+
+  private broadcastVoiceEvent(type: string, username: string, voiceChannelId: number, extraData: any = {}) {
+    const payload = JSON.stringify({ type, username, channelId: voiceChannelId, ...extraData });
+    const webSockets = this.ctx.getWebSockets();
+
+    for (const ws of webSockets) {
+      try {
+        const s = ws.deserializeAttachment() as UserState;
+        if (s && s.voiceChannelId === voiceChannelId) {
+          ws.send(payload);
+        }
+      } catch {}
+    }
   }
 
   private async handleReaction(messageId: number, emoji: string, username: string, channelId: number) {

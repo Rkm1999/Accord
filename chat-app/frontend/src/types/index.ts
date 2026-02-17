@@ -9,6 +9,7 @@ export interface Channel {
   id: number;
   name: string;
   type: 'public' | 'dm';
+  kind: 'text' | 'voice';
   created_by?: string;
   // For DMs
   other_username?: string;

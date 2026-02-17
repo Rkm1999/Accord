@@ -6,6 +6,7 @@ type ModalType = 'createChannel' | 'startDM' | 'search' | 'profile' | 'userDetai
 
 interface UIState {
   activeModal: ModalType;
+  modalData: any;
   userDetailUsername: string | null;
   selectedImageUrl: string | null;
   pickerMessageId: number | null; // null for chat input
@@ -39,6 +40,7 @@ export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
       activeModal: null,
+      modalData: null,
       userDetailUsername: null,
       selectedImageUrl: null,
       pickerMessageId: null,
@@ -57,6 +59,7 @@ export const useUIStore = create<UIState>()(
 
       openModal: (type, data, position) => set({ 
         activeModal: type,
+        modalData: data || null,
         userDetailUsername: type === 'userDetail' ? data : null,
         selectedImageUrl: type === 'image' ? data : null,
         pickerMessageId: type === 'emojiPicker' ? data : null,
@@ -64,6 +67,7 @@ export const useUIStore = create<UIState>()(
       }),
       closeModal: () => set({ 
         activeModal: null, 
+        modalData: null,
         userDetailUsername: null,
         selectedImageUrl: null,
         pickerMessageId: null,

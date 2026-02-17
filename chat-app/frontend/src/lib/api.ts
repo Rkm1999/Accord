@@ -38,8 +38,8 @@ export const apiClient = {
   fetchDMs: (username: string): Promise<Channel[]> => 
     api.get(`/api/dms?username=${encodeURIComponent(username)}`),
 
-  createChannel: (name: string, createdBy: string): Promise<Channel> => 
-    api.post('/api/channels', { name, createdBy }),
+  createChannel: (name: string, createdBy: string, kind: 'text' | 'voice' = 'text'): Promise<Channel> => 
+    api.post('/api/channels', { name, createdBy, kind }),
 
   deleteChannel: (channelId: number) => api.delete(`/api/channels/${channelId}`),
 
