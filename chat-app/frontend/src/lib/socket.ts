@@ -141,6 +141,69 @@ class SocketClient {
           chatStore.markChannelUnread(data.channelId);
         }
         messageStore.appendMessage(data.channelId, data);
+
+        // TTS Logic
+        if (
+          data.tts && 
+          data.channelId === voiceStore.activeVoiceChannelId &&
+          data.username !== authStore.username &&
+          'speechSynthesis' in window
+        ) {
+          try {
+            // Sanitize message: Replace URLs with "link"
+            let cleanMessage = data.message.replace(/https?:\/\/[^\s]+/g, 'link');
+            
+            // Truncate if too long (max 200 chars for TTS)
+            if (cleanMessage.length > 200) {
+              cleanMessage = cleanMessage.substring(0, 200) + '... message truncated';
+            }
+
+            const utterance = new SpeechSynthesisUtterance(cleanMessage);
+            utterance.lang = data.lang || 'en-US';
+            
+            // Voice selection logic
+            const voices = window.speechSynthesis.getVoices();
+            let matchedVoice: SpeechSynthesisVoice | undefined;
+            const langCode = data.lang?.split('-')[0]; // e.g. 'ko'
+
+            if (voiceStore.preferredVoiceName) {
+              const preferred = voices.find(v => v.name === voiceStore.preferredVoiceName);
+              // Only use the preferred voice if it matches the message language
+              if (preferred && preferred.lang.startsWith(langCode)) {
+                matchedVoice = preferred;
+              }
+            }
+
+            if (!matchedVoice && data.lang) {
+              // 1. Aggressive search for "Great" voices (Online/Natural/Neural)
+              // These are the high-quality ones provided by Google/Microsoft/Apple
+              const premiumKeywords = ['Google', 'Online', 'Natural', 'Enhanced', 'Neural', 'Siri'];
+              
+              matchedVoice = voices
+                .filter(v => v.lang.startsWith(langCode))
+                .sort((a, b) => {
+                  // Score based on premium keywords
+                  const aScore = premiumKeywords.reduce((acc, key) => acc + (a.name.includes(key) ? 1 : 0), 0);
+                  const bScore = premiumKeywords.reduce((acc, key) => acc + (b.name.includes(key) ? 1 : 0), 0);
+                  return bScore - aScore;
+                })[0];
+            }
+
+            if (matchedVoice) {
+              utterance.voice = matchedVoice;
+              utterance.lang = matchedVoice.lang;
+            }
+
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            
+            // On some browsers, we need to cancel the current one to start a new one reliably
+            // if it gets stuck, but let's just speak for now.
+            window.speechSynthesis.speak(utterance);
+          } catch (e) {
+            console.error('TTS failed:', e);
+          }
+        }
         break;
 
       case 'edit':

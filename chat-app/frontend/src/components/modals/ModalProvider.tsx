@@ -7,6 +7,7 @@ import { ProfileModal } from './ProfileModal';
 import { EmojiUploadModal } from './EmojiUploadModal';
 import { UserDetailModal } from './UserDetailModal';
 import { NotificationSettingsModal } from './NotificationSettingsModal';
+import { TtsVoiceSettingsModal } from './TtsVoiceSettingsModal';
 
 export const ModalProvider = () => {
   const { activeModal } = useUIStore();
@@ -20,6 +21,7 @@ export const ModalProvider = () => {
       {activeModal === 'userDetail' && <UserDetailModal />}
       {activeModal === 'notificationSettings' && <NotificationSettingsModal />}
       {activeModal === 'emojiUpload' && <EmojiUploadModal />}
+      {activeModal === 'ttsSettings' && <TtsVoiceSettingsModal />}
       <ImageModal />
     </>
   );

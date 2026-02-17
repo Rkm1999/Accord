@@ -31,6 +31,13 @@ export const ChannelSidebar = () => {
         if (currentChannel?.kind !== 'voice') {
           setLastTextChannelId(currentChannelId);
         }
+        
+        // Prime TTS for iOS/Mobile
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance("");
+          window.speechSynthesis.speak(utterance);
+        }
+
         socketClient.send({ type: 'join_voice', channelId: id });
         setActiveVoiceChannelId(id);
       }

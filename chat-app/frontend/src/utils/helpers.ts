@@ -97,3 +97,26 @@ export function getCaretCoordinates(element: HTMLTextAreaElement | HTMLInputElem
 
   return { top, left };
 }
+
+/**
+ * Detects language based on script patterns (CJK, Cyrillic, Latin).
+ * Returns a BCP 47 language tag (e.g., 'ko-KR', 'ja-JP', 'zh-CN', 'en-US').
+ */
+export function detectLanguage(text: string): string {
+  if (!text) return 'en-US';
+
+  // Korean
+  if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/.test(text)) return 'ko-KR';
+  
+  // Japanese (Hiragana/Katakana)
+  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return 'ja-JP';
+  
+  // Chinese (Simplified/Traditional check is hard, default to CN)
+  if (/[\u4E00-\u9FFF]/.test(text)) return 'zh-CN';
+  
+  // Russian / Cyrillic
+  if (/[\u0400-\u04FF]/.test(text)) return 'ru-RU';
+  
+  // Default to English
+  return 'en-US';
+}

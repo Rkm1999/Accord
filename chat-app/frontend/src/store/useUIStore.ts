@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Message } from '../types';
 
-type ModalType = 'createChannel' | 'startDM' | 'search' | 'profile' | 'userDetail' | 'notificationSettings' | 'emojiUpload' | 'image' | 'emojiPicker' | null;
+type ModalType = 'createChannel' | 'startDM' | 'search' | 'profile' | 'userDetail' | 'notificationSettings' | 'emojiUpload' | 'image' | 'emojiPicker' | 'ttsSettings' | null;
 
 interface UIState {
   activeModal: ModalType;

@@ -31,11 +31,21 @@ const AudioElement = ({ stream }: { stream: MediaStream }) => {
     stream.addEventListener('removetrack', handleTrackEvent);
 
     if (audioRef.current) {
-      // Clear and re-bind to ensure all tracks are active
-      audioRef.current.srcObject = null;
-      audioRef.current.srcObject = stream;
+      // Only re-bind if the stream object has actually changed or is null
+      if (audioRef.current.srcObject !== stream) {
+        audioRef.current.srcObject = stream;
+      }
       audioRef.current.muted = isDeafened;
-      audioRef.current.play().catch(e => console.warn('Audio play failed:', e));
+      
+      // Only call play if we aren't already playing to avoid AbortError
+      if (audioRef.current.paused) {
+        audioRef.current.play().catch(e => {
+          // Ignore AbortError as it's just a race condition during stream updates
+          if (e.name !== 'AbortError') {
+            console.warn('Audio play failed:', e);
+          }
+        });
+      }
     }
 
     return () => {

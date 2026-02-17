@@ -50,6 +50,7 @@ export const useWebRTC = () => {
         removeRemoteStream(u);
       });
       peersRef.current = {};
+      window.speechSynthesis?.cancel();
       return;
     }
 
@@ -106,11 +107,30 @@ export const useWebRTC = () => {
     
     const tracks = localStream.getTracks();
     for (const pc of Object.values(peersRef.current)) {
+      // Don't sync if the connection is closed
+      if (pc.connectionState === 'closed') continue;
+
       tracks.forEach(track => {
-        // Check if we're already sending this track
-        const hasTrack = pc.getSenders().some(s => s.track === track);
+        // Check if we're already sending this track or a track of this kind
+        const senders = pc.getSenders();
+        const hasTrack = senders.some(s => s.track === track);
+        
         if (!hasTrack) {
-          pc.addTrack(track, localStream);
+          // If we have a sender for this kind but with a different/null track, try replacing it instead
+          const sameKindSender = senders.find(s => s.track?.kind === track.kind || (!s.track && pc.getTransceivers().find(t => t.sender === s)?.receiver.track.kind === track.kind));
+          
+          if (sameKindSender) {
+            sameKindSender.replaceTrack(track).catch(err => console.error('Error replacing track during sync:', err));
+          } else {
+            try {
+              pc.addTrack(track, localStream);
+            } catch (err) {
+              // If it still fails with "Sender already exists", we can safely ignore it
+              if (!(err instanceof Error && err.name === 'InvalidAccessError')) {
+                console.error('Error adding track during sync:', err);
+              }
+            }
+          }
         }
       });
     }
@@ -307,6 +327,7 @@ export const useWebRTC = () => {
       window.removeEventListener('rtc-user-joined', handleUserJoined);
       window.removeEventListener('rtc-signal', handleRTCSignal);
       window.removeEventListener('rtc-user-left', handleUserLeft);
+      window.speechSynthesis?.cancel();
     };
   }, [activeVoiceChannelId, username]);
 };

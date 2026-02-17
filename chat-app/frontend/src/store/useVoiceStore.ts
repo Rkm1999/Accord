@@ -16,6 +16,8 @@ interface VoiceState {
   isDeafened: boolean;
   isCameraOn: boolean;
   isSpeaking: boolean;
+  isTtsEnabled: boolean;
+  preferredVoiceName: string | null;
   error: string | null;
   lastTextChannelId: number;
 
@@ -34,6 +36,8 @@ interface VoiceState {
   setDeafened: (deafened: boolean) => void;
   setCameraOn: (on: boolean) => void;
   setSpeaking: (speaking: boolean) => void;
+  setTtsEnabled: (enabled: boolean) => void;
+  setPreferredVoiceName: (name: string | null) => void;
   setError: (error: string | null) => void;
   setLastTextChannelId: (id: number) => void;
   
@@ -56,10 +60,22 @@ export const useVoiceStore = create<VoiceState>()(
       isDeafened: false,
       isCameraOn: false,
       isSpeaking: false,
+      isTtsEnabled: false,
+      preferredVoiceName: null,
       error: null,
       lastTextChannelId: 1,
 
-      setActiveVoiceChannelId: (id) => set({ activeVoiceChannelId: id }),
+      setActiveVoiceChannelId: (id) => {
+        // Trigger voice loading and ensure they are cached by the browser
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.getVoices();
+          // Some browsers need this event listener to actually populate the list
+          window.speechSynthesis.onvoiceschanged = () => {
+            window.speechSynthesis.getVoices();
+          };
+        }
+        set({ activeVoiceChannelId: id });
+      },
       setParticipants: (participants) => set({ participants }),
       setLocalStream: (stream) => set({ localStream: stream }),
       
@@ -88,19 +104,26 @@ export const useVoiceStore = create<VoiceState>()(
       setDeafened: (deafened) => set({ isDeafened: deafened }),
       setCameraOn: (on) => set({ isCameraOn: on }),
       setSpeaking: (speaking) => set({ isSpeaking: speaking }),
+      setTtsEnabled: (enabled) => set({ isTtsEnabled: enabled }),
+      setPreferredVoiceName: (name) => set({ preferredVoiceName: name }),
       setError: (error) => set({ error }),
       setLastTextChannelId: (id) => set({ lastTextChannelId: id }),
 
-      reset: () => set({
-        activeVoiceChannelId: null,
-        participants: [],
-        localStream: null,
-        remoteStreams: {},
-        peers: {},
-        isCameraOn: false,
-        isSpeaking: false,
-        error: null
-      }),
+      reset: () => {
+        window.speechSynthesis?.cancel();
+        set({
+          activeVoiceChannelId: null,
+          participants: [],
+          localStream: null,
+          remoteStreams: {},
+          peers: {},
+          isCameraOn: false,
+          isSpeaking: false,
+          isTtsEnabled: false,
+          preferredVoiceName: null,
+          error: null
+        });
+      },
     }),
     {
       name: 'accord-voice-prefs',
@@ -110,6 +133,8 @@ export const useVoiceStore = create<VoiceState>()(
         audioOutputId: state.audioOutputId,
         isMuted: state.isMuted,
         isDeafened: state.isDeafened,
+        isTtsEnabled: state.isTtsEnabled,
+        preferredVoiceName: state.preferredVoiceName,
         lastTextChannelId: state.lastTextChannelId
       })
     }

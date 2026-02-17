@@ -349,7 +349,7 @@ export class ChatRoom extends DurableObject {
     }
 
     // @ts-ignore
-    this.broadcastMessage(username, data.message, linkMetadata || undefined, fileAttachment || undefined, replyData || undefined, messageId, channelId, displayName, avatarKey, mentions);
+    this.broadcastMessage(username, data.message, linkMetadata || undefined, fileAttachment || undefined, replyData || undefined, messageId, channelId, displayName, avatarKey, mentions, !!data.tts, data.lang);
 
     // Trigger push notifications
     this.ctx.waitUntil(this.sendPushNotifications(username, data.message, channelId, mentions));
@@ -536,7 +536,7 @@ export class ChatRoom extends DurableObject {
     replyFileType?: string | null;
     replyFileSize?: number | null;
     replyFileKey?: string | null;
-  }, messageId?: number, channelId?: number, displayName?: string, avatarKey?: string | null, mentions?: string[]) {
+  }, messageId?: number, channelId?: number, displayName?: string, avatarKey?: string | null, mentions?: string[], tts?: boolean, lang?: string) {
     const webSockets = this.ctx.getWebSockets();
     const payload = JSON.stringify({
       type: "chat",
@@ -561,6 +561,8 @@ export class ChatRoom extends DurableObject {
       reply_file_key: replyData?.replyFileKey,
       mentions: mentions || [],
       channelId,
+      tts,
+      lang,
     });
 
 

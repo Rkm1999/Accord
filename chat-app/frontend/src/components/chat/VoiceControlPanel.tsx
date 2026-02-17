@@ -1,4 +1,4 @@
-import { Mic, MicOff, Video, VideoOff, Headphones, PhoneOff } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, Headphones, PhoneOff, MessageSquareText, MessageSquareOff } from 'lucide-react';
 import { useVoiceStore } from '@/store/useVoiceStore';
 import { useChatStore } from '@/store/useChatStore';
 import { clsx } from 'clsx';
@@ -6,8 +6,8 @@ import { socketClient } from '@/lib/socket';
 
 export const VoiceControlPanel = ({ isSidebar = false }: { isSidebar?: boolean }) => {
   const { 
-    activeVoiceChannelId, isMuted, isDeafened, isCameraOn,
-    setMuted, setDeafened, setCameraOn, reset, lastTextChannelId
+    activeVoiceChannelId, isMuted, isDeafened, isCameraOn, isTtsEnabled,
+    setMuted, setDeafened, setCameraOn, setTtsEnabled, reset, lastTextChannelId
   } = useVoiceStore();
   
   const { setCurrentChannelId } = useChatStore();
@@ -15,9 +15,24 @@ export const VoiceControlPanel = ({ isSidebar = false }: { isSidebar?: boolean }
   if (activeVoiceChannelId === null) return null;
 
   const handleDisconnect = () => {
+    window.speechSynthesis?.cancel();
     socketClient.send({ type: 'leave_voice' });
     reset();
     setCurrentChannelId(lastTextChannelId);
+  };
+
+  const toggleTts = () => {
+    const nextState = !isTtsEnabled;
+    if (!nextState) {
+      window.speechSynthesis?.cancel();
+    } else {
+      // Prime TTS for iOS/Mobile
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance("");
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+    setTtsEnabled(nextState);
   };
 
   return (
@@ -59,6 +74,17 @@ export const VoiceControlPanel = ({ isSidebar = false }: { isSidebar?: boolean }
             title={isCameraOn ? "Turn off camera" : "Turn on camera"}
           >
             {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+          </button>
+
+          <button 
+            onClick={toggleTts}
+            className={clsx(
+              "p-2 rounded transition-colors flex justify-center",
+              isTtsEnabled ? "text-accord-green bg-accord-green/10" : "text-accord-text-normal hover:bg-accord-dark-100"
+            )}
+            title={isTtsEnabled ? "Disable Send as TTS" : "Enable Send as TTS"}
+          >
+            {isTtsEnabled ? <MessageSquareText className="w-5 h-5" /> : <MessageSquareOff className="w-5 h-5" />}
           </button>
         </div>
 

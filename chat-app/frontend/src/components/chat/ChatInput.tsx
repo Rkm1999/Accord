@@ -4,10 +4,11 @@ import { Smile, Paperclip, Send, X, CornerUpLeft, Bold, Italic, Strikethrough, C
 import { useChatStore } from '@/store/useChatStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUIStore } from '@/store/useUIStore';
+import { useVoiceStore } from '@/store/useVoiceStore';
 import { socketClient } from '@/lib/socket';
 import { apiClient } from '@/lib/api';
 import { clsx } from 'clsx';
-import { getCaretCoordinates, getFileIcon } from '@/utils/helpers';
+import { getCaretCoordinates, getFileIcon, detectLanguage } from '@/utils/helpers';
 import { EmojiPicker } from '../modals/EmojiPicker';
 
 interface StagedFile {
@@ -20,6 +21,7 @@ interface StagedFile {
 export const ChatInput = () => {
   const { currentChannelId, allUsers } = useChatStore();
   const { username } = useAuthStore();
+  const { isTtsEnabled } = useVoiceStore();
   const { 
     replyingTo, setReplyingTo, openModal, closeModal, activeModal,
     isEmojiKeyboardOpen, setIsEmojiKeyboardOpen 
@@ -161,6 +163,8 @@ export const ChatInput = () => {
             message: idx === 0 ? currentText : '',
             channelId: currentChannelId,
             replyTo: currentReplyTo,
+            tts: isTtsEnabled,
+            lang: isTtsEnabled ? detectLanguage(currentText) : undefined,
             file: {
               name: f.file.name,
               type: f.file.type,
@@ -175,7 +179,9 @@ export const ChatInput = () => {
           type: 'chat',
           message: currentText,
           channelId: currentChannelId,
-          replyTo: currentReplyTo
+          replyTo: currentReplyTo,
+          tts: isTtsEnabled,
+          lang: isTtsEnabled ? detectLanguage(currentText) : undefined
         });
       }
       

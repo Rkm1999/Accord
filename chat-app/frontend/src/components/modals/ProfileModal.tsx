@@ -23,7 +23,8 @@ export const ProfileModal = () => {
   const { 
     audioInputId, setAudioInputId, 
     videoInputId, setVideoInputId,
-    audioOutputId, setAudioOutputId
+    audioOutputId, setAudioOutputId,
+    preferredVoiceName
   } = useVoiceStore();
   
   const [devices, setDevices] = useState<{
@@ -315,6 +316,22 @@ export const ProfileModal = () => {
                   >
                     {previewStream ? 'Stop Preview' : 'Test Camera'}
                   </button>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-accord-dark-100">
+                <label className="block text-xs font-semibold text-accord-text-muted uppercase mb-2">Text-to-Speech Voice</label>
+                <div 
+                  onClick={() => openModal('ttsSettings')}
+                  className="flex items-center justify-between p-3 bg-accord-dark-600 rounded cursor-pointer hover:bg-accord-dark-100 transition-colors"
+                >
+                  <div className="flex flex-col overflow-hidden mr-2">
+                    <span className="text-sm font-semibold text-accord-text-normal truncate">
+                      {preferredVoiceName || 'Auto-select (Smart)'}
+                    </span>
+                    <span className="text-xs text-accord-text-muted">Choose your preferred TTS voice model</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-accord-text-muted flex-shrink-0" />
                 </div>
               </div>
             </div>
