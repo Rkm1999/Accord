@@ -11,3 +11,5 @@
 .read 0012_covering_index.sql
 .read 0013_is_spoiler.sql
 .read 0014_channel_type.sql
+.read 0015_add_user_salt.sql
+.read 0016_auth_rate_limit.sql

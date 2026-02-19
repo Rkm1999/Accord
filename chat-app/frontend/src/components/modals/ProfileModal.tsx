@@ -85,7 +85,6 @@ export const ProfileModal = () => {
       }
 
       const result = await apiClient.updateProfile({
-        username: username!,
         displayName: newDisplayName,
         avatarImage
       });
@@ -109,7 +108,6 @@ export const ProfileModal = () => {
     if (!confirm('This will invalidate your old recovery key. Are you sure?')) return;
     try {
       const result = await apiClient.updateProfile({
-        username: username!,
         displayName: newDisplayName,
         generateNewRecoveryKey: true
       });

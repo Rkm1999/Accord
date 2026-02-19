@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 
 export const NotificationSettingsModal = () => {
   const { closeModal } = useUIStore();
-  const { username, fcmToken } = useAuthStore();
+  const { fcmToken } = useAuthStore();
   const { 
     channels, notificationSettings, setNotificationSettings 
   } = useChatStore();
@@ -28,8 +28,8 @@ export const NotificationSettingsModal = () => {
 
   const handleLevelChange = async (channelId: number, level: string) => {
     try {
-      await apiClient.updateNotificationSettings(username!, channelId, level);
-      const updated = await apiClient.fetchNotificationSettings(username!);
+      await apiClient.updateNotificationSettings(channelId, level);
+      const updated = await apiClient.fetchNotificationSettings();
       setNotificationSettings(updated);
     } catch (error) {
       console.error('Failed to update notification level');

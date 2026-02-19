@@ -24,8 +24,8 @@ export const UserDetailModal = () => {
 
   const handleStartDM = async () => {
     try {
-      const { id } = await apiClient.startDM(currentUsername!, user.username);
-      const updatedDMs = await apiClient.fetchDMs(currentUsername!);
+      const { id } = await apiClient.startDM(user.username);
+      const updatedDMs = await apiClient.fetchDMs();
       setDMs(updatedDMs);
       setCurrentChannelId(id);
       closeModal();

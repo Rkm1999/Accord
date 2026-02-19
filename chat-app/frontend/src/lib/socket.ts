@@ -16,7 +16,12 @@ class SocketClient {
       this.ws.close();
     }
 
-    const wsUrl = getWsUrl(username, channelId);
+    const { token } = useAuthStore.getState();
+    console.log(`Connecting to WS for user: ${username}, token present: ${!!token}`);
+    let wsUrl = getWsUrl(username, channelId);
+    if (token) {
+      wsUrl += `&token=${encodeURIComponent(token)}`;
+    }
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {

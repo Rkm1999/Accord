@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 import { Smile, Paperclip, Send, X, CornerUpLeft, Bold, Italic, Strikethrough, Code, EyeOff } from 'lucide-react';
 import { useChatStore } from '@/store/useChatStore';
-import { useAuthStore } from '@/store/useAuthStore';
 import { useUIStore } from '@/store/useUIStore';
 import { useVoiceStore } from '@/store/useVoiceStore';
 import { socketClient } from '@/lib/socket';
@@ -20,7 +19,6 @@ interface StagedFile {
 
 export const ChatInput = () => {
   const { currentChannelId, allUsers } = useChatStore();
-  const { username } = useAuthStore();
   const { isTtsEnabled } = useVoiceStore();
   const { 
     replyingTo, setReplyingTo, openModal, closeModal, activeModal,
@@ -150,7 +148,7 @@ export const ChatInput = () => {
         
         let resultKey = key;
         if (!exists) {
-          const res = await apiClient.uploadFile(f.file, username!);
+          const res = await apiClient.uploadFile(f.file);
           resultKey = res.key;
         }
         uploadedFiles.push({ ...f, key: resultKey });

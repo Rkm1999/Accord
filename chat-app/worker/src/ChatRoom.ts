@@ -7,6 +7,7 @@ export interface Env {
   FIREBASE_PROJECT_ID: string;
   FIREBASE_CLIENT_EMAIL: string;
   FIREBASE_PRIVATE_KEY: string;
+  JWT_SECRET: string;
 }
 
 interface UserState {
@@ -158,10 +159,24 @@ export class ChatRoom extends DurableObject {
     const state = ws.deserializeAttachment() as UserState;
     const { username, channelId, displayName, avatarKey } = state;
 
-    const data = JSON.parse(message);
+    let data: any;
+    try {
+      data = JSON.parse(message);
+    } catch {
+      return;
+    }
 
     if (data.type === "heartbeat") {
         return; // Just to keep connection alive
+    }
+
+    // Input Validation
+    if (data.type === "chat") {
+      if (!data.message || typeof data.message !== 'string' || data.message.length > 2000) return;
+    }
+    if (data.type === "reaction") {
+      if (!data.emoji || typeof data.emoji !== 'string' || data.emoji.length > 100) return;
+      if (typeof data.messageId !== 'number') return;
     }
 
     if (data.type === "switch_channel") {
@@ -480,9 +495,9 @@ export class ChatRoom extends DurableObject {
         );
 
         // If the token is invalid or no longer registered, remove it from our DB
-        if (!result.success && result.error) {
-          const errorCode = result.error.error?.code;
-          const errorMessage = result.error.error?.message;
+        if (!(result as any).success && (result as any).error) {
+          const errorCode = (result as any).error.error?.code;
+          const errorMessage = (result as any).error.error?.message;
           
           if (errorCode === 404 || errorCode === 410 || errorMessage?.includes('not found') || errorMessage?.includes('unregistered')) {
             console.log(`Removing dead token for user ${recipientUsername}`);
@@ -722,7 +737,14 @@ export class ChatRoom extends DurableObject {
   }
 
   private async sendChatContext(ws: WebSocket, channelId: number, targetId: number) {
-    // ... (logic remains same)
+    const beforeResult: any = await this.env.DB.prepare(
+        "SELECT m.*, u.display_name, u.avatar_key as user_avatar FROM messages m LEFT JOIN users u ON m.username = u.username WHERE m.channel_id = ? AND m.timestamp <= (SELECT timestamp FROM messages WHERE id = ?) ORDER BY m.timestamp DESC LIMIT 26"
+    ).bind(channelId, targetId).all();
+
+    const afterResult: any = await this.env.DB.prepare(
+        "SELECT m.*, u.display_name, u.avatar_key as user_avatar FROM messages m LEFT JOIN users u ON m.username = u.username WHERE m.channel_id = ? AND m.timestamp > (SELECT timestamp FROM messages WHERE id = ?) ORDER BY m.timestamp ASC LIMIT 25"
+    ).bind(channelId, targetId).all();
+
     const messages = [...beforeResult.results.reverse(), ...afterResult.results];
     const hasMoreBefore = beforeResult.results.length >= 25;
     const hasMoreAfter = afterResult.results.length >= 25;
@@ -730,7 +752,7 @@ export class ChatRoom extends DurableObject {
     ws.send(JSON.stringify({
       type: "history",
       messages,
-      channelId: channelId, // Added this
+      channelId: channelId,
       isContext: true,
       hasMore: hasMoreBefore,
       hasMoreAfter: hasMoreAfter,

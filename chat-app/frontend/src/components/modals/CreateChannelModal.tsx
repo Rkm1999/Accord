@@ -2,13 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Hash, Plus, X, Volume2 } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
 import { useChatStore } from '@/store/useChatStore';
-import { useAuthStore } from '@/store/useAuthStore';
 import { apiClient } from '@/lib/api';
 import { clsx } from 'clsx';
 
 export const CreateChannelModal = () => {
   const { closeModal, modalData } = useUIStore();
-  const { username } = useAuthStore();
   const { setChannels, setCurrentChannelId } = useChatStore();
   
   const [name, setName] = useState('');
@@ -26,7 +24,7 @@ export const CreateChannelModal = () => {
 
     setIsLoading(true);
     try {
-      const newChannel = await apiClient.createChannel(name.trim(), username!, kind);
+      const newChannel = await apiClient.createChannel(name.trim(), kind);
       const updated = await apiClient.fetchChannels();
       setChannels(updated);
       setCurrentChannelId(newChannel.id);

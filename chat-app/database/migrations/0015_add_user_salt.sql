@@ -1,0 +1,2 @@
+ALTER TABLE users ADD COLUMN salt TEXT;
+ALTER TABLE users ADD COLUMN hash_version INTEGER DEFAULT 1; -- 1 = SHA256 (old), 2 = PBKDF2 (new)

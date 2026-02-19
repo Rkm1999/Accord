@@ -40,8 +40,7 @@ export const EmojiUploadModal = () => {
 
       await apiClient.uploadEmoji({
         name: name.trim().toLowerCase().replace(/\s+/g, '_'),
-        image: base64Image,
-        username
+        image: base64Image
       });
 
       // Refresh emojis list

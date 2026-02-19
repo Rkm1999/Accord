@@ -85,7 +85,7 @@ async function registerTokenOnServer(token: string) {
   const platform = getPlatform();
 
   try {
-    await apiClient.pushRegister(username, token, platform);
+    await apiClient.pushRegister(token, platform);
     setFcmToken(token);
     localStorage.setItem('pushEnabled', 'true');
   } catch (err) {
@@ -137,7 +137,7 @@ export async function togglePushNotifications(enabled: boolean) {
     localStorage.setItem('pushEnabled', 'false');
     if (fcmToken && username) {
       try {
-        await apiClient.pushUnregister(username, fcmToken);
+        await apiClient.pushUnregister(fcmToken);
         setFcmToken(null);
       } catch (e) { 
         console.error('Failed to unregister push token', e); 

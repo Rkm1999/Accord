@@ -45,11 +45,12 @@ export const ChatPage = () => {
     const loadInitialData = async () => {
       try {
         const [users, channels, dms, notifications, emojis] = await Promise.all([
-          apiClient.fetchRegisteredUsers(),
-          apiClient.fetchChannels(),
-          apiClient.fetchDMs(username),
-          apiClient.fetchNotificationSettings(username),
-          apiClient.fetchEmojis()
+                  apiClient.fetchRegisteredUsers(),
+                  apiClient.fetchChannels(),
+                  apiClient.fetchDMs(),
+                  apiClient.fetchNotificationSettings(),
+                  apiClient.fetchEmojis()
+          
         ]);
 
         setAllUsers(users);

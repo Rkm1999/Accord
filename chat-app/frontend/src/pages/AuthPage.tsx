@@ -20,11 +20,23 @@ export const AuthPage = () => {
     try {
       if (isLogin) {
         const data = await apiClient.login(username, password);
-        setAuth(data);
+        setAuth({
+          username: data.username,
+          displayName: data.displayName,
+          avatarKey: data.avatarKey,
+          token: data.token
+        });
       } else {
-        const data = await apiClient.register(username, password);
+        const data = (await apiClient.register(username, password)) as any;
         if (data.recoveryKey) {
           window.dispatchEvent(new CustomEvent('accord-show-recovery', { detail: data.recoveryKey }));
+          if (data.token) {
+            setAuth({
+              username,
+              displayName: username,
+              token: data.token
+            });
+          }
         } else {
           alert('Registration successful! Please login.');
           setIsLogin(true);

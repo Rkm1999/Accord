@@ -6,6 +6,7 @@ import {
 
 const api = axios.create({
   baseURL: apiBaseUrl,
+  withCredentials: true,
 });
 
 // Helper to handle responses
@@ -13,6 +14,9 @@ api.interceptors.response.use(
   (response) => response.data,
   (error) => {
     const message = error.response?.data || error.message;
+    if (error.response?.status === 401) {
+      // Handle unauthorized (optional: trigger logout)
+    }
     return Promise.reject(new Error(message));
   }
 );
@@ -23,11 +27,15 @@ export const apiClient = {
     username: string;
     displayName: string;
     avatarKey?: string;
+    token?: string;
   }> => api.post('/api/auth/login', { username, password }),
 
   register: (username: string, password: string): Promise<{
     recoveryKey?: string;
+    token?: string;
   }> => api.post('/api/auth/register', { username, password }),
+
+  logout: () => api.post('/api/auth/logout'),
 
   resetPassword: (username: string, recoveryKey: string, newPassword: string) => 
     api.post('/api/auth/reset-password', { username, recoveryKey, newPassword }),
@@ -35,22 +43,21 @@ export const apiClient = {
   // Channels & DMs
   fetchChannels: (): Promise<Channel[]> => api.get('/api/channels'),
 
-  fetchDMs: (username: string): Promise<Channel[]> => 
-    api.get(`/api/dms?username=${encodeURIComponent(username)}`),
+  fetchDMs: (): Promise<Channel[]> => 
+    api.get('/api/dms'),
 
-  createChannel: (name: string, createdBy: string, kind: 'text' | 'voice' = 'text'): Promise<Channel> => 
-    api.post('/api/channels', { name, createdBy, kind }),
+  createChannel: (name: string, kind: 'text' | 'voice' = 'text'): Promise<Channel> => 
+    api.post('/api/channels', { name, kind }),
 
   deleteChannel: (channelId: number) => api.delete(`/api/channels/${channelId}`),
 
-  startDM: (username: string, targetUsername: string): Promise<{ id: number }> => 
-    api.post('/api/dm', { username, targetUsername }),
+  startDM: (targetUsername: string): Promise<{ id: number }> => 
+    api.post('/api/dm', { targetUsername }),
 
   // Users & Profile
   fetchRegisteredUsers: (): Promise<User[]> => api.get(`/api/users/list?t=${Date.now()}`),
 
   updateProfile: (profileData: {
-    username: string;
     displayName: string;
     avatarImage?: string | null;
     generateNewRecoveryKey?: boolean;
@@ -60,15 +67,15 @@ export const apiClient = {
   // Emojis
   fetchEmojis: (): Promise<CustomEmoji[]> => api.get('/api/emojis'),
 
-  uploadEmoji: (emojiData: { name: string; image: string; username: string }) => 
+  uploadEmoji: (emojiData: { name: string; image: string }) => 
     api.post('/api/emojis', emojiData),
 
   // Notifications
-  fetchNotificationSettings: (username: string): Promise<NotificationSetting[]> => 
-    api.get(`/api/notifications/settings?username=${encodeURIComponent(username)}`),
+  fetchNotificationSettings: (): Promise<NotificationSetting[]> => 
+    api.get('/api/notifications/settings'),
 
-  updateNotificationSettings: (username: string, channelId: number, level: string) => 
-    api.post('/api/notifications/settings', { username, channelId, level }),
+  updateNotificationSettings: (channelId: number, level: string) => 
+    api.post('/api/notifications/settings', { channelId, level }),
 
   // Search
   searchMessages: (searchParams: {
@@ -87,7 +94,6 @@ export const apiClient = {
 
   uploadFile: (
     file: File, 
-    username: string, 
     onProgress?: (percent: number) => void
   ): Promise<{
     name: string;
@@ -97,7 +103,6 @@ export const apiClient = {
   }> => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('username', username);
 
     return api.post('/api/upload', formData, {
       onUploadProgress: (progressEvent) => {
@@ -112,9 +117,9 @@ export const apiClient = {
   // PWA & Push
   getAppConfig: () => api.get('/api/config'),
 
-  pushRegister: (username: string, token: string, platform: string) => 
-    api.post('/api/push/register', { username, token, platform }),
+  pushRegister: (token: string, platform: string) => 
+    api.post('/api/push/register', { token, platform }),
 
-  pushUnregister: (username: string, token: string) => 
-    api.post('/api/push/unregister', { username, token })
+  pushUnregister: (token: string) => 
+    api.post('/api/push/unregister', { token })
 };
